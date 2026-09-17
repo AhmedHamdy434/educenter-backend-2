@@ -2,8 +2,6 @@ import { Prisma } from '@prisma/client';
 
 export const teacherDetailsSelect = {
   id: true,
-  specialization: true,
-  salary: true,
   bio: true,
   createdAt: true,
   updatedAt: true,
@@ -34,7 +32,6 @@ export const teacherDetailsSelect = {
 
 export const teacherListSelect = {
   id: true,
-  specialization: true,
   createdAt: true,
   user: {
     select: {

@@ -1,5 +1,8 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 import { AppModule } from './app.module';
 
@@ -58,6 +61,54 @@ async function bootstrap() {
     }),
   );
 
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('EduCenter API')
+    .setDescription(
+      'API documentation for EduCenter Multi-Tenant SaaS Platform',
+    )
+    .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'JWT',
+        description: 'Enter JWT access token',
+        in: 'header',
+      },
+      'JWT-auth',
+    )
+    .build();
+
+  let swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
+
+  const openApiPath = path.join(process.cwd(), 'docs', 'openapi.json');
+  if (fs.existsSync(openApiPath)) {
+    try {
+      const enrichedDoc = JSON.parse(fs.readFileSync(openApiPath, 'utf8'));
+      for (const [pathKey, methods] of Object.entries(enrichedDoc.paths || {})) {
+        if (swaggerDocument.paths[pathKey]) {
+          for (const [methodKey, op] of Object.entries(
+            methods as Record<string, any>,
+          )) {
+            if (swaggerDocument.paths[pathKey][methodKey] && op.responses) {
+              swaggerDocument.paths[pathKey][methodKey].responses =
+                op.responses;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load docs/openapi.json', err);
+    }
+  }
+
+  SwaggerModule.setup('api/docs', app, swaggerDocument, {
+    swaggerOptions: {
+      persistAuthorization: true,
+    },
+  });
+
   if (process.env.NODE_ENV !== 'production') {
     await app.listen(process.env.PORT || 3000);
   }
@@ -67,4 +118,5 @@ async function bootstrap() {
   );
 }
 
+// Reload trigger - teachers & students updated
 void bootstrap();

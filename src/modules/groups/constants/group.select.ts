@@ -79,7 +79,6 @@ export const groupDetailsSelect = {
   teacher: {
     select: {
       id: true,
-      specialization: true,
       user: {
         select: {
           id: true,

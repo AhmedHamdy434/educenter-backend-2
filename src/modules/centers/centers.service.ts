@@ -21,6 +21,7 @@ import { UpdateCenterStatusDto } from './dto/update-center-status.dto';
 import { RenewSubscriptionDto } from './dto/renew-subscription.dto';
 import {
   getFirstDayOfMonth,
+  getFirstDayOfNextMonth,
   getLastDayOfMonth,
 } from '../../common/utils/date.util';
 import { PlanType } from '../../common/enums/plan-type.enum';
@@ -384,7 +385,7 @@ export class CentersService {
     // 1. جلب آخر اشتراك للمركز
     const lastSubscription = await this.prisma.centerSubscription.findFirst({
       where: { centerId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { endDate: 'desc' },
       include: { subscriptionPlan: true },
     });
 
@@ -425,9 +426,9 @@ export class CentersService {
     let endDate: Date;
 
     if (isCurrentlyActive) {
-      // تمديد: نحافظ على تاريخ البداية ونمدد تاريخ الانتهاء بإضافة الشهور المطلوبة
-      startDate = lastSubscription.startDate;
-      endDate = getLastDayOfMonth(lastSubscription.endDate, totalMonthsToAdd);
+      // تمديد: يبدأ الاشتراك الجديد من أول يوم في الشهر التالي لانتهاء الاشتراك الحالي
+      startDate = getFirstDayOfNextMonth(lastSubscription.endDate);
+      endDate = getLastDayOfMonth(startDate, totalMonthsToAdd - 1);
     } else {
       // اشتراك جديد أو منتهي: يبدأ من أول يوم في الشهر الحالي وحتى آخر يوم في المدة المستهدفة
       startDate = getFirstDayOfMonth(now);

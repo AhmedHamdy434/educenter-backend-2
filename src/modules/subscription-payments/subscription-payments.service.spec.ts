@@ -57,7 +57,7 @@ describe('SubscriptionPaymentsService', () => {
   describe('create', () => {
     const dto = {
       centerSubscriptionId: 'sub-1',
-      amount: 500,
+      paid: 500,
       periodStart: new Date('2026-08-01'),
       periodEnd: new Date('2026-09-01'),
       paymentMethod: 'cash',
@@ -72,7 +72,7 @@ describe('SubscriptionPaymentsService', () => {
       );
     });
 
-    it('should throw BadRequestException if center subscription does not match center', async () => {
+    it('should throw BadRequestException if subscription does not belong to center', async () => {
       prismaMock.center.findUnique.mockResolvedValueOnce({ id: 'center-1' });
       prismaMock.centerSubscription.findUnique.mockResolvedValueOnce({
         id: 'sub-1',
@@ -94,12 +94,11 @@ describe('SubscriptionPaymentsService', () => {
         id: 'pay-1',
         centerSubscriptionId: 'sub-1',
         centerId: 'center-1',
-        amount: new Prisma.Decimal(500),
+        paid: new Prisma.Decimal(500),
         periodStart: dto.periodStart,
         periodEnd: dto.periodEnd,
         paymentMethod: 'cash',
         notes: 'تجديد يدوي',
-        paidAt: new Date(),
         createdAt: new Date(),
       };
       prismaMock.subscriptionPayment.create.mockResolvedValueOnce(
@@ -113,7 +112,7 @@ describe('SubscriptionPaymentsService', () => {
           data: expect.objectContaining({
             centerId: 'center-1',
             centerSubscriptionId: 'sub-1',
-            amount: new Prisma.Decimal(500),
+            paid: new Prisma.Decimal(500),
           }),
         }),
       );
@@ -152,8 +151,8 @@ describe('SubscriptionPaymentsService', () => {
     it('should return all subscription payments with pagination', async () => {
       prismaMock.subscriptionPayment.count.mockResolvedValueOnce(2);
       prismaMock.subscriptionPayment.findMany.mockResolvedValueOnce([
-        { id: 'pay-1', amount: new Prisma.Decimal(500) },
-        { id: 'pay-2', amount: new Prisma.Decimal(1000) },
+        { id: 'pay-1', paid: new Prisma.Decimal(500) },
+        { id: 'pay-2', paid: new Prisma.Decimal(1000) },
       ]);
 
       const result = await service.findAll({
@@ -172,16 +171,16 @@ describe('SubscriptionPaymentsService', () => {
     it('should calculate total revenue and breakdown by month', async () => {
       prismaMock.subscriptionPayment.findMany.mockResolvedValueOnce([
         {
-          amount: new Prisma.Decimal(500),
-          paidAt: new Date('2026-08-05T10:00:00Z'),
+          paid: new Prisma.Decimal(500),
+          createdAt: new Date('2026-08-05T10:00:00Z'),
         },
         {
-          amount: new Prisma.Decimal(1200),
-          paidAt: new Date('2026-08-15T12:00:00Z'),
+          paid: new Prisma.Decimal(1200),
+          createdAt: new Date('2026-08-15T12:00:00Z'),
         },
         {
-          amount: new Prisma.Decimal(800),
-          paidAt: new Date('2026-09-01T09:00:00Z'),
+          paid: new Prisma.Decimal(800),
+          createdAt: new Date('2026-09-01T09:00:00Z'),
         },
       ]);
 

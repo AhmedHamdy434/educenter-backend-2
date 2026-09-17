@@ -73,3 +73,41 @@
 * Avoid using `any` in test helpers, mock execution contexts, and fixtures.
 * Strongly type request objects, payload mocks, and user context using project types (e.g., `Partial<RequestUser>`, `RequestUser`, `ExecutionContext`) to maintain type safety and avoid ESLint `@typescript-eslint/no-unsafe-assignment` errors.
 * Always ensure all unit tests and ESLint checks pass without warnings.
+
+## 9. OpenAPI / Swagger Documentation Standards & Status Tracking
+* **Single Source of Truth:** `docs/openapi.json` defines the full OpenAPI specification and is dynamically merged into `SwaggerModule` in `src/main.ts` on startup.
+* **Dual Schema & Example Rule:** In Swagger UI, `content['application/json']` MUST always define both `schema` AND `example`. Omitting `schema` causes Swagger UI to hide the response body example completely:
+  ```json
+  "content": {
+    "application/json": {
+      "schema": { "type": "object" },
+      "example": { ... }
+    }
+  }
+  ```
+* **Strict Realism (No Guessing):** All examples must reflect exact field names, actual DTO validation error strings (in Arabic), real Service exception messages, Select Constants, and Prisma schema data types.
+* **Unified Envelopes:**
+  - **Success (Single Resource):**
+    `{ "success": true, "message": "...", "data": { ... } }`
+  - **Success (Paginated Collection):**
+    `{ "success": true, "message": "...", "data": [ ... ], "meta": { "total": 0, "page": 1, "limit": 10, "totalPages": 0, "hasNextPage": false, "hasPreviousPage": false } }`
+  - **Error (Default NestJS Format):**
+    `{ "statusCode": 400, "message": "..." | ["...", "..."], "error": "Bad Request" }`
+* **Current OpenAPI Documentation Status:**
+  - **Completed Modules (48 Operations Documented & Live in Swagger):**
+    1. `Auth` (6 endpoints): `/api/auth/login`, `/api/auth/super-admin/login`, `/api/auth/me`, `/api/auth/change-password`, `/api/auth/forgot-password`, `/api/auth/reset-password`
+    2. `Centers` (9 endpoints): `POST /api/centers`, `GET /api/centers`, `GET /api/centers/me`, `GET /api/centers/my-subscription`, `GET /api/centers/:id`, `PATCH /api/centers/:id`, `PATCH /api/centers/:id/status`, `POST /api/centers/:id/subscribe`, `POST /api/centers/:id/renew`
+    3. `Subscription Plans` (5 endpoints): `POST /api/subscription-plans`, `GET /api/subscription-plans`, `GET /api/subscription-plans/:id`, `PATCH /api/subscription-plans/:id`, `PATCH /api/subscription-plans/:id/toggle-status`
+    4. `Subscription Payments` (4 endpoints): `GET /api/subscription-payments/summary`, `GET /api/subscription-payments`, `POST /api/centers/:centerId/subscription-payments`, `GET /api/centers/:centerId/subscription-payments`
+    5. `Users` (3 endpoints): `GET /api/users`, `GET /api/users/:id`, `PATCH /api/users/:id`
+    6. `Grades` (5 endpoints): `POST /api/grades`, `GET /api/grades`, `GET /api/grades/:id`, `PATCH /api/grades/:id`, `PATCH /api/grades/:id/toggle-status`
+    7. `Subjects` (6 endpoints): `GET /api/subjects/options`, `POST /api/subjects`, `GET /api/subjects`, `GET /api/subjects/:id`, `PATCH /api/subjects/:id`, `PATCH /api/subjects/:id/toggle-status`
+    8. `Teachers` (5 endpoints): `POST /api/teachers`, `GET /api/teachers`, `GET /api/teachers/:id`, `PATCH /api/teachers/:id`, `PATCH /api/teachers/:id/toggle-status`
+    9. `Students` (5 endpoints): `POST /api/students`, `GET /api/students`, `GET /api/students/:id`, `PATCH /api/students/:id`, `PATCH /api/students/:id/toggle-status`
+  - **Pending Modules (Paused until User Finishes Pending Logic Changes):**
+    1. `Groups` (8 endpoints)
+    2. `Attendance` (6 endpoints)
+    3. `Payments` (3 endpoints)
+    4. `Notifications` (1 endpoint)
+    5. `AuditLogs` (1 endpoint)
+    6. `ParentPortal` (2 endpoints)

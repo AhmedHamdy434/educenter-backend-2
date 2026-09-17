@@ -50,7 +50,7 @@ export class SubscriptionPaymentsService {
       data: {
         centerId,
         centerSubscriptionId: dto.centerSubscriptionId,
-        amount: new Prisma.Decimal(dto.amount),
+        paid: new Prisma.Decimal(dto.paid),
         periodStart: dto.periodStart,
         periodEnd: dto.periodEnd,
         paymentMethod: dto.paymentMethod,
@@ -81,7 +81,7 @@ export class SubscriptionPaymentsService {
     };
 
     if (query.from || query.to) {
-      where.paidAt = {
+      where.createdAt = {
         ...(query.from ? { gte: query.from } : {}),
         ...(query.to ? { lte: query.to } : {}),
       };
@@ -101,7 +101,7 @@ export class SubscriptionPaymentsService {
         select: subscriptionPaymentListSelect,
         skip: query.skip,
         take: query.take,
-        orderBy: { paidAt: 'desc' },
+        orderBy: { createdAt: 'desc' },
       }),
     ]);
 
@@ -124,7 +124,7 @@ export class SubscriptionPaymentsService {
     }
 
     if (query.from || query.to) {
-      where.paidAt = {
+      where.createdAt = {
         ...(query.from ? { gte: query.from } : {}),
         ...(query.to ? { lte: query.to } : {}),
       };
@@ -149,7 +149,7 @@ export class SubscriptionPaymentsService {
         select: subscriptionPaymentListSelect,
         skip: query.skip,
         take: query.take,
-        orderBy: { paidAt: 'desc' },
+        orderBy: { createdAt: 'desc' },
       }),
     ]);
 
@@ -168,7 +168,7 @@ export class SubscriptionPaymentsService {
     const where: Prisma.SubscriptionPaymentWhereInput = {};
 
     if (query.from || query.to) {
-      where.paidAt = {
+      where.createdAt = {
         ...(query.from ? { gte: query.from } : {}),
         ...(query.to ? { lte: query.to } : {}),
       };
@@ -177,25 +177,25 @@ export class SubscriptionPaymentsService {
     const payments = await this.prisma.subscriptionPayment.findMany({
       where,
       select: {
-        amount: true,
-        paidAt: true,
+        paid: true,
+        createdAt: true,
       },
-      orderBy: { paidAt: 'asc' },
+      orderBy: { createdAt: 'asc' },
     });
 
     let totalRevenueDecimal = new Prisma.Decimal(0);
     const monthlyMap = new Map<string, Prisma.Decimal>();
 
     for (const payment of payments) {
-      totalRevenueDecimal = totalRevenueDecimal.plus(payment.amount);
+      totalRevenueDecimal = totalRevenueDecimal.plus(payment.paid);
 
-      const d = new Date(payment.paidAt);
+      const d = new Date(payment.createdAt);
       const year = d.getUTCFullYear();
       const month = String(d.getUTCMonth() + 1).padStart(2, '0');
       const key = `${year}-${month}`;
 
       const currentMonthTotal = monthlyMap.get(key) || new Prisma.Decimal(0);
-      monthlyMap.set(key, currentMonthTotal.plus(payment.amount));
+      monthlyMap.set(key, currentMonthTotal.plus(payment.paid));
     }
 
     const breakdown = Array.from(monthlyMap.entries())

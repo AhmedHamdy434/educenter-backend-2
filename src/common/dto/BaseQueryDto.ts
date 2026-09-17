@@ -1,16 +1,30 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsIn, IsOptional, IsString } from 'class-validator';
 import { PaginationDto } from './PaginationDto';
 
 export class BaseQueryDto extends PaginationDto {
+  @ApiPropertyOptional({
+    description: 'كلمة البحث النصي',
+    example: 'سنتر الأمل',
+  })
   @IsOptional()
   @IsString()
   readonly search?: string;
 
+  @ApiPropertyOptional({
+    description: 'حقل الترتيب',
+    example: 'createdAt',
+  })
   @IsOptional()
   @IsString()
   readonly sortBy?: string;
 
+  @ApiPropertyOptional({
+    description: 'اتجاه الترتيب (asc أو desc)',
+    enum: ['asc', 'desc'],
+    default: 'desc',
+  })
   @IsOptional()
   @Transform(({ value }) =>
     typeof value === 'string' ? value.toLowerCase() : value,

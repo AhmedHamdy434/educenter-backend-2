@@ -6,6 +6,7 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { UserQueryDto } from './dto/get-users.dto';
 
 describe('Cross-Tenant Security & Privilege Escalation Tests', () => {
+  const ADMIN_ROLE = 'ADMIN' as unknown as UserRole;
   let service: UsersService;
   let prismaService: {
     $transaction: jest.Mock;
@@ -14,6 +15,7 @@ describe('Cross-Tenant Security & Privilege Escalation Tests', () => {
       findFirst: jest.Mock;
       findMany: jest.Mock;
       count: jest.Mock;
+      update: jest.Mock;
     };
   };
 
@@ -28,6 +30,7 @@ describe('Cross-Tenant Security & Privilege Escalation Tests', () => {
         findFirst: jest.fn(),
         findMany: jest.fn(),
         count: jest.fn(),
+        update: jest.fn(),
       },
     };
 
@@ -114,7 +117,7 @@ describe('Cross-Tenant Security & Privilege Escalation Tests', () => {
           'center-A',
           'owner-id',
           { isActive: false },
-          { id: 'admin-id', role: UserRole.ADMIN },
+          { id: 'admin-id', role: ADMIN_ROLE },
         ),
       ).rejects.toThrow(ForbiddenException);
     });
@@ -122,7 +125,7 @@ describe('Cross-Tenant Security & Privilege Escalation Tests', () => {
     it('should prevent an ADMIN from modifying another ADMIN', async () => {
       prismaService.user.findFirst.mockResolvedValueOnce({
         id: 'admin-2-id',
-        role: UserRole.ADMIN,
+        role: ADMIN_ROLE,
         centerId: 'center-A',
       });
 
@@ -131,7 +134,7 @@ describe('Cross-Tenant Security & Privilege Escalation Tests', () => {
           'center-A',
           'admin-2-id',
           { fullName: 'Tampered' },
-          { id: 'admin-1-id', role: UserRole.ADMIN },
+          { id: 'admin-1-id', role: ADMIN_ROLE },
         ),
       ).rejects.toThrow(ForbiddenException);
     });
@@ -139,19 +142,19 @@ describe('Cross-Tenant Security & Privilege Escalation Tests', () => {
     it('should allow an OWNER to modify any user in their center', async () => {
       prismaService.user.findFirst.mockResolvedValueOnce({
         id: 'admin-1-id',
-        role: UserRole.ADMIN,
+        role: ADMIN_ROLE,
         centerId: 'center-A',
       });
       prismaService.user.findUnique.mockResolvedValue({
         id: 'admin-1-id',
         fullName: 'Updated by Owner',
-        role: UserRole.ADMIN,
+        role: ADMIN_ROLE,
         centerId: 'center-A',
       });
-      prismaService.user.update = jest.fn().mockResolvedValueOnce({
+      prismaService.user.update.mockResolvedValueOnce({
         id: 'admin-1-id',
         fullName: 'Updated by Owner',
-        role: UserRole.ADMIN,
+        role: ADMIN_ROLE,
         centerId: 'center-A',
       });
 

@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { SubscriptionPlan } from '@prisma/client';
-import { GRACE_PERIOD_DAYS } from 'src/common/constants';
+import { GRACE_PERIOD_DAYS } from '../../common/constants';
 
 export interface SubscriptionValidationResult {
   subscriptionPlan: SubscriptionPlan;
@@ -71,7 +71,7 @@ export class SubscriptionValidationService {
         1,
         Math.ceil(remainingMs / (24 * 60 * 60 * 1000)),
       );
-      const warningHeader = `فترة السماح نشطة. ${remainingDays} أيام متبقية.`;
+      const warningHeader = `Grace period active. ${remainingDays} days remaining.`;
 
       return {
         subscriptionPlan: subscription.subscriptionPlan,
@@ -88,8 +88,7 @@ export class SubscriptionValidationService {
         subscriptionPlan: subscription.subscriptionPlan,
         isGracePeriod: false,
         isExpired: true,
-        warningHeader:
-          'الاشتراك منتهي، يرجى التجديد لاستكمال الإضافة والتعديل.',
+        warningHeader: 'Subscription expired. Read-only mode active.',
       };
     }
 
@@ -162,6 +161,28 @@ export class SubscriptionValidationService {
       throw new ForbiddenException(
         'باقتك الحالية لا تدعم إنشاء الاختبارات. يرجى الترقية لتفعيل هذه الميزة.',
       );
+    }
+  }
+
+  /**
+   * Validate subject limit for a center.
+   */
+  async validateSubjectLimit(centerId: string) {
+    const plan = await this.getActiveSubscription(centerId);
+    const subjectLimit = (plan as unknown as { subjectLimit?: number }).subjectLimit;
+
+    if (subjectLimit !== undefined && subjectLimit !== null) {
+      const count = await this.prisma.subject.count({
+        where: {
+          centerId,
+        },
+      });
+
+      if (count >= subjectLimit) {
+        throw new BadRequestException(
+          `تم تجاوز الحد الأقصى المسموح به للمواد الدراسية في باقتك الحالية (${subjectLimit} مادة). يرجى ترقية الاشتراك.`,
+        );
+      }
     }
   }
 }

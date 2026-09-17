@@ -58,8 +58,6 @@ export class TeachersService {
         data: {
           userId: user.id,
           centerId,
-          specialization: data.specialization || null,
-          salary: data.salary || null,
           bio: data.bio || null,
         },
       });
@@ -114,7 +112,6 @@ export class TeachersService {
         { user: { fullName: { contains: query.search, mode: 'insensitive' } } },
         { user: { email: { contains: query.search, mode: 'insensitive' } } },
         { user: { phone: { contains: query.search, mode: 'insensitive' } } },
-        { specialization: { contains: query.search, mode: 'insensitive' } },
         { bio: { contains: query.search, mode: 'insensitive' } },
       ];
     }
@@ -187,9 +184,6 @@ export class TeachersService {
       await tx.teacher.update({
         where: { id },
         data: {
-          specialization:
-            data.specialization !== undefined ? data.specialization : undefined,
-          salary: data.salary !== undefined ? data.salary : undefined,
           bio: data.bio !== undefined ? data.bio : undefined,
         },
       });

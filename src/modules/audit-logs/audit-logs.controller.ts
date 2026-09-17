@@ -19,7 +19,7 @@ import { PaginationMeta } from '../../common/utils/buildMeta';
 
 @Controller('audit-logs')
 @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
-@Roles(AppRole.OWNER, AppRole.ADMIN)
+@Roles(AppRole.OWNER)
 export class AuditLogsController {
   constructor(private readonly auditLogsService: AuditLogsService) {}
 

@@ -145,6 +145,24 @@ OWNER         ADMIN        TEACHER       STUDENT    PARENT PORTAL           OWNE
 
 ---
 
+### 3.2.1 Center Subscription Payments (`SubscriptionPaymentsModule`)
+* **Purpose**: Records offline/manual payments made by centers to the SaaS platform for subscriptions and renewals.
+* **Schema Truth & Core Data Fields**:
+  - `id`: CUID unique record identifier.
+  - `centerId`: Center foreign key reference.
+  - `subscriptionId`: Link to `CenterSubscription`.
+  - `paid`: `Decimal` - Actual monetary amount received (Note: in the database model and DTO, this field is named `paid`, not `amount`).
+  - `periodStart`: Start timestamp of the billing coverage period.
+  - `periodEnd`: End timestamp of the billing coverage period.
+  - `createdAt`: Timestamp when the payment was logged (used as the effective payment date; there is no separate `paidAt`).
+* **Endpoints & Operations**:
+  - `GET /api/subscription-payments/summary`: Aggregated stats for SuperAdmin dashboard (total revenue, active subscriptions count, total payments count).
+  - `GET /api/subscription-payments`: Paginated list of all payments across all centers with date-range filters (`from`, `to`).
+  - `POST /api/centers/:centerId/subscription-payments`: SuperAdmin records a manual payment for a specific center.
+  - `GET /api/centers/:centerId/subscription-payments`: Paginated list of subscription payments belonging to a specific center (accessible by SuperAdmin and Center Owner).
+
+---
+
 ### 3.3 Center Administrators (`AdminsModule`)
 * **Admin Creation (`POST /admins`)**:
   - Restricted strictly to `OWNER`.
@@ -278,6 +296,7 @@ OWNER         ADMIN        TEACHER       STUDENT    PARENT PORTAL           OWNE
 | `SubscriptionPlan` | `SubscriptionPlansModule` | **Full** | SuperAdmin CRUD + Status toggle. Public read endpoints. |
 | `Center` | `CentersModule` | **Full** | SuperAdmin CRUD + Status + Subscribe/Renew. Tenant `me` & `my-subscription`. |
 | `CenterSubscription` | `CentersModule` | **Full** | Subscription lifecycle, 3-day grace period, daily expiry cron. |
+| `SubscriptionPayment` | `SubscriptionPaymentsModule` | **Full** | Records offline/manual center payments (`paid`, `periodStart`, `periodEnd`, `createdAt`). |
 | `User` | `UsersModule` / `AuthModule` | **Full** | Full management, role hierarchy safeguards, real-time `isActive` validation. |
 | `SuperAdmin` | `AuthModule` | **Full** | Authenticated via `POST /auth/login`. Seeded via script. |
 | `Teacher` | `TeachersModule` | **Full** | Full CRUD, Status toggle, User account sync, Subject assignments. |
@@ -302,11 +321,12 @@ OWNER         ADMIN        TEACHER       STUDENT    PARENT PORTAL           OWNE
 
 ## 6. Complete API Reference Table
 
-The following table documents all **63 endpoints** implemented in the EduCenter backend API:
+The following table documents all **71 endpoints** implemented in the EduCenter backend API:
 
 | Module | Method | Endpoint Path | Allowed Roles | Business Purpose |
 | :--- | :---: | :--- | :--- | :--- |
 | **Auth** | `POST` | `/api/auth/login` | Public (Throttled) | Authenticate user/admin, check `isActive`, return JWT & `mustChangePassword`. |
+| **Auth** | `POST` | `/api/auth/super-admin/login` | Public (Throttled) | Authenticate SuperAdmin specifically, return platform JWT. |
 | **Auth** | `GET` | `/api/auth/me` | Authenticated | Retrieve authenticated user profile and tenant details. |
 | **Auth** | `PATCH` | `/api/auth/change-password` | Authenticated | Change current user's password and clear `mustChangePassword`. |
 | **Auth** | `POST` | `/api/auth/forgot-password` | Public (Throttled) | Request 6-digit OTP password reset code (safe against enumeration). |
@@ -325,6 +345,10 @@ The following table documents all **63 endpoints** implemented in the EduCenter 
 | **Centers** | `PATCH` | `/api/centers/:id/status` | `SUPER_ADMIN` | Toggle center active/suspended status. |
 | **Centers** | `POST` | `/api/centers/:id/subscribe` | `SUPER_ADMIN` | Assign a new subscription plan to a center starting immediately. |
 | **Centers** | `POST` | `/api/centers/:id/renew` | `SUPER_ADMIN` | Renew a center's subscription with smart extension logic. |
+| **Subscription Payments** | `GET` | `/api/subscription-payments/summary` | `SUPER_ADMIN` | SuperAdmin overview of total revenue, active subscriptions, and payments count. |
+| **Subscription Payments** | `GET` | `/api/subscription-payments` | `SUPER_ADMIN` | Paginated list of all subscription payments across all centers. |
+| **Subscription Payments** | `POST` | `/api/centers/:centerId/subscription-payments` | `SUPER_ADMIN` | Record a manual/offline subscription payment for a specific center. |
+| **Subscription Payments** | `GET` | `/api/centers/:centerId/subscription-payments` | `SUPER_ADMIN`, `OWNER` | List subscription payments belonging to a specific center. |
 | **Admins** | `POST` | `/api/admins` | `OWNER` | Create a new center administrator (`ADMIN`) and dispatch credentials. |
 | **Admins** | `GET` | `/api/admins` | `OWNER` | List center administrators with search and pagination. |
 | **Users** | `GET` | `/api/users` | `OWNER`, `ADMIN` | List all center accounts with role and status filtering, search, pagination. |
@@ -372,3 +396,48 @@ The following table documents all **63 endpoints** implemented in the EduCenter 
 | **Audit Logs** | `GET` | `/api/audit-logs` | `OWNER`, `ADMIN` | List administrative and financial audit logs with action and entity filters. |
 | **Parent Portal** | `POST` | `/api/p/generate/:studentId` | `OWNER`, `ADMIN`, `TEACHER` | Generate a secure 30-day Parent Magic Token for student progress tracking. |
 | **Parent Portal** | `GET` | `/api/p/:token` | **Public** | Public responsive student report for parents (attendance, groups, payments). |
+
+---
+
+## 7. OpenAPI / Swagger Documentation & Live Status
+
+### 7.1 OpenAPI Standards & Response Envelope Specifications
+* **Single Source of Truth**: `docs/openapi.json` is maintained as the authoritative API spec and automatically merged in `src/main.ts` into NestJS Swagger UI.
+* **Dual Definition Rule**: Both `schema` and `example` are declared on all `application/json` responses to ensure full Swagger UI body preview and type syntax rendering:
+  ```json
+  "content": {
+    "application/json": {
+      "schema": { "type": "object" },
+      "example": { ... }
+    }
+  }
+  ```
+* **Unified Envelopes Agreed**:
+  - **Single Resource**: `{ "success": true, "message": "...", "data": { ... } }`
+  - **Paginated Collection**: `{ "success": true, "message": "...", "data": [ ... ], "meta": { "total": ..., "page": ..., "limit": ..., "totalPages": ..., "hasNextPage": ..., "hasPreviousPage": ... } }`
+  - **Error (NestJS Standard)**: `{ "statusCode": ..., "message": "..." | [...], "error": "..." }`
+
+### 7.2 Current Module Progress & Implementation Status (48 / 69 Operations Complete)
+
+| Module | Endpoints Count | Swagger Status | Status Description |
+| :--- | :---: | :---: | :--- |
+| **Auth** | 6 | ✅ **Completed** | Full realistic examples for login (Center & SuperAdmin), me, change password, OTP reset. |
+| **Centers** | 9 | ✅ **Completed** | Full CRUD, onboarding, status toggling, plan subscribe & renew. |
+| **Subscription Plans** | 5 | ✅ **Completed** | Full CRUD, status toggle, public view endpoints. |
+| **Subscription Payments** | 4 | ✅ **Completed** | Revenue summary, global list, and center-specific payment operations. |
+| **Users** | 3 | ✅ **Completed** | Center user management, role immutability, hierarchy protection. |
+| **Grades** | 5 | ✅ **Completed** | Academic grades CRUD, active status toggle, unique name enforcement. |
+| **Subjects** | 6 | ✅ **Completed** | Subjects CRUD, options dropdown, grade associations, limit checks. |
+| **Teachers** | 5 | ✅ **Completed** | Teacher onboarding, accounts, diff-synced subject relations, limit checks. |
+| **Students** | 5 | ✅ **Completed** | Student onboarding, accounts, grade enrollments, seat & plan limit checks. |
+| **Groups** | 8 | ⏸️ **Pending** | Paused: Waiting for user updates to group logic, student assignments, and schedules. |
+| **Attendance** | 6 | ⏸️ **Pending** | Paused: Waiting for user updates to attendance session flow and reports. |
+| **Payments** | 3 | ⏸️ **Pending** | Paused: Waiting for user updates to student monthly tuition fee logic. |
+| **Notifications** | 1 | ⏸️ **Pending** | Paused: Waiting for user updates to WhatsApp notifications. |
+| **Audit Logs** | 1 | ⏸️ **Pending** | Paused: Waiting for user updates to audit logging. |
+| **Parent Portal** | 2 | ⏸️ **Pending** | Paused: Waiting for user updates to parent magic links & portal view. |
+
+**Current Live Server Info**:
+- Host: `http://localhost:5000`
+- Swagger UI Documentation: `http://localhost:5000/api/docs`
+- OpenAPI JSON Endpoint: `http://localhost:5000/api/docs-json`

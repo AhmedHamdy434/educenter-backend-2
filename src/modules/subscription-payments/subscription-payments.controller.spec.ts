@@ -69,7 +69,7 @@ describe('SubscriptionPaymentsControllers', () => {
   it('should call create on center payment creation endpoint', async () => {
     const dto = {
       centerSubscriptionId: 'sub-1',
-      amount: 300,
+      paid: 300,
       periodStart: new Date(),
       periodEnd: new Date(),
     };
