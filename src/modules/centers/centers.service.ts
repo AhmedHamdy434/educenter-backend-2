@@ -382,14 +382,29 @@ export class CentersService {
   ): Promise<CenterDetails> {
     await this.findOne(centerId);
 
-    // 1. جلب آخر اشتراك للمركز
-    const lastSubscription = await this.prisma.centerSubscription.findFirst({
-      where: { centerId },
+    const now = new Date();
+
+    // 1. جلب الاشتراك النشط حالياً للمركز (إن وجد وسارٍ)
+    const activeSubscription = await this.prisma.centerSubscription.findFirst({
+      where: {
+        centerId,
+        status: 'ACTIVE',
+        endDate: { gte: now },
+      },
       orderBy: { endDate: 'desc' },
       include: { subscriptionPlan: true },
     });
 
-    // 2. تحديد باقة الاشتراك المستهدفة (المرسلة في الـ DTO أو الباقة السابقة)
+    // 2. إذا لم يوجد اشتراك نشط سارٍ، جلب أحدث اشتراك لمعرفة الباقة السابقة
+    const lastSubscription =
+      activeSubscription ||
+      (await this.prisma.centerSubscription.findFirst({
+        where: { centerId },
+        orderBy: { endDate: 'desc' },
+        include: { subscriptionPlan: true },
+      }));
+
+    // 3. تحديد باقة الاشتراك المستهدفة (المرسلة في الـ DTO أو باقة الاشتراك الحالي)
     const targetPlanId =
       dto?.subscriptionPlanId || lastSubscription?.subscriptionPlanId;
 
@@ -411,28 +426,42 @@ export class CentersService {
       throw new BadRequestException('باقة الاشتراك المطلوبة غير نشطة.');
     }
 
-    // 3. حساب تواريخ الاشتراك بناءً على نوع الباقة (MONTHLY / YEARLY)
+    // 4. حساب تواريخ الاشتراك وفترة الدفعة بناءً على نوع الباقة (MONTHLY / YEARLY)
     const count = dto?.monthsCount ?? 1;
     const isYearly = plan.type === PlanType.YEARLY;
     const totalMonthsToAdd = isYearly ? count * 12 : count;
 
-    const now = new Date();
-    const isCurrentlyActive =
-      lastSubscription &&
-      lastSubscription.status === 'ACTIVE' &&
-      new Date(lastSubscription.endDate) > now;
+    const isCurrentlyActive = !!activeSubscription;
 
-    let startDate: Date;
-    let endDate: Date;
+    let subscriptionStartDate: Date;
+    let subscriptionEndDate: Date;
+    let paymentPeriodStart: Date;
+    let paymentPeriodEnd: Date;
 
-    if (isCurrentlyActive) {
-      // تمديد: يبدأ الاشتراك الجديد من أول يوم في الشهر التالي لانتهاء الاشتراك الحالي
-      startDate = getFirstDayOfNextMonth(lastSubscription.endDate);
-      endDate = getLastDayOfMonth(startDate, totalMonthsToAdd - 1);
+    if (isCurrentlyActive && activeSubscription) {
+      // تمديد اشتراك سارٍ:
+      // فترة الدفعة تبدأ من أول يوم في الشهر التالي لانتهاء الاشتراك الحالي (أو التاريخ المحدد إن وجد)
+      paymentPeriodStart = dto?.startDate
+        ? getFirstDayOfMonth(new Date(dto.startDate))
+        : getFirstDayOfNextMonth(activeSubscription.endDate);
+      paymentPeriodEnd = getLastDayOfMonth(
+        paymentPeriodStart,
+        totalMonthsToAdd - 1,
+      );
+      // تاريخ نهاية الاشتراك يمتد ليشمل المدة المجددة كاملة
+      subscriptionEndDate = paymentPeriodEnd;
+      subscriptionStartDate = paymentPeriodStart;
     } else {
-      // اشتراك جديد أو منتهي: يبدأ من أول يوم في الشهر الحالي وحتى آخر يوم في المدة المستهدفة
-      startDate = getFirstDayOfMonth(now);
-      endDate = getLastDayOfMonth(startDate, totalMonthsToAdd - 1);
+      // اشتراك جديد أو منتهٍ: يبدأ من أول يوم في الشهر الحالي (أو التاريخ المحدد) وحتى آخر يوم في المدة المستهدفة
+      subscriptionStartDate = dto?.startDate
+        ? getFirstDayOfMonth(new Date(dto.startDate))
+        : getFirstDayOfMonth(now);
+      subscriptionEndDate = getLastDayOfMonth(
+        subscriptionStartDate,
+        totalMonthsToAdd - 1,
+      );
+      paymentPeriodStart = subscriptionStartDate;
+      paymentPeriodEnd = subscriptionEndDate;
     }
 
     const inputPrice =
@@ -454,38 +483,60 @@ export class CentersService {
         ? `تجديد اشتراك ${isYearly ? 'سنوي' : 'شهري'} (${periodDescription}) بسعر مخصص: ${totalPrice.toString()}`
         : `تجديد اشتراك ${isYearly ? 'سنوي' : 'شهري'} (${periodDescription})`;
 
-    // 4. تنفيذ العملية داخل معاملة لضمان سلامة البيانات
+    // 5. تنفيذ العملية داخل معاملة لضمان سلامة البيانات
     await this.prisma.$transaction(async (tx) => {
-      // إنهاء حالة الاشتراكات السابقة النشطة
-      await tx.centerSubscription.updateMany({
-        where: {
-          centerId,
-          status: 'ACTIVE',
-        },
-        data: {
-          status: 'EXPIRED',
-        },
-      });
+      let targetSubscriptionId: string;
 
-      // إنشاء سجل الاشتراك المجدد
-      const renewedSubscription = await tx.centerSubscription.create({
-        data: {
-          centerId,
-          subscriptionPlanId: plan.id,
-          customPrice: totalPrice,
-          startDate,
-          endDate,
-          status: 'ACTIVE',
-        },
-      });
+      if (
+        isCurrentlyActive &&
+        activeSubscription &&
+        plan.id === activeSubscription.subscriptionPlanId
+      ) {
+        // تمديد نفس الاشتراك النشط بتحديث تاريخ البداية وتاريخ الانتهاء
+        const updatedSubscription = await tx.centerSubscription.update({
+          where: { id: activeSubscription.id },
+          data: {
+            startDate: subscriptionStartDate,
+            endDate: subscriptionEndDate,
+            status: 'ACTIVE',
+          },
+        });
+        targetSubscriptionId = updatedSubscription.id;
+      } else {
+        // في حال تغيير الباقة أو إذا كان الاشتراك منتهياً:
+        // إنهاء حالة الاشتراكات السابقة النشطة
+        await tx.centerSubscription.updateMany({
+          where: {
+            centerId,
+            status: 'ACTIVE',
+          },
+          data: {
+            status: 'EXPIRED',
+          },
+        });
 
+        // إنشاء سجل الاشتراك المجدد
+        const renewedSubscription = await tx.centerSubscription.create({
+          data: {
+            centerId,
+            subscriptionPlanId: plan.id,
+            customPrice: totalPrice,
+            startDate: subscriptionStartDate,
+            endDate: subscriptionEndDate,
+            status: 'ACTIVE',
+          },
+        });
+        targetSubscriptionId = renewedSubscription.id;
+      }
+
+      // تسجيل دفعة الاشتراك بالفترة المحددة للتجديد
       await tx.subscriptionPayment.create({
         data: {
-          centerSubscriptionId: renewedSubscription.id,
+          centerSubscriptionId: targetSubscriptionId,
           centerId,
           paid: totalPrice,
-          periodStart: startDate,
-          periodEnd: endDate,
+          periodStart: paymentPeriodStart,
+          periodEnd: paymentPeriodEnd,
           paymentMethod: 'manual',
           notes,
         },

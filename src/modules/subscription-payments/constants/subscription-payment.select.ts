@@ -14,21 +14,7 @@ export const subscriptionPaymentListSelect = {
     select: {
       id: true,
       name: true,
-      slug: true,
-      email: true,
       phone: true,
-    },
-  },
-  centerSubscription: {
-    select: {
-      id: true,
-      status: true,
-      subscriptionPlan: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
     },
   },
 } satisfies Prisma.SubscriptionPaymentSelect;

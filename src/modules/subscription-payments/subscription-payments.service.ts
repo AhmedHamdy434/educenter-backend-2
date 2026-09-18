@@ -137,8 +137,8 @@ export class SubscriptionPaymentsService {
             name: { contains: query.search, mode: 'insensitive' },
           },
         },
-        { paymentMethod: { contains: query.search, mode: 'insensitive' } },
-        { notes: { contains: query.search, mode: 'insensitive' } },
+        // { paymentMethod: { contains: query.search, mode: 'insensitive' } },
+        // { notes: { contains: query.search, mode: 'insensitive' } },
       ];
     }
 

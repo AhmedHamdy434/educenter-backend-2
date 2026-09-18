@@ -11,7 +11,8 @@ import {
 
 export class RenewSubscriptionDto {
   @ApiPropertyOptional({
-    description: 'معرف باقة جديدة إذا رغب المركز في الترقية/التبديل عند التجديد',
+    description:
+      'معرف باقة جديدة إذا رغب المركز في الترقية/التبديل عند التجديد',
     example: 'cuid-plan-premium',
   })
   @IsOptional()
@@ -58,4 +59,13 @@ export class RenewSubscriptionDto {
   @IsNumber({}, { message: 'السعر المخصص يجب أن يكون رقماً صالحاً.' })
   @Min(0, { message: 'السعر لا يمكن أن يكون سالباً.' })
   readonly price?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'تاريخ بداية التجديد (اختياري، الافتراضي: الشهر التالي للاشتراك الساري أو الشهر الحالي للمنتهي)',
+    example: '2026-10-01T00:00:00.000Z',
+  })
+  @IsOptional()
+  // @IsDateString({}, { message: 'تاريخ بداية الاشتراك غير صالح.' })
+  readonly startDate?: Date;
 }

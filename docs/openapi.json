@@ -8128,6 +8128,99 @@
           "ParentPortal"
         ]
       }
+    },
+    "/api/home-stats": {
+      "get": {
+        "operationId": "HomeStatsController_getHomeStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "تم جلب إحصائيات الصفحة الرئيسية بنجاح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "example": {
+                    "success": true,
+                    "message": "تم جلب إحصائيات الصفحة الرئيسية بنجاح.",
+                    "data": {
+                      "totalRevenue": 35024,
+                      "totalCenters": 4,
+                      "activeCenters": 4,
+                      "graceCenters": 0,
+                      "expiredCenters": 0,
+                      "suspendedCenters": 0,
+                      "activePlans": 4,
+                      "totalPlans": 4
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم جلب إحصائيات الصفحة الرئيسية بنجاح.",
+                  "data": {
+                    "totalRevenue": 35024,
+                    "totalCenters": 4,
+                    "activeCenters": 4,
+                    "graceCenters": 0,
+                    "expiredCenters": 0,
+                    "suspendedCenters": 0,
+                    "activePlans": 4,
+                    "totalPlans": 4
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح بالدخول",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "example": {
+                    "statusCode": 401,
+                    "message": "Unauthorized"
+                  }
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح إلا للمدير العام (SUPER_ADMIN)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "example": {
+                    "statusCode": 403,
+                    "message": "Forbidden resource",
+                    "error": "Forbidden"
+                  }
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "جلب إحصائيات الكروت الرئيسية للمنصة (خاص بالمدير العام SUPER_ADMIN)",
+        "tags": [
+          "Home Stats"
+        ]
+      }
     }
   },
   "info": {

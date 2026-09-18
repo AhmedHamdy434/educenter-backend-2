@@ -23,6 +23,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { ParentPortalModule } from './modules/parent-portal/parent-portal.module';
 import { SubscriptionPaymentsModule } from './modules/subscription-payments/subscription-payments.module';
+import { HomeStatsModule } from './modules/home-stats/home-stats.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { SubscriptionPaymentsModule } from './modules/subscription-payments/subs
     SubscriptionPlansModule,
     CentersModule,
     SubscriptionPaymentsModule,
+    HomeStatsModule,
     CloudinaryModule,
     GradesModule,
     SubjectsModule,

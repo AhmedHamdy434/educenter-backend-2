@@ -37,7 +37,10 @@ export class SubscriptionPaymentsController {
   })
   @ApiResponse({ status: 200, description: 'تم جلب ملخص الإيرادات بنجاح' })
   @ApiResponse({ status: 401, description: 'غير مصرح بالدخول' })
-  @ApiResponse({ status: 403, description: 'غير مسموح إلا للمدير العام (SUPER_ADMIN)' })
+  @ApiResponse({
+    status: 403,
+    description: 'غير مسموح إلا للمدير العام (SUPER_ADMIN)',
+  })
   async getSummary(
     @Query() query: SubscriptionPaymentSummaryDto,
   ): Promise<SubscriptionRevenueSummary> {
@@ -47,12 +50,14 @@ export class SubscriptionPaymentsController {
   @Get()
   @ResponseMessage('تم جلب سجل دفعات الاشتراكات بنجاح.')
   @ApiOperation({
-    summary:
-      'جلب سجل كامل لدفعات اشتراكات المراكز للمنصة مع التصفية والصفحات',
+    summary: 'جلب سجل كامل لدفعات اشتراكات المراكز للمنصة مع التصفية والصفحات',
   })
   @ApiResponse({ status: 200, description: 'تم جلب سجل الدفعات بنجاح' })
   @ApiResponse({ status: 401, description: 'غير مصرح بالدخول' })
-  @ApiResponse({ status: 403, description: 'غير مسموح إلا للمدير العام (SUPER_ADMIN)' })
+  @ApiResponse({
+    status: 403,
+    description: 'غير مسموح إلا للمدير العام (SUPER_ADMIN)',
+  })
   async findAll(
     @Query() query: GetSubscriptionPaymentsDto,
   ): Promise<{ data: SubscriptionPaymentListItem[]; meta: PaginationMeta }> {

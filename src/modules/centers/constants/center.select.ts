@@ -71,9 +71,9 @@ export const centerDetailsSelect = {
     },
   },
   subscriptions: {
-    where: {
-      status: 'ACTIVE',
-    },
+    // where: {
+    //   status: 'ACTIVE',
+    // },
     select: {
       id: true,
       customPrice: true,
@@ -88,18 +88,18 @@ export const centerDetailsSelect = {
           image: true,
           price: true,
           type: true,
-          studentLimit: true,
-          teacherLimit: true,
-          canCreateExams: true,
-          isPopular: true,
-          isActive: true,
+          // studentLimit: true,
+          // teacherLimit: true,
+          // canCreateExams: true,
+          // isPopular: true,
+          // isActive: true,
         },
       },
     },
     orderBy: {
       endDate: 'desc',
     },
-    take: 1,
+    // take: 1,
   },
 } satisfies Prisma.CenterSelect;
 

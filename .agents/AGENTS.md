@@ -104,6 +104,7 @@
     7. `Subjects` (6 endpoints): `GET /api/subjects/options`, `POST /api/subjects`, `GET /api/subjects`, `GET /api/subjects/:id`, `PATCH /api/subjects/:id`, `PATCH /api/subjects/:id/toggle-status`
     8. `Teachers` (5 endpoints): `POST /api/teachers`, `GET /api/teachers`, `GET /api/teachers/:id`, `PATCH /api/teachers/:id`, `PATCH /api/teachers/:id/toggle-status`
     9. `Students` (5 endpoints): `POST /api/students`, `GET /api/students`, `GET /api/students/:id`, `PATCH /api/students/:id`, `PATCH /api/students/:id/toggle-status`
+    10. `Home Stats` (1 endpoint): `GET /api/home-stats`
   - **Pending Modules (Paused until User Finishes Pending Logic Changes):**
     1. `Groups` (8 endpoints)
     2. `Attendance` (6 endpoints)
