@@ -32,7 +32,12 @@
                       "phone": "01012345678",
                       "role": "OWNER",
                       "centerId": "clycenter001",
-                      "mustChangePassword": false
+                      "mustChangePassword": false,
+                      "center": {
+                        "id": "clycenter001",
+                        "name": "سنتر الإيمان التعليمي",
+                        "slug": "al-eman"
+                      }
                     }
                   }
                 },
@@ -50,7 +55,12 @@
                         "phone": "01012345678",
                         "role": "OWNER",
                         "centerId": "clycenter001",
-                        "mustChangePassword": false
+                        "mustChangePassword": false,
+                        "center": {
+                          "id": "clycenter001",
+                          "name": "سنتر الإيمان التعليمي",
+                          "slug": "al-eman"
+                        }
                       }
                     }
                   }
@@ -781,7 +791,11 @@
                       "mustChangePassword": false,
                       "centerId": "clycenter001",
                       "createdAt": "2026-09-01T08:00:00.000Z",
-                      "updatedAt": "2026-09-01T08:00:00.000Z"
+                      "center": {
+                        "id": "clycenter001",
+                        "name": "سنتر الإيمان التعليمي",
+                        "slug": "al-eman"
+                      }
                     }
                   }
                 },
@@ -799,7 +813,11 @@
                     "mustChangePassword": false,
                     "centerId": "clycenter001",
                     "createdAt": "2026-09-01T08:00:00.000Z",
-                    "updatedAt": "2026-09-01T08:00:00.000Z"
+                    "center": {
+                      "id": "clycenter001",
+                      "name": "سنتر الإيمان التعليمي",
+                      "slug": "al-eman"
+                    }
                   }
                 }
               }
@@ -937,7 +955,11 @@
                       "mustChangePassword": false,
                       "centerId": "clycenter001",
                       "createdAt": "2026-09-01T08:00:00.000Z",
-                      "updatedAt": "2026-09-01T08:00:00.000Z"
+                      "center": {
+                        "id": "clycenter001",
+                        "name": "سنتر الإيمان التعليمي",
+                        "slug": "al-eman"
+                      }
                     }
                   }
                 },
@@ -955,7 +977,11 @@
                     "mustChangePassword": false,
                     "centerId": "clycenter001",
                     "createdAt": "2026-09-01T08:00:00.000Z",
-                    "updatedAt": "2026-09-01T08:00:00.000Z"
+                    "center": {
+                      "id": "clycenter001",
+                      "name": "سنتر الإيمان التعليمي",
+                      "slug": "al-eman"
+                    }
                   }
                 }
               }

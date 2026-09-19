@@ -91,7 +91,8 @@ export class CreateCenterDto {
   readonly ownerFullName!: string;
 
   @ApiProperty({
-    description: 'البريد الإلكتروني لمالك المركز (يستخدم لتسجيل الدخول كـ OWNER)',
+    description:
+      'البريد الإلكتروني لمالك المركز (يستخدم لتسجيل الدخول كـ OWNER)',
     example: 'owner@elawael.com',
   })
   @IsNotEmpty()

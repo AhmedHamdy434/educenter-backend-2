@@ -11,7 +11,13 @@ export const userDetailsSelect = {
   mustChangePassword: true,
   centerId: true,
   createdAt: true,
-  updatedAt: true,
+  center: {
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+    },
+  },
 } satisfies Prisma.UserSelect;
 
 export const userListSelect = {

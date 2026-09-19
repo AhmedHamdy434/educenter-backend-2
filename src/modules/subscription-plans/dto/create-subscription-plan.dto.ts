@@ -63,7 +63,8 @@ export class CreateSubscriptionPlanDto {
   readonly studentLimit!: number;
 
   @ApiProperty({
-    description: 'الحد الأقصى لعدد المعلمين المسموح به في المركز ضمن هذه الباقة',
+    description:
+      'الحد الأقصى لعدد المعلمين المسموح به في المركز ضمن هذه الباقة',
     example: 20,
     minimum: 0,
   })

@@ -4,12 +4,12 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { User, SuperAdmin } from '@prisma/client';
+import { SuperAdmin } from '@prisma/client';
 import {
   comparePassword,
   hashPassword,
 } from '../../common/utils/password.util';
-import { UsersService } from '../users/users.service';
+import { UsersService, UserWithCenter } from '../users/users.service';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -33,7 +33,7 @@ export class AuthService {
   private async validateCenterUser(
     identifier: string,
     pass: string,
-  ): Promise<User> {
+  ): Promise<UserWithCenter> {
     const user = await this.usersService.findByIdentifier(identifier);
     if (!user) {
       throw new UnauthorizedException('بيانات الاعتماد غير صالحة');
@@ -122,6 +122,7 @@ export class AuthService {
         role: user.role,
         centerId: user.centerId,
         mustChangePassword: user.mustChangePassword,
+        center: user.center,
       },
     };
   }
@@ -159,21 +160,21 @@ export class AuthService {
    */
   async getProfile(userId: string) {
     // 1. التحقق من المدير العام أولاً
-    const superAdmin = await this.prisma.superAdmin.findUnique({
-      where: { id: userId },
-    });
+    // const superAdmin = await this.prisma.superAdmin.findUnique({
+    //   where: { id: userId },
+    // });
 
-    if (superAdmin && superAdmin.isActive) {
-      return {
-        id: superAdmin.id,
-        fullName: superAdmin.fullName,
-        email: superAdmin.email,
-        phone: null,
-        role: 'SUPER_ADMIN' as const,
-        centerId: null,
-        mustChangePassword: false,
-      };
-    }
+    // if (superAdmin && superAdmin.isActive) {
+    //   return {
+    //     id: superAdmin.id,
+    //     fullName: superAdmin.fullName,
+    //     email: superAdmin.email,
+    //     phone: null,
+    //     role: 'SUPER_ADMIN' as const,
+    //     centerId: null,
+    //     mustChangePassword: false,
+    //   };
+    // }
 
     // 2. التحقق من المستخدم العادي
     const user = await this.usersService.findById(userId);
@@ -181,15 +182,7 @@ export class AuthService {
       throw new UnauthorizedException('بيانات الاعتماد غير صالحة');
     }
 
-    return {
-      id: user.id,
-      fullName: user.fullName,
-      email: user.email,
-      phone: user.phone,
-      role: user.role,
-      centerId: user.centerId,
-      mustChangePassword: user.mustChangePassword,
-    };
+    return user;
   }
 
   /**
@@ -222,7 +215,10 @@ export class AuthService {
       return { success: true, message: 'تم تغيير كلمة المرور بنجاح.' };
     }
 
-    const user = await this.usersService.findById(userId);
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, password: true },
+    });
     if (!user) {
       throw new UnauthorizedException('المستخدم غير موجود.');
     }

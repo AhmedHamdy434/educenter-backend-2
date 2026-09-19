@@ -3,7 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { JwtModule } from '@nestjs/jwt';
-import { APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
+import { AllExceptionsFilter, LoggingInterceptor } from './common/http-logging';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { RequestContextMiddleware } from './common/middleware/request-context.middleware';
 import { PrismaModule } from './database/prisma/prisma.module';
@@ -62,7 +63,15 @@ import { HomeStatsModule } from './modules/home-stats/home-stats.module';
   providers: [
     {
       provide: APP_INTERCEPTOR,
+      useClass: LoggingInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
       useClass: TransformInterceptor,
+    },
+    {
+      provide: APP_FILTER,
+      useClass: AllExceptionsFilter,
     },
   ],
 })

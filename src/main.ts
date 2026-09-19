@@ -80,13 +80,15 @@ async function bootstrap() {
     )
     .build();
 
-  let swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
+  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
 
   const openApiPath = path.join(process.cwd(), 'docs', 'openapi.json');
   if (fs.existsSync(openApiPath)) {
     try {
       const enrichedDoc = JSON.parse(fs.readFileSync(openApiPath, 'utf8'));
-      for (const [pathKey, methods] of Object.entries(enrichedDoc.paths || {})) {
+      for (const [pathKey, methods] of Object.entries(
+        enrichedDoc.paths || {},
+      )) {
         if (swaggerDocument.paths[pathKey]) {
           for (const [methodKey, op] of Object.entries(
             methods as Record<string, any>,

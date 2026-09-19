@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  HttpStatus,
   Injectable,
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma/prisma.service';
@@ -36,16 +37,29 @@ export class SubscriptionValidationService {
       },
       include: {
         subscriptionPlan: true,
+        center: {
+          select: {
+            isActive: true,
+          },
+        },
       },
       orderBy: {
         endDate: 'desc',
       },
     });
 
-    if (!subscription) {
-      throw new ForbiddenException(
-        'المركز لا يمتلك اشتراكاً نشطاً حالياً. يرجى الاشتراك في إحدى الباقات.',
-      );
+    if (
+      !subscription ||
+      !subscription.subscriptionPlan?.isActive ||
+      !subscription.center?.isActive
+    ) {
+      throw new ForbiddenException({
+        statusCode: HttpStatus.FORBIDDEN,
+        message:
+          'المركز لا يمتلك اشتراكاً نشطاً حالياً. يرجى الاشتراك في إحدى الباقات.',
+        error: 'Forbidden',
+        code: 'CENTER_SUBSCRIPTION_INACTIVE',
+      });
     }
 
     const now = new Date();
@@ -169,7 +183,8 @@ export class SubscriptionValidationService {
    */
   async validateSubjectLimit(centerId: string) {
     const plan = await this.getActiveSubscription(centerId);
-    const subjectLimit = (plan as unknown as { subjectLimit?: number }).subjectLimit;
+    const subjectLimit = (plan as unknown as { subjectLimit?: number })
+      .subjectLimit;
 
     if (subjectLimit !== undefined && subjectLimit !== null) {
       const count = await this.prisma.subject.count({

@@ -69,6 +69,15 @@ OWNER         ADMIN        TEACHER       STUDENT    PARENT PORTAL           OWNE
   - Operational tenant controllers are protected by `SubscriptionGuard`.
 * **SubscriptionGuard Behavior & Lifecycle**:
   - **SuperAdmin**: Bypasses subscription checks.
+  - **Inactive / Missing Subscription**: If the center has no subscription, an inactive subscription plan, or the center itself is deactivated (`!center.isActive`), requests are blocked with `403 ForbiddenException` returning the fixed machine-readable code `CENTER_SUBSCRIPTION_INACTIVE`:
+    ```json
+    {
+      "statusCode": 403,
+      "message": "المركز لا يمتلك اشتراكاً نشطاً حالياً. يرجى الاشتراك في إحدى الباقات.",
+      "error": "Forbidden",
+      "code": "CENTER_SUBSCRIPTION_INACTIVE"
+    }
+    ```
   - **Grace Period (3 Days)**: If a center's subscription has expired within the last 3 days, requests are permitted and an HTTP response header is returned:
     `X-Subscription-Warning: Grace period active. X days remaining.`
   - **Read-Only Mode**: After the 3-day grace period, `GET`, `HEAD`, and `OPTIONS` requests remain accessible (allowing data browsing and exports), while mutating operations (`POST`, `PUT`, `PATCH`, `DELETE`) are blocked with `403 ForbiddenException` (`'اشتراك السنتر منتهي، برجاء التجديد لاستكمال الإضافة والتعديل.'`).

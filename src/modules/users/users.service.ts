@@ -18,6 +18,18 @@ import {
 } from './constants/user.select';
 import { randomBytes } from 'crypto';
 
+export type UserWithCenter = Prisma.UserGetPayload<{
+  include: {
+    center: {
+      select: {
+        id: true;
+        name: true;
+        slug: true;
+      };
+    };
+  };
+}>;
+
 export interface CreateUserAccountInput {
   fullName: string;
   email: string;
@@ -45,19 +57,29 @@ export class UsersService {
   /**
    * البحث عن مستخدم بواسطة المعرف الفريد الخاص به (ID).
    */
-  async findById(id: string): Promise<User | null> {
+  async findById(id: string): Promise<UserDetails | null> {
     return this.prisma.user.findUnique({
       where: { id },
+      select: userDetailsSelect,
     });
   }
 
   /**
-   * البحث عن مستخدم بواسطة البريد الإلكتروني أو رقم الهاتف باستخدام استعلام OR.
+   * البحث عن مستخدم بواسطة البريد الإلكتروني أو رقم الهاتف للتحقق من بيانات الدخول (Authentication) شاملاً بيانات السنتر.
    */
-  async findByIdentifier(identifier: string): Promise<User | null> {
+  async findByIdentifier(identifier: string): Promise<UserWithCenter | null> {
     return this.prisma.user.findFirst({
       where: {
         OR: [{ email: identifier }, { phone: identifier }],
+      },
+      include: {
+        center: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
+        },
       },
     });
   }

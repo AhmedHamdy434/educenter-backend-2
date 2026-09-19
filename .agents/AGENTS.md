@@ -23,6 +23,15 @@
 * **SubscriptionGuard Behavior & Lifecycle:**
   - If the user has no `centerId` (e.g., `SUPER_ADMIN`), access is granted immediately.
   - For center users (`OWNER`, `ADMIN`, `TEACHER`, `STUDENT`), it validates via `SubscriptionValidationService.validateActiveSubscription(centerId)` against the center's active subscription.
+  - **Inactive / Missing Subscription:** If the center has no subscription, an inactive subscription plan, or the center itself is deactivated, requests are **blocked** with `403 ForbiddenException` returning the fixed error code `CENTER_SUBSCRIPTION_INACTIVE`:
+    ```json
+    {
+      "statusCode": 403,
+      "message": "المركز لا يمتلك اشتراكاً نشطاً حالياً. يرجى الاشتراك في إحدى الباقات.",
+      "error": "Forbidden",
+      "code": "CENTER_SUBSCRIPTION_INACTIVE"
+    }
+    ```
   - **Grace Period (3 Days):** If `now > endDate` but within the 3-day grace period, requests are permitted (read & write), and an HTTP response header is attached:
     `X-Subscription-Warning: Grace period active. X days remaining.`
   - **Read-Only Mode:** If the subscription has exceeded the 3-day grace period:

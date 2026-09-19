@@ -24,6 +24,8 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { RequestUser } from './interfaces/authenticated-request.interface';
 import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { AppRole } from '../../common/enums/app-role.enum';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -38,9 +40,15 @@ export class AuthController {
   @ApiOperation({
     summary: 'تسجيل الدخول لمستخدمي المراكز التعليمية (مالك، معلم، طالب)',
   })
-  @ApiResponse({ status: 200, description: 'تم تسجيل الدخول وإرجاع رمز الوصول' })
+  @ApiResponse({
+    status: 200,
+    description: 'تم تسجيل الدخول وإرجاع رمز الوصول',
+  })
   @ApiResponse({ status: 400, description: 'بيانات الطلب غير صالحة' })
-  @ApiResponse({ status: 401, description: 'بيانات الاعتماد غير صالحة أو الحساب غير نشط' })
+  @ApiResponse({
+    status: 401,
+    description: 'بيانات الاعتماد غير صالحة أو الحساب غير نشط',
+  })
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
   }
@@ -51,15 +59,22 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ResponseMessage('تم تسجيل الدخول بنجاح.')
   @ApiOperation({ summary: 'تسجيل الدخول للمدير العام للمنصة (Super Admin)' })
-  @ApiResponse({ status: 200, description: 'تم تسجيل الدخول وإرجاع رمز الوصول' })
+  @ApiResponse({
+    status: 200,
+    description: 'تم تسجيل الدخول وإرجاع رمز الوصول',
+  })
   @ApiResponse({ status: 400, description: 'بيانات الطلب غير صالحة' })
-  @ApiResponse({ status: 401, description: 'بيانات الاعتماد غير صالحة أو الحساب غير نشط' })
+  @ApiResponse({
+    status: 401,
+    description: 'بيانات الاعتماد غير صالحة أو الحساب غير نشط',
+  })
   async superAdminLogin(@Body() loginDto: LoginDto) {
     return this.authService.superAdminLogin(loginDto);
   }
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
+  @Roles(AppRole.OWNER, AppRole.TEACHER, AppRole.STUDENT)
   @ApiBearerAuth('JWT-auth')
   @ResponseMessage('تم استرجاع بيانات الملف الشخصي بنجاح.')
   @ApiOperation({ summary: 'استرجاع بيانات الملف الشخصي للمستخدم الحالي' })
@@ -77,7 +92,10 @@ export class AuthController {
   @ApiOperation({ summary: 'تغيير كلمة المرور للمستخدم الحالي' })
   @ApiResponse({ status: 200, description: 'تم تغيير كلمة المرور بنجاح' })
   @ApiResponse({ status: 400, description: 'بيانات التحقق غير صالحة' })
-  @ApiResponse({ status: 401, description: 'غير مصرح أو كلمة المرور الحالية غير صحيحة' })
+  @ApiResponse({
+    status: 401,
+    description: 'غير مصرح أو كلمة المرور الحالية غير صحيحة',
+  })
   async changePassword(
     @CurrentUser() user: RequestUser,
     @Body() dto: ChangePasswordDto,
@@ -91,7 +109,10 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ResponseMessage('تم معالجة طلب استعادة كلمة المرور.')
   @ApiOperation({ summary: 'طلب إرسال رمز OTP لاستعادة كلمة المرور' })
-  @ApiResponse({ status: 200, description: 'تم إرسال رمز التحقق في حال وجود البريد' })
+  @ApiResponse({
+    status: 200,
+    description: 'تم إرسال رمز التحقق في حال وجود البريد',
+  })
   @ApiResponse({ status: 400, description: 'صيغة البريد الإلكتروني غير صالحة' })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto);
@@ -103,8 +124,14 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ResponseMessage('تم إعادة تعيين كلمة المرور بنجاح.')
   @ApiOperation({ summary: 'إعادة تعيين كلمة المرور باستخدام رمز OTP' })
-  @ApiResponse({ status: 200, description: 'تمت إعادة تعيين كلمة المرور بنجاح' })
-  @ApiResponse({ status: 400, description: 'رمز التحقق غير صحيح أو منتهي أو كلمة المرور غير صالحة' })
+  @ApiResponse({
+    status: 200,
+    description: 'تمت إعادة تعيين كلمة المرور بنجاح',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'رمز التحقق غير صحيح أو منتهي أو كلمة المرور غير صالحة',
+  })
   async resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto);
   }

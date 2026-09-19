@@ -6,7 +6,8 @@ import { PrismaService } from '../../database/prisma/prisma.service';
 import { AppRole } from '../../common/enums/app-role.enum';
 import { hashPassword } from '../../common/utils/password.util';
 import { UnauthorizedException } from '@nestjs/common';
-import type { User, SuperAdmin } from '@prisma/client';
+import type { SuperAdmin } from '@prisma/client';
+import type { UserWithCenter } from '../users/users.service';
 
 describe('Auth Security & Endpoint Separation Tests', () => {
   let authService: AuthService;
@@ -52,7 +53,7 @@ describe('Auth Security & Endpoint Separation Tests', () => {
       const email = 'owner@center.com';
       const userPassword = await hashPassword('UserPassword456');
 
-      const userRecord: User = {
+      const userRecord: UserWithCenter = {
         id: 'user-1',
         fullName: 'Center Owner',
         email,
@@ -65,6 +66,11 @@ describe('Auth Security & Endpoint Separation Tests', () => {
         mustChangePassword: false,
         createdAt: new Date(),
         updatedAt: new Date(),
+        center: {
+          id: 'center-1',
+          name: 'Center One',
+          slug: 'center-one',
+        },
       };
 
       mockUserFindByIdentifier.mockResolvedValue(userRecord);
@@ -78,6 +84,11 @@ describe('Auth Security & Endpoint Separation Tests', () => {
       expect(result.user.role).toBe(AppRole.OWNER);
       expect(result.user.id).toBe('user-1');
       expect(result.user.centerId).toBe('center-1');
+      expect(result.user.center).toEqual({
+        id: 'center-1',
+        name: 'Center One',
+        slug: 'center-one',
+      });
       expect(mockSuperAdminFindUnique).not.toHaveBeenCalled();
     });
 
@@ -85,7 +96,7 @@ describe('Auth Security & Endpoint Separation Tests', () => {
       const email = 'inactive@center.com';
       const userPassword = await hashPassword('Password123');
 
-      const inactiveUser: User = {
+      const inactiveUser: UserWithCenter = {
         id: 'user-2',
         fullName: 'Inactive User',
         email,
@@ -98,6 +109,11 @@ describe('Auth Security & Endpoint Separation Tests', () => {
         mustChangePassword: false,
         createdAt: new Date(),
         updatedAt: new Date(),
+        center: {
+          id: 'center-1',
+          name: 'Center One',
+          slug: 'center-one',
+        },
       };
 
       mockUserFindByIdentifier.mockResolvedValue(inactiveUser);
@@ -126,6 +142,11 @@ describe('Auth Security & Endpoint Separation Tests', () => {
         mustChangePassword: false,
         createdAt: new Date(),
         updatedAt: new Date(),
+        center: {
+          id: 'center-1',
+          name: 'Center One',
+          slug: 'center-one',
+        },
       });
 
       await expect(

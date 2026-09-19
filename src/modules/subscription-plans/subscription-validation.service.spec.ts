@@ -42,22 +42,34 @@ describe('SubscriptionValidationService', () => {
   });
 
   describe('validateSubscriptionAccess & validateActiveSubscription', () => {
-    it('should throw ForbiddenException if no subscription exists', async () => {
+    it('should throw ForbiddenException with CENTER_SUBSCRIPTION_INACTIVE code if no subscription exists', async () => {
       prisma.centerSubscription.findFirst.mockResolvedValueOnce(null);
 
-      await expect(
-        service.validateActiveSubscription('center-1'),
-      ).rejects.toThrow(ForbiddenException);
+      try {
+        await service.validateActiveSubscription('center-1');
+        fail('Expected ForbiddenException to be thrown');
+      } catch (err: unknown) {
+        expect(err).toBeInstanceOf(ForbiddenException);
+        const forbiddenErr = err as ForbiddenException;
+        expect(forbiddenErr.getResponse()).toEqual({
+          statusCode: 403,
+          message:
+            'المركز لا يمتلك اشتراكاً نشطاً حالياً. يرجى الاشتراك في إحدى الباقات.',
+          error: 'Forbidden',
+          code: 'CENTER_SUBSCRIPTION_INACTIVE',
+        });
+      }
     });
 
     it('should allow access within 3-day grace period and return warning header', async () => {
       const pastDate = new Date(Date.now() - 1000 * 60 * 60 * 24); // 1 day past endDate
-      const mockPlan = { id: 'plan-1', name: 'Free' };
+      const mockPlan = { id: 'plan-1', name: 'Free', isActive: true };
       prisma.centerSubscription.findFirst.mockResolvedValueOnce({
         id: 'sub-1',
         status: 'EXPIRED',
         endDate: pastDate,
         subscriptionPlan: mockPlan,
+        center: { isActive: true },
       });
 
       const result = await service.validateSubscriptionAccess(
@@ -76,12 +88,13 @@ describe('SubscriptionValidationService', () => {
 
     it('should allow GET in read-only mode after grace period expires (> 3 days)', async () => {
       const pastDate = new Date(Date.now() - 1000 * 60 * 60 * 24 * 5); // 5 days past endDate
-      const mockPlan = { id: 'plan-1', name: 'Free' };
+      const mockPlan = { id: 'plan-1', name: 'Free', isActive: true };
       prisma.centerSubscription.findFirst.mockResolvedValueOnce({
         id: 'sub-1',
         status: 'EXPIRED',
         endDate: pastDate,
         subscriptionPlan: mockPlan,
+        center: { isActive: true },
       });
 
       const result = await service.validateSubscriptionAccess('center-1', true);
@@ -100,7 +113,8 @@ describe('SubscriptionValidationService', () => {
         id: 'sub-1',
         status: 'EXPIRED',
         endDate: pastDate,
-        subscriptionPlan: { id: 'plan-1', name: 'Free' },
+        subscriptionPlan: { id: 'plan-1', name: 'Free', isActive: true },
+        center: { isActive: true },
       });
 
       await expect(
@@ -116,6 +130,7 @@ describe('SubscriptionValidationService', () => {
         studentLimit: 100,
         teacherLimit: 10,
         subjectLimit: 15,
+        isActive: true,
       };
 
       prisma.centerSubscription.findFirst.mockResolvedValueOnce({
@@ -123,10 +138,51 @@ describe('SubscriptionValidationService', () => {
         status: 'ACTIVE',
         endDate: futureDate,
         subscriptionPlan: mockPlan,
+        center: { isActive: true },
       });
 
       const plan = await service.validateActiveSubscription('center-1');
       expect(plan).toEqual(mockPlan);
+    });
+
+    it('should throw ForbiddenException if subscription plan is inactive (isActive: false)', async () => {
+      const futureDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30);
+      prisma.centerSubscription.findFirst.mockResolvedValueOnce({
+        id: 'sub-1',
+        status: 'ACTIVE',
+        endDate: futureDate,
+        subscriptionPlan: {
+          id: 'plan-1',
+          name: 'Deactivated Plan',
+          isActive: false,
+        },
+        center: { isActive: true },
+      });
+
+      await expect(
+        service.validateSubscriptionAccess('center-1', false),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should throw ForbiddenException if center is inactive (center.isActive: false)', async () => {
+      const futureDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30);
+      prisma.centerSubscription.findFirst.mockResolvedValueOnce({
+        id: 'sub-1',
+        status: 'ACTIVE',
+        endDate: futureDate,
+        subscriptionPlan: {
+          id: 'plan-1',
+          name: 'Active Plan',
+          isActive: true,
+        },
+        center: {
+          isActive: false,
+        },
+      });
+
+      await expect(
+        service.validateSubscriptionAccess('center-1', false),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 
@@ -141,7 +197,9 @@ describe('SubscriptionValidationService', () => {
         studentLimit: 50,
         teacherLimit: 5,
         subjectLimit: 10,
+        isActive: true,
       },
+      center: { isActive: true },
     };
 
     it('should throw BadRequestException if student limit is reached', async () => {

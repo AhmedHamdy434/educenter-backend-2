@@ -40,7 +40,10 @@ export class SubscriptionPlansController {
   @ApiResponse({ status: 201, description: 'تم إنشاء باقة الاشتراك بنجاح' })
   @ApiResponse({ status: 400, description: 'بيانات الطلب غير صالحة' })
   @ApiResponse({ status: 401, description: 'غير مصرح بالدخول' })
-  @ApiResponse({ status: 403, description: 'غير مسموح إلا للمدير العام (SUPER_ADMIN)' })
+  @ApiResponse({
+    status: 403,
+    description: 'غير مسموح إلا للمدير العام (SUPER_ADMIN)',
+  })
   @ApiResponse({ status: 409, description: 'اسم الباقة مسجل مسبقاً' })
   create(@Body() createSubscriptionPlanDto: CreateSubscriptionPlanDto) {
     return this.subscriptionPlansService.create(createSubscriptionPlanDto);
@@ -48,7 +51,9 @@ export class SubscriptionPlansController {
 
   @Get()
   @ResponseMessage('تم جلب باقات الاشتراك بنجاح.')
-  @ApiOperation({ summary: 'جلب قائمة باقات الاشتراك مع دعم التصفية والصفحات (متاحة للعامة)' })
+  @ApiOperation({
+    summary: 'جلب قائمة باقات الاشتراك مع دعم التصفية والصفحات (متاحة للعامة)',
+  })
   @ApiResponse({ status: 200, description: 'تم جلب باقات الاشتراك بنجاح' })
   findAll(@Query() query: SubscriptionPlanQueryDto) {
     return this.subscriptionPlansService.findAll(query);
@@ -72,7 +77,10 @@ export class SubscriptionPlansController {
   @ApiResponse({ status: 200, description: 'تم تحديث باقة الاشتراك بنجاح' })
   @ApiResponse({ status: 400, description: 'بيانات الطلب غير صالحة' })
   @ApiResponse({ status: 401, description: 'غير مصرح بالدخول' })
-  @ApiResponse({ status: 403, description: 'غير مسموح إلا للمدير العام (SUPER_ADMIN)' })
+  @ApiResponse({
+    status: 403,
+    description: 'غير مسموح إلا للمدير العام (SUPER_ADMIN)',
+  })
   @ApiResponse({ status: 404, description: 'باقة الاشتراك غير موجودة' })
   @ApiResponse({ status: 409, description: 'اسم الباقة مستخدم بالفعل' })
   update(
@@ -90,7 +98,10 @@ export class SubscriptionPlansController {
   @ApiOperation({ summary: 'تغيير حالة تفعيل باقة الاشتراك (تفعيل / تعطيل)' })
   @ApiResponse({ status: 200, description: 'تم تحديث حالة تفعيل الباقة بنجاح' })
   @ApiResponse({ status: 401, description: 'غير مصرح بالدخول' })
-  @ApiResponse({ status: 403, description: 'غير مسموح إلا للمدير العام (SUPER_ADMIN)' })
+  @ApiResponse({
+    status: 403,
+    description: 'غير مسموح إلا للمدير العام (SUPER_ADMIN)',
+  })
   @ApiResponse({ status: 404, description: 'باقة الاشتراك غير موجودة' })
   toggleStatus(@Param('id') id: string) {
     return this.subscriptionPlansService.toggleStatus(id);
