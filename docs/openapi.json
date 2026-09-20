@@ -231,6 +231,97 @@
         ]
       }
     },
+    "/api/auth/super-admin/me": {
+      "get": {
+        "operationId": "AuthController_getSuperAdminMe",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "تم استرجاع البيانات بنجاح",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "تم استرجاع بيانات الملف الشخصي بنجاح.",
+                  "data": {
+                    "id": "clysa0011122334455",
+                    "fullName": "المدير العام للنظام",
+                    "email": "superadmin@educenter.com",
+                    "phone": null,
+                    "role": "SUPER_ADMIN",
+                    "centerId": null,
+                    "mustChangePassword": false
+                  }
+                },
+                "schema": {
+                  "type": "object",
+                  "example": {
+                    "success": true,
+                    "message": "تم استرجاع بيانات الملف الشخصي بنجاح.",
+                    "data": {
+                      "id": "clysa0011122334455",
+                      "fullName": "المدير العام للنظام",
+                      "email": "superadmin@educenter.com",
+                      "phone": null,
+                      "role": "SUPER_ADMIN",
+                      "centerId": null,
+                      "mustChangePassword": false
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح بالدخول",
+            "content": {
+              "application/json": {
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                },
+                "schema": {
+                  "type": "object",
+                  "example": {
+                    "statusCode": 401,
+                    "message": "Unauthorized"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح إلا للمدير العام (SUPER_ADMIN)",
+            "content": {
+              "application/json": {
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                },
+                "schema": {
+                  "type": "object",
+                  "example": {
+                    "statusCode": 403,
+                    "message": "Forbidden resource",
+                    "error": "Forbidden"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "استرجاع بيانات الملف الشخصي للمدير العام للمنصة (Super Admin)",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
     "/api/auth/me": {
       "get": {
         "operationId": "AuthController_getMe",

@@ -330,12 +330,13 @@ OWNER         ADMIN        TEACHER       STUDENT    PARENT PORTAL           OWNE
 
 ## 6. Complete API Reference Table
 
-The following table documents all **71 endpoints** implemented in the EduCenter backend API:
+The following table documents all **72 endpoints** implemented in the EduCenter backend API:
 
 | Module | Method | Endpoint Path | Allowed Roles | Business Purpose |
 | :--- | :---: | :--- | :--- | :--- |
 | **Auth** | `POST` | `/api/auth/login` | Public (Throttled) | Authenticate user/admin, check `isActive`, return JWT & `mustChangePassword`. |
 | **Auth** | `POST` | `/api/auth/super-admin/login` | Public (Throttled) | Authenticate SuperAdmin specifically, return platform JWT. |
+| **Auth** | `GET` | `/api/auth/super-admin/me` | `SUPER_ADMIN` | Retrieve SuperAdmin profile details. |
 | **Auth** | `GET` | `/api/auth/me` | Authenticated | Retrieve authenticated user profile and tenant details. |
 | **Auth** | `PATCH` | `/api/auth/change-password` | Authenticated | Change current user's password and clear `mustChangePassword`. |
 | **Auth** | `POST` | `/api/auth/forgot-password` | Public (Throttled) | Request 6-digit OTP password reset code (safe against enumeration). |

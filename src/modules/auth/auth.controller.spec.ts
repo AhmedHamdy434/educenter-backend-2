@@ -8,6 +8,7 @@ describe('AuthController', () => {
   let authService: {
     login: jest.Mock;
     superAdminLogin: jest.Mock;
+    getSuperAdminProfile: jest.Mock;
     getProfile: jest.Mock;
     changePassword: jest.Mock;
     forgotPassword: jest.Mock;
@@ -18,6 +19,7 @@ describe('AuthController', () => {
     authService = {
       login: jest.fn(),
       superAdminLogin: jest.fn(),
+      getSuperAdminProfile: jest.fn(),
       getProfile: jest.fn(),
       changePassword: jest.fn(),
       forgotPassword: jest.fn(),
@@ -64,6 +66,28 @@ describe('AuthController', () => {
 
     const result = await controller.superAdminLogin(dto);
     expect(authService.superAdminLogin).toHaveBeenCalledWith(dto);
+    expect(result).toBe(expected);
+  });
+
+  it('should call authService.getSuperAdminProfile on super-admin/me endpoint', async () => {
+    const mockUser = {
+      id: 'sa-1',
+      centerId: null,
+      role: 'SUPER_ADMIN' as const,
+    };
+    const expected = {
+      id: 'sa-1',
+      fullName: 'Super Admin',
+      email: 'superadmin@system.local',
+      phone: null,
+      role: 'SUPER_ADMIN' as const,
+      centerId: null,
+      mustChangePassword: false,
+    };
+    authService.getSuperAdminProfile.mockResolvedValue(expected);
+
+    const result = await controller.getSuperAdminMe(mockUser);
+    expect(authService.getSuperAdminProfile).toHaveBeenCalledWith('sa-1');
     expect(result).toBe(expected);
   });
 });

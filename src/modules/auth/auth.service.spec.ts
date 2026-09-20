@@ -158,4 +158,50 @@ describe('AuthService', () => {
       ).rejects.toThrow('رمز التحقق غير صالح أو انتهت صلاحيته.');
     });
   });
+
+  describe('getSuperAdminProfile', () => {
+    it('should return super admin profile if found and active', async () => {
+      prismaMock.superAdmin.findUnique.mockResolvedValueOnce({
+        id: 'sa-1',
+        fullName: 'Super Admin',
+        email: 'superadmin@system.local',
+        isActive: true,
+      });
+
+      const result = await service.getSuperAdminProfile('sa-1');
+      expect(prismaMock.superAdmin.findUnique).toHaveBeenCalledWith({
+        where: { id: 'sa-1' },
+      });
+      expect(result).toEqual({
+        id: 'sa-1',
+        fullName: 'Super Admin',
+        email: 'superadmin@system.local',
+        phone: null,
+        role: 'SUPER_ADMIN',
+        centerId: null,
+        mustChangePassword: false,
+      });
+    });
+
+    it('should throw UnauthorizedException if super admin is not found', async () => {
+      prismaMock.superAdmin.findUnique.mockResolvedValueOnce(null);
+
+      await expect(service.getSuperAdminProfile('unknown')).rejects.toThrow(
+        'بيانات الاعتماد غير صالحة أو الحساب غير نشط',
+      );
+    });
+
+    it('should throw UnauthorizedException if super admin is inactive', async () => {
+      prismaMock.superAdmin.findUnique.mockResolvedValueOnce({
+        id: 'sa-1',
+        fullName: 'Super Admin',
+        email: 'superadmin@system.local',
+        isActive: false,
+      });
+
+      await expect(service.getSuperAdminProfile('sa-1')).rejects.toThrow(
+        'بيانات الاعتماد غير صالحة أو الحساب غير نشط',
+      );
+    });
+  });
 });

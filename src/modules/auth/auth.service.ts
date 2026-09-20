@@ -159,30 +159,37 @@ export class AuthService {
    * استرجاع بيانات الملف الشخصي لـ GET /auth/me.
    */
   async getProfile(userId: string) {
-    // 1. التحقق من المدير العام أولاً
-    // const superAdmin = await this.prisma.superAdmin.findUnique({
-    //   where: { id: userId },
-    // });
-
-    // if (superAdmin && superAdmin.isActive) {
-    //   return {
-    //     id: superAdmin.id,
-    //     fullName: superAdmin.fullName,
-    //     email: superAdmin.email,
-    //     phone: null,
-    //     role: 'SUPER_ADMIN' as const,
-    //     centerId: null,
-    //     mustChangePassword: false,
-    //   };
-    // }
-
-    // 2. التحقق من المستخدم العادي
     const user = await this.usersService.findById(userId);
     if (!user || !user.isActive) {
       throw new UnauthorizedException('بيانات الاعتماد غير صالحة');
     }
 
     return user;
+  }
+
+  /**
+   * استرجاع بيانات الملف الشخصي للمدير العام (Super Admin) لـ GET /auth/super-admin/me.
+   */
+  async getSuperAdminProfile(adminId: string) {
+    const superAdmin = await this.prisma.superAdmin.findUnique({
+      where: { id: adminId },
+    });
+
+    if (!superAdmin || !superAdmin.isActive) {
+      throw new UnauthorizedException(
+        'بيانات الاعتماد غير صالحة أو الحساب غير نشط',
+      );
+    }
+
+    return {
+      id: superAdmin.id,
+      fullName: superAdmin.fullName,
+      email: superAdmin.email,
+      phone: null,
+      role: 'SUPER_ADMIN' as const,
+      centerId: null,
+      mustChangePassword: false,
+    };
   }
 
   /**

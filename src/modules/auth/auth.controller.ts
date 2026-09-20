@@ -21,6 +21,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { RequestUser } from './interfaces/authenticated-request.interface';
 import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
@@ -70,6 +71,24 @@ export class AuthController {
   })
   async superAdminLogin(@Body() loginDto: LoginDto) {
     return this.authService.superAdminLogin(loginDto);
+  }
+
+  @Get('super-admin/me')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AppRole.SUPER_ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ResponseMessage('تم استرجاع بيانات الملف الشخصي بنجاح.')
+  @ApiOperation({
+    summary: 'استرجاع بيانات الملف الشخصي للمدير العام للمنصة (Super Admin)',
+  })
+  @ApiResponse({ status: 200, description: 'تم استرجاع البيانات بنجاح' })
+  @ApiResponse({ status: 401, description: 'غير مصرح بالدخول' })
+  @ApiResponse({
+    status: 403,
+    description: 'غير مسموح إلا للمدير العام (SUPER_ADMIN)',
+  })
+  async getSuperAdminMe(@CurrentUser() user: RequestUser) {
+    return this.authService.getSuperAdminProfile(user.id);
   }
 
   @Get('me')

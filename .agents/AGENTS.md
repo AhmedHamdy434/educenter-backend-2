@@ -104,7 +104,7 @@
     `{ "statusCode": 400, "message": "..." | ["...", "..."], "error": "Bad Request" }`
 * **Current OpenAPI Documentation Status:**
   - **Completed Modules (48 Operations Documented & Live in Swagger):**
-    1. `Auth` (6 endpoints): `/api/auth/login`, `/api/auth/super-admin/login`, `/api/auth/me`, `/api/auth/change-password`, `/api/auth/forgot-password`, `/api/auth/reset-password`
+    1. `Auth` (7 endpoints): `/api/auth/login`, `/api/auth/super-admin/login`, `/api/auth/super-admin/me`, `/api/auth/me`, `/api/auth/change-password`, `/api/auth/forgot-password`, `/api/auth/reset-password`
     2. `Centers` (9 endpoints): `POST /api/centers`, `GET /api/centers`, `GET /api/centers/me`, `GET /api/centers/my-subscription`, `GET /api/centers/:id`, `PATCH /api/centers/:id`, `PATCH /api/centers/:id/status`, `POST /api/centers/:id/subscribe`, `POST /api/centers/:id/renew`
     3. `Subscription Plans` (5 endpoints): `POST /api/subscription-plans`, `GET /api/subscription-plans`, `GET /api/subscription-plans/:id`, `PATCH /api/subscription-plans/:id`, `PATCH /api/subscription-plans/:id/toggle-status`
     4. `Subscription Payments` (4 endpoints): `GET /api/subscription-payments/summary`, `GET /api/subscription-payments`, `POST /api/centers/:centerId/subscription-payments`, `GET /api/centers/:centerId/subscription-payments`
