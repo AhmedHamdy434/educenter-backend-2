@@ -1,8 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsBoolean, IsEnum, IsOptional } from 'class-validator';
-import { Transform } from 'class-transformer';
 import { UserRole } from '@prisma/client';
 import { BaseQueryDto } from '../../../common/dto/BaseQueryDto';
+import { ToBoolean } from '../../../common/decorators/to-boolean.decorator';
 
 export class UserQueryDto extends BaseQueryDto {
   @ApiPropertyOptional({
@@ -19,11 +19,7 @@ export class UserQueryDto extends BaseQueryDto {
     example: true,
   })
   @IsOptional()
-  @Transform(({ value }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
-    return undefined;
-  })
+  @ToBoolean()
   @IsBoolean({ message: 'حالة التفعيل يجب أن تكون قيمة منطقية.' })
   readonly isActive?: boolean;
 }

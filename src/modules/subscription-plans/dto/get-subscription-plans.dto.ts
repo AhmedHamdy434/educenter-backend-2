@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
 import { IsBoolean, IsOptional, IsString } from 'class-validator';
 import { BaseQueryDto } from '../../../common/dto/BaseQueryDto';
+import { ToBoolean } from '../../../common/decorators/to-boolean.decorator';
 
 export class SubscriptionPlanQueryDto extends BaseQueryDto {
   @ApiPropertyOptional({
@@ -9,12 +9,7 @@ export class SubscriptionPlanQueryDto extends BaseQueryDto {
     example: true,
   })
   @IsOptional()
-  @Transform(({ obj, key }) => {
-    const value = (obj as Record<string, unknown>)[key];
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
-    return undefined;
-  })
+  @ToBoolean()
   @IsBoolean()
   readonly active?: boolean;
 
@@ -23,12 +18,7 @@ export class SubscriptionPlanQueryDto extends BaseQueryDto {
     example: true,
   })
   @IsOptional()
-  @Transform(({ obj, key }) => {
-    const value = (obj as Record<string, unknown>)[key];
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
-    return undefined;
-  })
+  @ToBoolean()
   @IsBoolean()
   readonly popular?: boolean;
 

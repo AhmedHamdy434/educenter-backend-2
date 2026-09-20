@@ -70,6 +70,7 @@
 * Use appropriate `class-validator` decorators (e.g., `@IsNotEmpty`, `@IsString`, `@IsEmail`, `@MinLength`, `@IsOptional`) for parameter validation.
 * Always add Arabic error messages to custom validations where possible.
 * Use `class-transformer` decorators (e.g., `@Type(() => Number)` or `@Transform()`) to convert string query parameters to correct types (like numbers or booleans).
+* **Boolean Query Transformation (`@ToBoolean`):** Always use the custom `@ToBoolean()` decorator (`src/common/decorators/to-boolean.decorator.ts`) for boolean query parameters (e.g. `active`, `isActive`, `popular`). It automatically converts `1`, `'1'`, `true`, `'true'` -> `true`, and `0`, `'0'`, `false`, `'false'` -> `false`, and returns `undefined` otherwise.
 
 ## 7. Response Structure & Interceptors
 * Successful responses are automatically intercepted and wrapped by `TransformInterceptor` into:
