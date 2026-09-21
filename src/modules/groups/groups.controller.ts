@@ -11,8 +11,13 @@ import {
   BadRequestException,
   HttpStatus,
   HttpCode,
+  Res,
 } from '@nestjs/common';
-import { ResponseMessage } from '../../common/decorators/response-message.decorator';
+import type { Response } from 'express';
+import {
+  BypassInterceptor,
+  ResponseMessage,
+} from '../../common/decorators/response-message.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { SubscriptionGuard } from '../../common/guards/subscription.guard';
@@ -61,6 +66,41 @@ export class GroupsController {
       );
     }
     return this.groupsService.findAll(user.centerId, query, user.role, user.id);
+  }
+
+  /**
+   * تصدير قائمة المجموعات الدراسية إلى ملف Excel.
+   * تم وضعه قبل مسار :id لتجنب تعارض المسارات في Express.
+   */
+  @Get('export/excel')
+  @Roles(AppRole.OWNER, AppRole.TEACHER)
+  @BypassInterceptor()
+  async exportExcel(
+    @CurrentUser() user: RequestUser,
+    @Query() query: GroupQueryDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    if (!user.centerId) {
+      throw new BadRequestException(
+        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
+      );
+    }
+    const buffer = await this.groupsService.exportToExcel(
+      user.centerId,
+      query,
+      user.role,
+      user.id,
+    );
+    const dateStr = new Date().toISOString().split('T')[0];
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="groups-${dateStr}.xlsx"`,
+    );
+    res.send(buffer);
   }
 
   @Get(':id')

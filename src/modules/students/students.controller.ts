@@ -11,8 +11,19 @@ import {
   HttpStatus,
   HttpCode,
   ForbiddenException,
+  Res,
+  UseInterceptors,
+  UploadedFile,
+  DefaultValuePipe,
+  ParseBoolPipe,
 } from '@nestjs/common';
-import { ResponseMessage } from '../../common/decorators/response-message.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiConsumes } from '@nestjs/swagger';
+import type { Response } from 'express';
+import {
+  BypassInterceptor,
+  ResponseMessage,
+} from '../../common/decorators/response-message.decorator';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { StudentQueryDto } from './dto/get-students.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
@@ -24,6 +35,8 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { AppRole } from '../../common/enums/app-role.enum';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { RequestUser } from '../auth/interfaces/authenticated-request.interface';
+import { ExcelValidationPipe } from '../../shared/excel/pipes/excel-validation.pipe';
+import { ExcelImportSummary } from '../../shared/excel/interfaces/excel.interface';
 import { StudentDetails, StudentListItem } from './constants/student.select';
 
 @Controller('students')
@@ -66,6 +79,101 @@ export class StudentsController {
       );
     }
     return this.studentsService.findAll(user.centerId, query);
+  }
+
+  /**
+   * تصدير قائمة الطلاب للمركز الحالي إلى ملف Excel.
+   * تم وضعه قبل مسار :id لتجنب تعارض المسارات في Express.
+   */
+  @Get('export/excel')
+  @Roles(AppRole.OWNER, AppRole.TEACHER)
+  @BypassInterceptor()
+  async exportExcel(
+    @CurrentUser() user: RequestUser,
+    @Query() query: StudentQueryDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    if (!user.centerId) {
+      throw new BadRequestException(
+        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
+      );
+    }
+    const buffer = await this.studentsService.exportToExcel(
+      user.centerId,
+      query,
+    );
+    const dateStr = new Date().toISOString().split('T')[0];
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="students-${dateStr}.xlsx"`,
+    );
+    res.send(buffer);
+  }
+
+  /**
+   * تحميل قالب Excel فارغ ومجهز لاستيراد بيانات الطلاب.
+   * تم وضعه قبل مسار :id لتجنب تعارض المسارات في Express.
+   */
+  @Get('export/template')
+  @Roles(AppRole.OWNER)
+  @BypassInterceptor()
+  async getTemplate(
+    @CurrentUser() user: RequestUser,
+    @Res() res: Response,
+  ): Promise<void> {
+    if (!user.centerId) {
+      throw new BadRequestException(
+        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
+      );
+    }
+    const buffer = await this.studentsService.getImportTemplate(user.centerId);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="students-template.xlsx"',
+    );
+    res.send(buffer);
+  }
+
+  /**
+   * استيراد بيانات الطلاب من ملف Excel المرفوع.
+   */
+  @Post('import/excel')
+  @HttpCode(HttpStatus.OK)
+  @ResponseMessage('تم استيراد بيانات الطلاب بنجاح.')
+  @Roles(AppRole.OWNER)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  async importExcel(
+    @CurrentUser() user: RequestUser,
+    @UploadedFile(new ExcelValidationPipe()) file: Express.Multer.File,
+    @Query('dryRun', new DefaultValuePipe(false), ParseBoolPipe)
+    dryRun: boolean,
+  ): Promise<
+    ExcelImportSummary<{
+      fullName: string;
+      email: string;
+      phone?: string;
+      gradeName: string;
+    }>
+  > {
+    if (!user.centerId) {
+      throw new BadRequestException(
+        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
+      );
+    }
+    return this.studentsService.importFromExcel(
+      user.centerId,
+      file.buffer,
+      dryRun,
+    );
   }
 
   /**

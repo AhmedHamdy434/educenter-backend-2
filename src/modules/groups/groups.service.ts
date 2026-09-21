@@ -20,9 +20,14 @@ import { UpdateGroupDto } from './dto/update-group.dto';
 import { GroupQueryDto } from './dto/get-groups.dto';
 import { GroupStudentsDto } from './dto/group-students.dto';
 
+import { ExcelService } from '../../shared/excel/excel.service';
+
 @Injectable()
 export class GroupsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly excelService: ExcelService,
+  ) {}
 
   private getPrismaClient(tx?: Prisma.TransactionClient) {
     return tx ?? this.prisma;
@@ -528,5 +533,110 @@ export class GroupsService {
         'المعلم المحدد غير مخصص لتدريس هذه المادة الدراسية.',
       );
     }
+  }
+
+  /**
+   * تصدير المجموعات الدراسية إلى ملف Excel مع حصر الصلاحيات وتنسيق المواعيد.
+   */
+  async exportToExcel(
+    centerId: string,
+    query: GroupQueryDto,
+    currentUserRole: AppRole,
+    currentUserId: string,
+  ): Promise<Buffer> {
+    const { active, gradeId, subjectId, teacherId } = query;
+    const where = query.getWhere<Prisma.GroupWhereInput>(['name']);
+    where.centerId = centerId;
+
+    if (active !== undefined) where.isActive = active;
+    if (gradeId) where.gradeId = gradeId;
+    if (subjectId) where.subjectId = subjectId;
+    if (teacherId) where.teacherId = teacherId;
+
+    if (currentUserRole === AppRole.TEACHER) {
+      where.teacher = { userId: currentUserId };
+    } else if (currentUserRole === AppRole.STUDENT) {
+      where.students = { some: { student: { userId: currentUserId } } };
+    }
+
+    const orderBy = query.getOrderBy<
+      | Prisma.GroupOrderByWithRelationInput
+      | Prisma.GroupOrderByWithRelationInput[]
+    >(['name', 'capacity', 'monthlyFee', 'startDate', 'createdAt'], {
+      createdAt: 'desc',
+    });
+
+    const groups = await this.prisma.group.findMany({
+      where,
+      orderBy,
+      select: {
+        name: true,
+        capacity: true,
+        monthlyFee: true,
+        startDate: true,
+        isActive: true,
+        grade: { select: { name: true } },
+        subject: { select: { name: true } },
+        teacher: { select: { user: { select: { fullName: true } } } },
+        schedule: { select: { day: true, hour: true, minute: true } },
+        _count: { select: { students: true } },
+      },
+    });
+
+    const DAY_NAMES: Record<string, string> = {
+      SUNDAY: 'الأحد',
+      MONDAY: 'الإثنين',
+      TUESDAY: 'الثلاثاء',
+      WEDNESDAY: 'الأربعاء',
+      THURSDAY: 'الخميس',
+      FRIDAY: 'الجمعة',
+      SATURDAY: 'السبت',
+    };
+
+    const exportRows = groups.map((g) => {
+      const scheduleStr =
+        g.schedule.length > 0
+          ? g.schedule
+              .map((s) => {
+                const day = DAY_NAMES[s.day] || s.day;
+                const hh = s.hour.toString().padStart(2, '0');
+                const mm = s.minute.toString().padStart(2, '0');
+                return `${day} (${hh}:${mm})`;
+              })
+              .join(' | ')
+          : '—';
+
+      return {
+        name: g.name,
+        gradeName: g.grade?.name || '—',
+        subjectName: g.subject?.name || '—',
+        teacherName: g.teacher?.user?.fullName || '—',
+        monthlyFee: Number(g.monthlyFee).toFixed(2),
+        studentsCount: g._count?.students || 0,
+        capacity: g.capacity ? String(g.capacity) : 'غير محدد',
+        schedule: scheduleStr,
+        status: g.isActive ? 'نشط' : 'معطل',
+        startDate: g.startDate
+          ? new Date(g.startDate).toISOString().split('T')[0]
+          : '—',
+      };
+    });
+
+    return this.excelService.buildWorkbookBuffer({
+      sheetName: 'المجموعات الدراسية',
+      columns: [
+        { header: 'اسم المجموعة', key: 'name', width: 25 },
+        { header: 'المرحلة الدراسية', key: 'gradeName', width: 22 },
+        { header: 'المادة الدراسية', key: 'subjectName', width: 20 },
+        { header: 'المعلم', key: 'teacherName', width: 22 },
+        { header: 'الاشتراك الشهري', key: 'monthlyFee', width: 16 },
+        { header: 'عدد الطلاب المسجلين', key: 'studentsCount', width: 18 },
+        { header: 'السعة القصوى', key: 'capacity', width: 14 },
+        { header: 'مواعيد الحصص الأسبوعية', key: 'schedule', width: 35 },
+        { header: 'الحالة', key: 'status', width: 12 },
+        { header: 'تاريخ البدء', key: 'startDate', width: 16 },
+      ],
+      data: exportRows,
+    });
   }
 }

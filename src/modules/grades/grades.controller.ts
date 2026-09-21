@@ -10,8 +10,19 @@ import {
   UseGuards,
   HttpStatus,
   HttpCode,
+  Res,
+  UseInterceptors,
+  UploadedFile,
+  DefaultValuePipe,
+  ParseBoolPipe,
 } from '@nestjs/common';
-import { ResponseMessage } from '../../common/decorators/response-message.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiConsumes } from '@nestjs/swagger';
+import type { Response } from 'express';
+import {
+  BypassInterceptor,
+  ResponseMessage,
+} from '../../common/decorators/response-message.decorator';
 import { CreateGradeDto } from './dto/create-grade.dto';
 import { GradeQueryDto } from './dto/get-grades.dto';
 import { UpdateGradeDto } from './dto/update-grade.dto';
@@ -22,6 +33,8 @@ import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AppRole } from '../../common/enums/app-role.enum';
 import { CurrentCenterId } from '../../common/decorators/current-center-id.decorator';
+import { ExcelValidationPipe } from '../../shared/excel/pipes/excel-validation.pipe';
+import { ExcelImportSummary } from '../../shared/excel/interfaces/excel.interface';
 import { GradeDetails, GradeListItem } from './constants/grade.select';
 
 @Controller('grades')
@@ -54,6 +67,71 @@ export class GradesController {
     @Query() query: GradeQueryDto,
   ): Promise<{ data: GradeListItem[]; meta: any }> {
     return this.gradesService.findAll(centerId, query);
+  }
+
+  /**
+   * تصدير المراحل الدراسية لملف Excel.
+   * تم وضعه قبل مسار :id لتجنب تعارض المسارات في Express.
+   */
+  @Get('export/excel')
+  @Roles(AppRole.OWNER)
+  @BypassInterceptor()
+  async exportExcel(
+    @CurrentCenterId() centerId: string,
+    @Query() query: GradeQueryDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    const buffer = await this.gradesService.exportToExcel(centerId, query);
+    const dateStr = new Date().toISOString().split('T')[0];
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="grades-${dateStr}.xlsx"`,
+    );
+    res.send(buffer);
+  }
+
+  /**
+   * تحميل قالب Excel فارغ ومجهز لاستيراد المراحل الدراسية.
+   * تم وضعه قبل مسار :id لتجنب تعارض المسارات في Express.
+   */
+  @Get('export/template')
+  @Roles(AppRole.OWNER)
+  @BypassInterceptor()
+  async getTemplate(@Res() res: Response): Promise<void> {
+    const buffer = await this.gradesService.getImportTemplate();
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="grades-template.xlsx"',
+    );
+    res.send(buffer);
+  }
+
+  /**
+   * استيراد المراحل الدراسية من ملف Excel المرفوع.
+   */
+  @Post('import/excel')
+  @HttpCode(HttpStatus.OK)
+  @ResponseMessage('تم استيراد المراحل الدراسية بنجاح.')
+  @Roles(AppRole.OWNER)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  async importExcel(
+    @CurrentCenterId() centerId: string,
+    @UploadedFile(new ExcelValidationPipe()) file: Express.Multer.File,
+    @Query('dryRun', new DefaultValuePipe(false), ParseBoolPipe)
+    dryRun: boolean,
+  ): Promise<
+    ExcelImportSummary<{ name: string; order: number; description?: string }>
+  > {
+    return this.gradesService.importFromExcel(centerId, file.buffer, dryRun);
   }
 
   /**

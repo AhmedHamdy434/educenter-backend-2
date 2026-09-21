@@ -3,9 +3,10 @@ import { StudentsController } from './students.controller';
 import { StudentsService } from './students.service';
 import { UsersModule } from '../users/users.module';
 import { SubscriptionPlansModule } from '../subscription-plans/subscription-plans.module';
+import { ExcelModule } from '../../shared/excel/excel.module';
 
 @Module({
-  imports: [UsersModule, SubscriptionPlansModule],
+  imports: [UsersModule, SubscriptionPlansModule, ExcelModule],
   controllers: [StudentsController],
   providers: [StudentsService],
   exports: [StudentsService],

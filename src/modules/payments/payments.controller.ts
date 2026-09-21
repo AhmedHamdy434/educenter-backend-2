@@ -8,8 +8,13 @@ import {
   BadRequestException,
   HttpStatus,
   HttpCode,
+  Res,
 } from '@nestjs/common';
-import { ResponseMessage } from '../../common/decorators/response-message.decorator';
+import type { Response } from 'express';
+import {
+  BypassInterceptor,
+  ResponseMessage,
+} from '../../common/decorators/response-message.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { SubscriptionGuard } from '../../common/guards/subscription.guard';
@@ -46,6 +51,34 @@ export class PaymentsController {
     return data;
   }
 
+  /**
+   * تصدير كشف مصفوفة مدفوعات المجموعة إلى ملف Excel.
+   */
+  @Get('groups/:groupId/payments/export/excel')
+  @Roles(AppRole.OWNER, AppRole.TEACHER)
+  @BypassInterceptor()
+  async exportGroupPayments(
+    @CurrentUser() user: RequestUser,
+    @Param('groupId') groupId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const centerId = this.validateCenterId(user.centerId);
+    const buffer = await this.paymentsService.exportGroupPaymentsToExcel(
+      centerId,
+      groupId,
+    );
+    const dateStr = new Date().toISOString().split('T')[0];
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="group-payments-${groupId}-${dateStr}.xlsx"`,
+    );
+    res.send(buffer);
+  }
+
   @Post('group-students/:groupStudentId/payments')
   @HttpCode(HttpStatus.CREATED)
   @ResponseMessage('تم تسجيل دفع الاشتراك بنجاح.')
@@ -79,5 +112,35 @@ export class PaymentsController {
       user.id,
     );
     return data;
+  }
+
+  /**
+   * تصدير كشف حساب مدفوعات طالب محدد إلى ملف Excel.
+   */
+  @Get('students/:studentId/payments/export/excel')
+  @Roles(AppRole.OWNER, AppRole.TEACHER, AppRole.STUDENT)
+  @BypassInterceptor()
+  async exportStudentPayments(
+    @CurrentUser() user: RequestUser,
+    @Param('studentId') studentId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const centerId = this.validateCenterId(user.centerId);
+    const buffer = await this.paymentsService.exportStudentPaymentsToExcel(
+      centerId,
+      studentId,
+      user.role,
+      user.id,
+    );
+    const dateStr = new Date().toISOString().split('T')[0];
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="student-payments-${studentId}-${dateStr}.xlsx"`,
+    );
+    res.send(buffer);
   }
 }

@@ -1,0 +1,370 @@
+import {
+  BadRequestException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
+import { StudentsService } from './students.service';
+import { PrismaService } from '../../database/prisma/prisma.service';
+import { UsersService } from '../users/users.service';
+import { SubscriptionValidationService } from '../subscription-plans/subscription-validation.service';
+import { ExcelService } from '../../shared/excel/excel.service';
+import { StudentQueryDto } from './dto/get-students.dto';
+
+describe('StudentsService - Excel Import & Export', () => {
+  let service: StudentsService;
+  let prisma: {
+    student: {
+      findMany: jest.Mock;
+      count: jest.Mock;
+      createManyAndReturn: jest.Mock;
+    };
+    grade: {
+      findMany: jest.Mock;
+    };
+    user: {
+      findMany: jest.Mock;
+      createManyAndReturn: jest.Mock;
+    };
+    studentEnrollment: {
+      createMany: jest.Mock;
+    };
+    $transaction: jest.Mock;
+  };
+  let usersService: {
+    createUserAccount: jest.Mock;
+    updateUserAccount: jest.Mock;
+  };
+  let subscriptionValidationService: {
+    getActiveSubscription: jest.Mock;
+    validateStudentLimit: jest.Mock;
+  };
+  let excelService: {
+    buildWorkbookBuffer: jest.Mock;
+    buildTemplateBuffer: jest.Mock;
+    parseSheetRows: jest.Mock;
+  };
+
+  const centerId = 'center-test-123';
+
+  beforeEach(async () => {
+    prisma = {
+      student: {
+        findMany: jest.fn(),
+        count: jest.fn(),
+        createManyAndReturn: jest.fn(),
+      },
+      grade: {
+        findMany: jest.fn(),
+      },
+      user: {
+        findMany: jest.fn(),
+        createManyAndReturn: jest.fn(),
+      },
+      studentEnrollment: {
+        createMany: jest.fn(),
+      },
+      $transaction: jest.fn(),
+    };
+
+    usersService = {
+      createUserAccount: jest.fn(),
+      updateUserAccount: jest.fn(),
+    };
+
+    subscriptionValidationService = {
+      getActiveSubscription: jest.fn(),
+      validateStudentLimit: jest.fn(),
+    };
+
+    excelService = {
+      buildWorkbookBuffer: jest.fn(),
+      buildTemplateBuffer: jest.fn(),
+      parseSheetRows: jest.fn(),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        StudentsService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: UsersService, useValue: usersService },
+        {
+          provide: SubscriptionValidationService,
+          useValue: subscriptionValidationService,
+        },
+        { provide: ExcelService, useValue: excelService },
+      ],
+    }).compile();
+
+    service = module.get<StudentsService>(StudentsService);
+  });
+
+  describe('exportToExcel', () => {
+    it('should query students scoped by centerId and generate Excel buffer', async () => {
+      prisma.student.findMany.mockResolvedValue([
+        {
+          id: 'student-1',
+          parentPhone: '01198765432',
+          notes: 'طالب ممتاز',
+          createdAt: new Date('2026-09-01'),
+          user: {
+            fullName: 'أحمد محمود',
+            email: 'ahmed@example.com',
+            phone: '01012345678',
+            isActive: true,
+          },
+          enrollments: [
+            {
+              grade: { name: 'الصف الأول الثانوي' },
+            },
+          ],
+        },
+      ]);
+      const mockBuffer = Buffer.from('mock-excel-students');
+      excelService.buildWorkbookBuffer.mockResolvedValue(mockBuffer);
+
+      const query = {
+        getWhere: jest.fn().mockReturnValue({}),
+        getOrderBy: jest.fn().mockReturnValue([{ createdAt: 'desc' }]),
+      } as unknown as StudentQueryDto;
+
+      const result = await service.exportToExcel(centerId, query);
+
+      expect(prisma.student.findMany).toHaveBeenCalled();
+      expect(excelService.buildWorkbookBuffer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sheetName: 'الطلاب',
+        }),
+      );
+      expect(result).toBe(mockBuffer);
+    });
+  });
+
+  describe('getImportTemplate', () => {
+    it('should query active grades and return dual-sheet template buffer', async () => {
+      prisma.grade.findMany.mockResolvedValue([
+        { name: 'الصف الأول الثانوي' },
+        { name: 'الصف الثاني الثانوي' },
+      ]);
+      const mockBuffer = Buffer.from('mock-students-template');
+      excelService.buildTemplateBuffer.mockResolvedValue(mockBuffer);
+
+      const result = await service.getImportTemplate(centerId);
+
+      expect(prisma.grade.findMany).toHaveBeenCalledWith({
+        where: { centerId, isActive: true },
+        select: { name: true },
+        orderBy: { order: 'asc' },
+      });
+      expect(excelService.buildTemplateBuffer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          dataSheetName: 'بيانات الطلاب',
+          instructionsSheetName: 'دليل الاستيراد',
+        }),
+      );
+      expect(result).toBe(mockBuffer);
+    });
+  });
+
+  describe('importFromExcel', () => {
+    const fileBuffer = Buffer.from('mock-file');
+
+    beforeEach(() => {
+      subscriptionValidationService.getActiveSubscription.mockResolvedValue({
+        studentLimit: 500,
+      });
+      prisma.student.count.mockResolvedValue(100);
+      prisma.grade.findMany.mockResolvedValue([
+        { id: 'grade-1', name: 'الصف الأول الثانوي' },
+      ]);
+      prisma.user.findMany.mockResolvedValue([]);
+    });
+
+    it('should throw BadRequestException if file has no data rows', async () => {
+      excelService.parseSheetRows.mockResolvedValue({
+        headers: ['اسم الطالب', 'البريد الإلكتروني', 'المرحلة الدراسية'],
+        rows: [],
+      });
+
+      await expect(
+        service.importFromExcel(centerId, fileBuffer),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if import exceeds plan student limit', async () => {
+      subscriptionValidationService.getActiveSubscription.mockResolvedValue({
+        studentLimit: 105,
+      });
+      prisma.student.count.mockResolvedValue(100);
+      excelService.parseSheetRows.mockResolvedValue({
+        headers: ['اسم الطالب', 'البريد الإلكتروني', 'المرحلة الدراسية'],
+        rows: Array(10).fill({
+          rowNumber: 2,
+          values: {
+            'اسم الطالب': 'طالب',
+            'البريد الإلكتروني': 't@e.com',
+            'المرحلة الدراسية': 'الصف الأول الثانوي',
+          },
+        }),
+      });
+
+      await expect(
+        service.importFromExcel(centerId, fileBuffer),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw UnprocessableEntityException (422) if required fields are missing or invalid', async () => {
+      excelService.parseSheetRows.mockResolvedValue({
+        headers: ['اسم الطالب', 'البريد الإلكتروني', 'المرحلة الدراسية'],
+        rows: [
+          {
+            rowNumber: 2,
+            values: {
+              'اسم الطالب': 'أ',
+              'البريد الإلكتروني': 'invalid-email',
+              'المرحلة الدراسية': '',
+            },
+          },
+        ],
+      });
+
+      await expect(
+        service.importFromExcel(centerId, fileBuffer),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('should throw UnprocessableEntityException (422) if email is duplicate within the file', async () => {
+      excelService.parseSheetRows.mockResolvedValue({
+        headers: ['اسم الطالب', 'البريد الإلكتروني', 'المرحلة الدراسية'],
+        rows: [
+          {
+            rowNumber: 2,
+            values: {
+              'اسم الطالب': 'طالب 1',
+              'البريد الإلكتروني': 'student@example.com',
+              'المرحلة الدراسية': 'الصف الأول الثانوي',
+            },
+          },
+          {
+            rowNumber: 3,
+            values: {
+              'اسم الطالب': 'طالب 2',
+              'البريد الإلكتروني': 'student@example.com',
+              'المرحلة الدراسية': 'الصف الأول الثانوي',
+            },
+          },
+        ],
+      });
+
+      await expect(
+        service.importFromExcel(centerId, fileBuffer),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('should throw UnprocessableEntityException (422) if grade does not exist in center', async () => {
+      excelService.parseSheetRows.mockResolvedValue({
+        headers: ['اسم الطالب', 'البريد الإلكتروني', 'المرحلة الدراسية'],
+        rows: [
+          {
+            rowNumber: 2,
+            values: {
+              'اسم الطالب': 'طالب 1',
+              'البريد الإلكتروني': 'student1@example.com',
+              'المرحلة الدراسية': 'مرحلة غير مسجلة',
+            },
+          },
+        ],
+      });
+
+      await expect(
+        service.importFromExcel(centerId, fileBuffer),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('should support dryRun=true and return validated rows preview without DB writes', async () => {
+      excelService.parseSheetRows.mockResolvedValue({
+        headers: ['اسم الطالب', 'البريد الإلكتروني', 'المرحلة الدراسية'],
+        rows: [
+          {
+            rowNumber: 2,
+            values: {
+              'اسم الطالب': 'أحمد محمود',
+              'البريد الإلكتروني': 'ahmed@example.com',
+              'المرحلة الدراسية': 'الصف الأول الثانوي',
+            },
+          },
+        ],
+      });
+
+      const result = await service.importFromExcel(centerId, fileBuffer, true);
+
+      expect(result.totalRows).toBe(1);
+      expect(result.validRows).toBe(1);
+      expect(result.failedRows).toBe(0);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('should execute batch insertion in prisma.$transaction with single password hash when dryRun=false', async () => {
+      excelService.parseSheetRows.mockResolvedValue({
+        headers: [
+          'اسم الطالب',
+          'البريد الإلكتروني',
+          'رقم هاتف الطالب',
+          'المرحلة الدراسية',
+        ],
+        rows: [
+          {
+            rowNumber: 2,
+            values: {
+              'اسم الطالب': 'أحمد محمود',
+              'البريد الإلكتروني': 'ahmed@example.com',
+              'رقم هاتف الطالب': '01012345678',
+              'المرحلة الدراسية': 'الصف الأول الثانوي',
+            },
+          },
+        ],
+      });
+
+      const mockTx = {
+        user: {
+          createManyAndReturn: jest
+            .fn()
+            .mockResolvedValue([{ id: 'user-1', email: 'ahmed@example.com' }]),
+        },
+        student: {
+          createManyAndReturn: jest
+            .fn()
+            .mockResolvedValue([{ id: 'student-1', userId: 'user-1' }]),
+        },
+        studentEnrollment: {
+          createMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+      };
+
+      prisma.$transaction.mockImplementation(
+        async (cb: (tx: typeof mockTx) => Promise<unknown>) => {
+          return await cb(mockTx);
+        },
+      );
+
+      const result = await service.importFromExcel(centerId, fileBuffer, false);
+
+      expect(result.totalRows).toBe(1);
+      expect(result.validRows).toBe(1);
+      expect(result.initialDefaultPassword).toBeDefined();
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(mockTx.user.createManyAndReturn).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            fullName: 'أحمد محمود',
+            email: 'ahmed@example.com',
+            centerId,
+            role: 'STUDENT',
+          }),
+        ],
+        select: { id: true, email: true },
+      });
+      expect(mockTx.student.createManyAndReturn).toHaveBeenCalled();
+      expect(mockTx.studentEnrollment.createMany).toHaveBeenCalled();
+    });
+  });
+});

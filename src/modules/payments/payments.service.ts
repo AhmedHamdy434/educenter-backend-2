@@ -9,9 +9,14 @@ import { PrismaService } from '../../database/prisma/prisma.service';
 import { AppRole } from '../../common/enums/app-role.enum';
 import { PayMonthDto } from './dto/pay-month.dto';
 
+import { ExcelService } from '../../shared/excel/excel.service';
+
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly excelService: ExcelService,
+  ) {}
 
   /**
    * تحويل أي تاريخ إلى اليوم الأول من الشهر في التوقيت العالمي (UTC midnight) لتسهيل المقارنة.
@@ -323,5 +328,130 @@ export class PaymentsService {
         name: p.groupStudent.group.name,
       },
     }));
+  }
+
+  /**
+   * تصدير كشف مصفوفة مدفوعات المجموعة إلى ملف Excel.
+   */
+  async exportGroupPaymentsToExcel(
+    centerId: string,
+    groupId: string,
+  ): Promise<Buffer> {
+    const group = await this.prisma.group.findFirst({
+      where: { id: groupId, centerId },
+      select: {
+        id: true,
+        name: true,
+        startDate: true,
+        monthsCount: true,
+      },
+    });
+
+    if (!group) {
+      throw new NotFoundException('المجموعة الدراسية المطلوبة غير موجودة.');
+    }
+
+    const studentsData = await this.getGroupPayments(centerId, groupId);
+    const groupMonths = this.getGroupMonths(group.startDate, group.monthsCount);
+    const monthHeaders = groupMonths.map((m) => this.formatDate(m));
+
+    const columns = [
+      { header: 'اسم الطالب', key: 'fullName', width: 25 },
+      { header: 'رقم الهاتف', key: 'phone', width: 16, numFmt: '@' },
+      ...monthHeaders.map((m) => ({
+        header: m,
+        key: `month_${m}`,
+        width: 16,
+      })),
+      { header: 'الشهور المسددة', key: 'paidCount', width: 15 },
+      { header: 'الشهور المستحقة', key: 'unpaidCount', width: 15 },
+    ];
+
+    const rows = studentsData.map((st) => {
+      const row: Record<string, any> = {
+        fullName: st.studentInfo.fullName,
+        phone: st.studentInfo.phone || '—',
+        paidCount: st.paidMonths.length,
+        unpaidCount: st.unpaidMonths.length,
+      };
+
+      const paidMap = new Map(
+        st.paidMonths.map((pm) => [pm.subscriptionDate, pm.amount]),
+      );
+
+      for (const m of monthHeaders) {
+        if (paidMap.has(m)) {
+          row[`month_${m}`] = `مدفوع (${paidMap.get(m)} ج.م)`;
+        } else if (st.unpaidMonths.includes(m)) {
+          row[`month_${m}`] = 'مستحق (غير مدفوع)';
+        } else {
+          row[`month_${m}`] = 'غير مسجل';
+        }
+      }
+
+      return row;
+    });
+
+    return this.excelService.buildWorkbookBuffer({
+      sheetName: group.name.slice(0, 31),
+      columns,
+      data: rows,
+    });
+  }
+
+  /**
+   * تصدير كشف حساب مدفوعات طالب محدد إلى ملف Excel.
+   */
+  async exportStudentPaymentsToExcel(
+    centerId: string,
+    studentId: string,
+    userRole: AppRole,
+    userId: string,
+  ): Promise<Buffer> {
+    const payments = await this.getStudentPayments(
+      centerId,
+      studentId,
+      userRole,
+      userId,
+    );
+
+    let resolvedStudentId = studentId;
+    if (studentId === 'me') {
+      const currentStudent = await this.prisma.student.findUnique({
+        where: { userId },
+      });
+      if (currentStudent) {
+        resolvedStudentId = currentStudent.id;
+      }
+    }
+
+    const student = await this.prisma.student.findUnique({
+      where: { id: resolvedStudentId },
+      include: { user: { select: { fullName: true } } },
+    });
+
+    const studentName = student?.user?.fullName || 'الطالب';
+
+    const columns = [
+      { header: 'المجموعة الدراسية', key: 'groupName', width: 25 },
+      { header: 'الشهر المستحق', key: 'subscriptionDate', width: 16 },
+      { header: 'المبلغ المدفوع', key: 'amount', width: 16 },
+      { header: 'تاريخ الدفع', key: 'paidAt', width: 18 },
+      { header: 'ملاحظات', key: 'notes', width: 30 },
+    ];
+
+    const rows = payments.map((p) => ({
+      groupName: p.group.name,
+      subscriptionDate: p.subscriptionDate,
+      amount: `${p.amount} ج.م`,
+      paidAt: p.paidAt ? new Date(p.paidAt).toISOString().split('T')[0] : '—',
+      notes: p.notes || '—',
+    }));
+
+    return this.excelService.buildWorkbookBuffer({
+      sheetName: `مدفوعات ${studentName}`.slice(0, 31),
+      columns,
+      data: rows,
+    });
   }
 }
