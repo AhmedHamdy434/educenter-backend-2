@@ -1,13 +1,13 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
   Post,
   Query,
   UseGuards,
-  BadRequestException,
   HttpStatus,
   HttpCode,
 } from '@nestjs/common';
@@ -21,8 +21,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AppRole } from '../../common/enums/app-role.enum';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import type { RequestUser } from '../auth/interfaces/authenticated-request.interface';
+import { CurrentCenterId } from '../../common/decorators/current-center-id.decorator';
 import { GradeDetails, GradeListItem } from './constants/grade.select';
 
 @Controller('grades')
@@ -38,15 +37,10 @@ export class GradesController {
   @ResponseMessage('تم إنشاء المرحلة الدراسية بنجاح.')
   @Roles(AppRole.OWNER)
   create(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Body() createGradeDto: CreateGradeDto,
   ): Promise<GradeDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.gradesService.create(user.centerId, createGradeDto);
+    return this.gradesService.create(centerId, createGradeDto);
   }
 
   /**
@@ -56,15 +50,10 @@ export class GradesController {
   @ResponseMessage('تم جلب المراحل الدراسية بنجاح.')
   @Roles(AppRole.OWNER, AppRole.TEACHER, AppRole.STUDENT)
   findAll(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Query() query: GradeQueryDto,
   ): Promise<{ data: GradeListItem[]; meta: any }> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.gradesService.findAll(user.centerId, query);
+    return this.gradesService.findAll(centerId, query);
   }
 
   /**
@@ -74,15 +63,10 @@ export class GradesController {
   @ResponseMessage('تم جلب تفاصيل المرحلة الدراسية بنجاح.')
   @Roles(AppRole.OWNER, AppRole.TEACHER, AppRole.STUDENT)
   findOne(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Param('id') id: string,
   ): Promise<GradeDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.gradesService.findOne(user.centerId, id);
+    return this.gradesService.findOne(centerId, id);
   }
 
   /**
@@ -92,16 +76,11 @@ export class GradesController {
   @ResponseMessage('تم تحديث المرحلة الدراسية بنجاح.')
   @Roles(AppRole.OWNER)
   update(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Param('id') id: string,
     @Body() updateGradeDto: UpdateGradeDto,
   ): Promise<GradeDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.gradesService.update(user.centerId, id, updateGradeDto);
+    return this.gradesService.update(centerId, id, updateGradeDto);
   }
 
   /**
@@ -111,14 +90,23 @@ export class GradesController {
   @ResponseMessage('تم تحديث حالة تفعيل المرحلة الدراسية بنجاح.')
   @Roles(AppRole.OWNER)
   toggleStatus(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Param('id') id: string,
   ): Promise<GradeDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.gradesService.toggleStatus(user.centerId, id);
+    return this.gradesService.toggleStatus(centerId, id);
+  }
+
+  /**
+   * حذف مرحلة دراسية معينة.
+   */
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  @ResponseMessage('تم حذف المرحلة الدراسية بنجاح.')
+  @Roles(AppRole.OWNER)
+  remove(
+    @CurrentCenterId() centerId: string,
+    @Param('id') id: string,
+  ): Promise<void> {
+    return this.gradesService.remove(centerId, id);
   }
 }

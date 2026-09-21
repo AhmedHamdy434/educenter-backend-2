@@ -26,7 +26,7 @@ export class BaseQueryDto extends PaginationDto {
     default: 'desc',
   })
   @IsOptional()
-  @Transform(({ value }) =>
+  @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.toLowerCase() : value,
   )
   @IsIn(['asc', 'desc'], {

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -57,6 +58,14 @@ export class GradesService {
       where.isActive = active;
     }
 
+    const orderBy = query.getOrderBy<
+      | Prisma.GradeOrderByWithRelationInput
+      | Prisma.GradeOrderByWithRelationInput[]
+    >(
+      ['name', 'order', 'createdAt'],
+      [{ order: 'asc' }, { createdAt: 'desc' }],
+    );
+
     const [total, data] = await Promise.all([
       this.prisma.grade.count({ where }),
       this.prisma.grade.findMany({
@@ -64,7 +73,7 @@ export class GradesService {
         skip,
         take,
         select: gradeListSelect,
-        orderBy: [{ order: 'asc' }, { createdAt: 'desc' }],
+        orderBy,
       }),
     ]);
 
@@ -124,6 +133,39 @@ export class GradesService {
       where: { id },
       data: { isActive: !currentGrade.isActive },
       select: gradeDetailsSelect,
+    });
+  }
+
+  async remove(centerId: string, id: string): Promise<void> {
+    const grade = await this.prisma.grade.findFirst({
+      where: { id, centerId },
+      include: {
+        _count: {
+          select: {
+            subjects: true,
+            groups: true,
+            enrollments: true,
+          },
+        },
+      },
+    });
+
+    if (!grade) {
+      throw new NotFoundException('المرحلة الدراسية المطلوبة غير موجودة.');
+    }
+
+    if (
+      grade._count.subjects > 0 ||
+      grade._count.groups > 0 ||
+      grade._count.enrollments > 0
+    ) {
+      throw new BadRequestException(
+        'لا يمكن حذف المرحلة الدراسية لوجود مواد أو مجموعات أو طلاب مرتبطين بها.',
+      );
+    }
+
+    await this.prisma.grade.delete({
+      where: { id },
     });
   }
 

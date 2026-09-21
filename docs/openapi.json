@@ -4930,10 +4930,15 @@
             "name": "sortBy",
             "required": false,
             "in": "query",
-            "description": "حقل الترتيب",
+            "description": "حقل الترتيب (الاسم name أو الترتيب order أو تاريخ الإنشاء createdAt)",
             "schema": {
-              "example": "createdAt",
-              "type": "string"
+              "example": "name",
+              "type": "string",
+              "enum": [
+                "name",
+                "order",
+                "createdAt"
+              ]
             }
           },
           {
@@ -5277,6 +5282,100 @@
         ],
         "summary": "تحديث بيانات مرحلة دراسية معينة",
         "description": "تحديث بيانات مرحلة دراسية معينة تابعة للمركز الحالي (متاح لمالك المركز OWNER فقط)."
+      },
+      "delete": {
+        "operationId": "GradesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "تم حذف المرحلة الدراسية بنجاح.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم حذف المرحلة الدراسية بنجاح.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "بيانات غير صالحة أو وجود عناصر مرتبطة بالمرحلة تمنع حذفها",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "لا يمكن حذف المرحلة الدراسية لوجود مواد أو مجموعات أو طلاب مرتبطين بها.",
+                  "error": "Bad Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "المرحلة الدراسية غير موجودة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 404,
+                  "message": "المرحلة الدراسية المطلوبة غير موجودة.",
+                  "error": "Not Found"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Grades"
+        ],
+        "summary": "حذف مرحلة دراسية",
+        "description": "حذف مرحلة دراسية محددة تابعة للمركز الحالي بعد التحقق من عدم وجود مواد أو مجموعات أو طلاب مرتبطين بها (متاح لمالك المركز OWNER فقط)."
       }
     },
     "/api/grades/{id}/toggle-status": {
