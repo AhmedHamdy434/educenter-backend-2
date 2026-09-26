@@ -35,7 +35,7 @@ import { AppRole } from '../../common/enums/app-role.enum';
 import { CurrentCenterId } from '../../common/decorators/current-center-id.decorator';
 import { ExcelValidationPipe } from '../../shared/excel/pipes/excel-validation.pipe';
 import { ExcelImportSummary } from '../../shared/excel/interfaces/excel.interface';
-import { GradeDetails, GradeListItem } from './constants/grade.select';
+import { GradeListItem } from './constants/grade.select';
 
 @Controller('grades')
 @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
@@ -52,7 +52,7 @@ export class GradesController {
   create(
     @CurrentCenterId() centerId: string,
     @Body() createGradeDto: CreateGradeDto,
-  ): Promise<GradeDetails> {
+  ): Promise<GradeListItem> {
     return this.gradesService.create(centerId, createGradeDto);
   }
 
@@ -139,7 +139,7 @@ export class GradesController {
   findOne(
     @CurrentCenterId() centerId: string,
     @Param('id') id: string,
-  ): Promise<GradeDetails> {
+  ): Promise<GradeListItem> {
     return this.gradesService.findOne(centerId, id);
   }
 
@@ -153,7 +153,7 @@ export class GradesController {
     @CurrentCenterId() centerId: string,
     @Param('id') id: string,
     @Body() updateGradeDto: UpdateGradeDto,
-  ): Promise<GradeDetails> {
+  ): Promise<GradeListItem> {
     return this.gradesService.update(centerId, id, updateGradeDto);
   }
 
@@ -166,7 +166,7 @@ export class GradesController {
   toggleStatus(
     @CurrentCenterId() centerId: string,
     @Param('id') id: string,
-  ): Promise<GradeDetails> {
+  ): Promise<GradeListItem> {
     return this.gradesService.toggleStatus(centerId, id);
   }
 
