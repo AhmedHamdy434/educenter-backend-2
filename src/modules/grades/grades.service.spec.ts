@@ -17,6 +17,7 @@ describe('GradesService - Excel & PDF Import/Export', () => {
       findMany: jest.Mock;
       createMany: jest.Mock;
       findUnique: jest.Mock;
+      count: jest.Mock;
     };
     $transaction: jest.Mock;
   };
@@ -37,6 +38,7 @@ describe('GradesService - Excel & PDF Import/Export', () => {
         findMany: jest.fn(),
         createMany: jest.fn(),
         findUnique: jest.fn(),
+        count: jest.fn(),
       },
       $transaction: jest.fn(),
     };
@@ -61,6 +63,59 @@ describe('GradesService - Excel & PDF Import/Export', () => {
     }).compile();
 
     service = module.get<GradesService>(GradesService);
+  });
+
+  describe('findAll', () => {
+    it('should sort by subjects count when sortBy is subjects', async () => {
+      prisma.grade.count.mockResolvedValue(1);
+      prisma.grade.findMany.mockResolvedValue([]);
+
+      const query = new GradeQueryDto();
+      (query as any).sortBy = 'subjects';
+      (query as any).sortOrder = 'desc';
+
+      await service.findAll(centerId, query);
+
+      expect(prisma.grade.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: { subjects: { _count: 'desc' } },
+        }),
+      );
+    });
+
+    it('should sort by groups count when sortBy is groups', async () => {
+      prisma.grade.count.mockResolvedValue(1);
+      prisma.grade.findMany.mockResolvedValue([]);
+
+      const query = new GradeQueryDto();
+      (query as any).sortBy = 'groups';
+      (query as any).sortOrder = 'asc';
+
+      await service.findAll(centerId, query);
+
+      expect(prisma.grade.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: { groups: { _count: 'asc' } },
+        }),
+      );
+    });
+
+    it('should sort by enrollments count when sortBy is enrollments', async () => {
+      prisma.grade.count.mockResolvedValue(1);
+      prisma.grade.findMany.mockResolvedValue([]);
+
+      const query = new GradeQueryDto();
+      (query as any).sortBy = 'enrollments';
+      (query as any).sortOrder = 'desc';
+
+      await service.findAll(centerId, query);
+
+      expect(prisma.grade.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: { enrollments: { _count: 'desc' } },
+        }),
+      );
+    });
   });
 
   describe('exportToExcel', () => {

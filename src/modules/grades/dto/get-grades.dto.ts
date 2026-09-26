@@ -23,14 +23,14 @@ export class GradeQueryDto extends BaseQueryDto {
 
   @ApiPropertyOptional({
     description:
-      'حقل الترتيب (الاسم name أو الترتيب order أو تاريخ الإنشاء createdAt)',
-    enum: ['name', 'order', 'createdAt'],
-    example: 'name',
+      'حقل الترتيب: name, order, createdAt أو عدد المواد subjects, عدد المجموعات groups, عدد الطلاب enrollments',
+    enum: ['name', 'order', 'createdAt', 'subjects', 'groups', 'enrollments'],
+    example: 'subjects',
   })
   @IsOptional()
-  @IsIn(['name', 'order', 'createdAt'], {
+  @IsIn(['name', 'order', 'createdAt', 'subjects', 'groups', 'enrollments'], {
     message:
-      'حقل الترتيب يجب أن يكون أحد الحقول التالية: name, order, createdAt.',
+      'حقل الترتيب يجب أن يكون أحد الحقول التالية: name, order, createdAt, subjects, groups, enrollments.',
   })
   declare readonly sortBy?: string;
 }

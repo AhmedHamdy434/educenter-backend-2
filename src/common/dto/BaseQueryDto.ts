@@ -51,16 +51,33 @@ export class BaseQueryDto extends PaginationDto {
 
   /**
    * إنشاء كائن الترتيب (orderBy) لـ Prisma بشكل آمن وموحد.
-   * يتم التحقق من الحقول المسموحة (allowedFields) لحماية قاعدة البيانات من أي أخطاء أو حقول غير مصرح بها.
+   * يتم التحقق من الحقول المسموحة (allowedFields) وحقول عد العلاقات (relationCountFields)
+   * لحماية قاعدة البيانات من أي أخطاء أو حقول غير مصرح بها.
    */
   getOrderBy<T>(
     allowedFields: string[] = [],
     defaultOrder: T = { createdAt: 'desc' } as unknown as T,
+    relationCountFields: string[] | Record<string, string> = [],
   ): T {
-    if (this.sortBy && allowedFields.includes(this.sortBy)) {
-      return {
-        [this.sortBy]: this.sortOrder || 'desc',
-      } as unknown as T;
+    if (this.sortBy) {
+      if (Array.isArray(relationCountFields)) {
+        if (relationCountFields.includes(this.sortBy)) {
+          return {
+            [this.sortBy]: { _count: this.sortOrder || 'desc' },
+          } as unknown as T;
+        }
+      } else if (this.sortBy in relationCountFields) {
+        const relationKey = relationCountFields[this.sortBy];
+        return {
+          [relationKey]: { _count: this.sortOrder || 'desc' },
+        } as unknown as T;
+      }
+
+      if (allowedFields.includes(this.sortBy)) {
+        return {
+          [this.sortBy]: this.sortOrder || 'desc',
+        } as unknown as T;
+      }
     }
 
     return defaultOrder;

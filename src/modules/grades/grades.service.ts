@@ -31,6 +31,8 @@ const EXCEL_MIME_TYPE =
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const PDF_MIME_TYPE = 'application/pdf';
 
+const GRADE_RELATION_COUNT_FIELDS = ['subjects', 'groups', 'enrollments'];
+
 @Injectable()
 export class GradesService {
   constructor(
@@ -82,6 +84,7 @@ export class GradesService {
     >(
       ['name', 'order', 'createdAt'],
       [{ order: 'asc' }, { createdAt: 'desc' }],
+      GRADE_RELATION_COUNT_FIELDS,
     );
 
     const [total, data] = await Promise.all([
@@ -214,6 +217,7 @@ export class GradesService {
     >(
       ['name', 'order', 'createdAt'],
       [{ order: 'asc' }, { createdAt: 'desc' }],
+      GRADE_RELATION_COUNT_FIELDS,
     );
 
     const grades = await this.prisma.grade.findMany({

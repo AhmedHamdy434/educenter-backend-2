@@ -47,6 +47,8 @@
 * Put Guards and Roles decorators at the Controller level if they apply globally to all its endpoints (e.g. `@Controller('subscription-plans') @UseGuards(JwtAuthGuard, RolesGuard) @Roles(AppRole.SUPER_ADMIN)`).
 * Use explicit NestJS HTTP Status constants (e.g., `HttpStatus.OK`, `HttpStatus.CREATED`) in `@HttpCode` decorators.
 * Use the custom decorator `@ResponseMessage('...')` for successful responses.
+* In tenant-scoped controllers, inject `@CurrentCenterId() centerId: string` parameter decorator to cleanly pass the center ID directly to service methods.
+* **Express Route Precedence Rule:** Always define static sub-routes (such as `export/excel`, `export/pdf`, `export/template`, `import/excel`) **before** parameterized routes (`:id`, `:id/*`) to prevent Express from intercepting sub-paths as IDs.
 * Apply `@UseGuards(ThrottlerGuard)` and `@Throttle({ default: { limit, ttl } })` on public brute-force sensitive endpoints (`/auth/login`, `/auth/forgot-password`, `/auth/reset-password`).
 * **Strictly Lightweight Controllers (Zero Business/Formatting Logic):** Controllers must ONLY validate DTOs, authorize, and delegate immediately to services. Controllers must NOT perform date formatting, filename building, buffer handling, or manual response header setting (`Content-Type`, `Content-Disposition`). All export and file download logic belongs entirely in the Service layer.
 
@@ -71,7 +73,7 @@
 * Inherit all query DTOs from `BaseQueryDto` to reuse pagination (`page`, `limit`), search (`search`), and sorting (`sortBy`, `sortOrder`).
 * Use `query.skip` and `query.take` getters inherited from `PaginationDto` to feed offset-based pagination directly.
 * Use `query.getWhere(['searchField1', 'searchField2'])` helper to automatically construct insensitive `OR` search clauses.
-* Use `query.getOrderBy(['allowedField1', 'allowedField2'], defaultOrder)` helper to safely construct Prisma `orderBy` clauses with whitelisted fields.
+* Use `query.getOrderBy(['allowedField1', 'allowedField2'], defaultOrder, relationCountFields)` helper to safely construct Prisma `orderBy` clauses with whitelisted scalar fields and support ordering by relation counts (`_count: { [relation]: sortOrder }`).
 * Put entity-specific custom filters (such as `active: boolean`, `role: UserRole`, `type: NotificationType`) inside the module's query DTO instead of the base DTO.
 
 ## 6. DTO Properties & Validation Rules
@@ -131,3 +133,145 @@
     4. `Notifications` (1 endpoint)
     5. `AuditLogs` (1 endpoint)
     6. `ParentPortal` (2 endpoints)
+
+## 10. Standard Entity Module Blueprint (The Grades Module Architecture)
+Every standard educational entity module (e.g. `Grades`, `Subjects`, etc.) MUST strictly mirror the structure, design patterns, and conventions established in `src/modules/grades`:
+
+### A. Folder & File Structure
+```text
+src/modules/[entities]/
+├── constants/
+│   └── [entity].select.ts          # Prisma select definitions & derived TypeScript payload types
+├── dto/
+│   ├── create-[entity].dto.ts      # Creation DTO with validations
+│   ├── update-[entity].dto.ts      # Update DTO extending PartialType(Create...Dto)
+│   └── get-[entities].dto.ts       # Query DTO extending BaseQueryDto
+├── [entities].controller.ts        # Pure, lightweight NestJS controller
+├── [entities].service.ts           # Business logic, exports, imports, validations
+├── [entities].module.ts            # NestJS module declaration
+└── [entities].service.spec.ts      # Comprehensive unit tests
+```
+
+### B. Select Constants & Type System (`constants/[entity].select.ts`)
+* Define distinct select objects using the `satisfies Prisma.[Entity]Select` pattern:
+  - `[entity]ListSelect`: Essential fields for list queries, creations, updates, and fast lookups. Excludes heavy relations and sensitive hashes.
+  - `[entity]DetailsSelect`: Composes `...[entity]ListSelect` and includes relational counters `_count: { select: { ... } }` or necessary relationships.
+* Derive and export payload types directly from Prisma:
+  ```typescript
+  export type [Entity]ListItem = Prisma.[Entity]GetPayload<{ select: typeof [entity]ListSelect }>;
+  export type [Entity]Details = Prisma.[Entity]GetPayload<{ select: typeof [entity]DetailsSelect }>;
+  ```
+* Enforce explicit return types on all controller and service methods using these types (e.g. `Promise<[Entity]ListItem>`, `Promise<{ data: [Entity]Details[]; meta: any }>`).
+
+### C. DTO Design & Validation Rules
+* **Create DTO (`create-[entity].dto.ts`):**
+  - All properties marked `readonly`.
+  - Thorough `class-validator` rules with user-friendly Arabic validation messages (`@IsNotEmpty`, `@IsString`, `@MaxLength`, `@IsInt`, `@Min`).
+  - Strict type transformation with `class-transformer` (`@Type(() => Number)`).
+  - Explicit defaults where applicable (e.g., `readonly order?: number = 0;`).
+* **Update DTO (`update-[entity].dto.ts`):**
+  - Extends `PartialType(Create[Entity]Dto)`.
+  - Explicitly adds update-only optional fields (e.g., `@IsOptional() @IsBoolean() readonly isActive?: boolean;`).
+* **Query DTO (`get-[entities].dto.ts`):**
+  - Extends `BaseQueryDto` to inherit pagination (`page`, `limit`), search (`search`), and sorting (`sortBy`, `sortOrder`).
+  - Custom boolean filters decorated with `@ToBoolean()` and `@IsBoolean()`.
+  - Override `sortBy` with `declare readonly sortBy?: string` and validate strictly with `@IsIn(['col1', 'col2', 'createdAt'])`.
+  - Annotate with `@ApiPropertyOptional(...)` including description, example, and enum for Swagger.
+
+### D. Controller Standards & Route Precedence
+* **Class Decorators:**
+  `@Controller('[entities]')`
+  `@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)`
+* **Tenant Scoping:** Use `@CurrentCenterId() centerId: string` parameter decorator to inject the authenticated user's center ID directly.
+* **HTTP Responses & Statuses:**
+  - `@HttpCode(HttpStatus.CREATED)` for POST creation.
+  - `@HttpCode(HttpStatus.OK)` for DELETE, status toggle, and import.
+  - `@ResponseMessage('...')` with Arabic confirmation text on all standard endpoints.
+* **Express Route Precedence Rule (CRITICAL):**
+  - Static sub-routes (`export/excel`, `export/pdf`, `export/template`, `import/excel`) **MUST** be placed before parameterized routes (`:id`, `:id/toggle-status`) in the controller class to prevent route collisions in Express.
+* **Standard Endpoints Mapping (10 Endpoints):**
+  1. `POST /` -> Create entity (`@Roles(AppRole.OWNER)`)
+  2. `GET /` -> Paginated list (`@Roles(AppRole.OWNER, AppRole.TEACHER, AppRole.STUDENT)`)
+  3. `GET /export/excel` -> Export to Excel (`@BypassInterceptor()`, `@Res() res: Response`, delegates to service)
+  4. `GET /export/pdf` -> Export to PDF (`@BypassInterceptor()`, `@Res() res: Response`, delegates to service)
+  5. `GET /export/template` -> Download empty import template (`@BypassInterceptor()`, `@Res() res: Response`)
+  6. `POST /import/excel` -> Import from Excel (`@UseInterceptors(FileInterceptor('file'))`, `@ApiConsumes('multipart/form-data')`, `@UploadedFile(new ExcelValidationPipe())`, `@Query('dryRun', new DefaultValuePipe(false), ParseBoolPipe)`)
+  7. `GET /:id` -> Single entity details
+  8. `PATCH /:id` -> Update entity
+  9. `PATCH /:id/toggle-status` -> Fast status toggle (active/inactive)
+  10. `DELETE /:id` -> Safe deletion
+
+### E. Service Business Logic & Integrity Standards
+* **Tenant Isolation:** Every Prisma query and mutation must include `centerId` in its filter/data.
+* **Uniqueness Assertion:**
+  - Implement private helper `ensure[Entity]NameIsUnique(centerId, name)` using `prisma.[entity].findUnique({ where: { centerId_name: { centerId, name } } })`.
+  - Throw `ConflictException` with Arabic message if already taken.
+  - In updates: check uniqueness ONLY if the unique field has changed.
+* **Safe Deletion & Relational Protection:**
+  - Fetch target record with `[entity]DetailsSelect` to inspect `_count`.
+  - Block deletion if any dependent relations exist (e.g. subjects, groups, students) by throwing `BadRequestException('لا يمكن حذف ... لوجود ... مرتبطين بها.')`.
+* **Fast Status Toggle:**
+  - Retrieve current status via `findOne(centerId, id)` and update `isActive: !current.isActive`.
+* **Paginated Query (`findAll`):**
+  - Extract `skip`, `take`, and filters from `query`.
+  - Build `where` with `query.getWhere(['name', 'description'])` and set `where.centerId = centerId`.
+  - Build `orderBy` with `query.getOrderBy([...allowed], [defaultOrder])`.
+  - Fetch count and items concurrently with `Promise.all([this.prisma.[entity].count({ where }), this.prisma.[entity].findMany({ where, skip, take, select: [entity]DetailsSelect, orderBy })])`.
+  - Return `{ data, meta: buildMeta(total, query.page, query.limit) }`.
+
+### F. File Export Architecture (Excel & PDF - DRY)
+* Define centralized constants: `EXCEL_MIME_TYPE`, `PDF_MIME_TYPE`.
+* **Single Reusable Dataset Extractor:**
+  - Implement `private async getExportDataset(centerId: string, query: [Entity]QueryDto): Promise<{ rows: any[]; dateStr: string }>` to run the Prisma query once, format dates and status labels, and supply rows to both Excel and PDF generators.
+* **Dual-Mode Handler (Stream or Buffer):**
+  - Accept `(centerId: string, query: [Entity]QueryDto, res?: Response): Promise<Buffer | void>`.
+  - If `res` is passed: call `this.sendFileDownload(res, buffer, filename, mimeType)` to set headers and stream.
+  - If `res` is omitted: return `buffer` directly (enabling easy unit testing).
+
+### G. Excel Import Pipeline & Error Envelope Standard
+* **Validation Pipe:** Use `new ExcelValidationPipe()` on the uploaded file to ensure valid `.xlsx` / `.xls` MIME type and enforce the 5MB file size limit.
+* **Header Verification:** Use `excelService.parseSheetRows(fileBuffer, { expectedHeaders: [...] })`. Throw `BadRequestException` if rows are empty.
+* **Performance & N+1 Prevention:** Pre-fetch all existing names for the center in a single query and normalize into a `Set` using `normalizeArabicText()`.
+* **Row-by-Row Validation:**
+  - Validate all rows sequentially, collecting errors into `errors: RowValidationError[]`.
+  - Track duplicates within the same file using a `Set<string>`.
+  - Validate required fields, types, and uniqueness against the pre-fetched database Set.
+* **Atomic 422 Error Envelope:**
+  - If any row fails (`errors.length > 0`), reject the entire file and throw `UnprocessableEntityException` with the standardized structure:
+    ```json
+    {
+      "statusCode": 422,
+      "message": "تعذر استيراد الملف لوجود أخطاء في البيانات المرفقة.",
+      "error": "Unprocessable Entity",
+      "data": {
+        "totalRows": 10,
+        "validRows": 8,
+        "failedRows": 2,
+        "remainingErrorsCount": 0,
+        "errors": [
+          { "row": 3, "field": "name", "value": "...", "message": "..." }
+        ]
+      }
+    }
+    ```
+  - Cap error details to the first 100 errors in `errors.slice(0, 100)` and report `remainingErrorsCount`.
+* **Dry-Run Mode (`dryRun: boolean`):**
+  - If `dryRun === true`, return the summary and parsed rows preview without executing database writes.
+* **Transactional Persistence:**
+  - Wrap batch creation in `prisma.$transaction(async (tx) => { await tx.[entity].createMany({ data: validRowsToCreate }); })`.
+  - Catch Prisma `P2002` (unique violation) errors and translate to `UnprocessableEntityException`.
+
+### H. Excel Import Template Standard
+* Provide `getImportTemplate(res?: Response)` leveraging `excelService.buildTemplateBuffer`.
+* Include two sheets:
+  1. Data sheet: column headers, appropriate column widths, and cell formatting (`numFmt`).
+  2. Instructions sheet: clear Arabic bullet points explaining mandatory vs optional columns, validation constraints, and sample data.
+
+### I. Unit Testing Standard (`[entity].service.spec.ts`)
+* Mock `PrismaService`, `ExcelService`, and `PdfService`.
+* Test scenarios must cover:
+  1. Standard CRUD operations, tenant isolation, and `ConflictException` on duplicate names.
+  2. Safe deletion blocking when relational counts > 0.
+  3. Export to Excel & PDF (verifying buffer return and HTTP response streaming).
+  4. Template generation.
+  5. Import validation: empty file (400), invalid rows (422), duplicate in file (422), duplicate in DB (422), race condition P2002 (422), dry-run preview, and successful batch creation.

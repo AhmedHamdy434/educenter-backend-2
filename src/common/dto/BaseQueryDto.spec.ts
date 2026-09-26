@@ -49,4 +49,30 @@ describe('BaseQueryDto', () => {
     const orderBy = dto.getOrderBy(['name', 'createdAt']);
     expect(orderBy).toEqual({ createdAt: 'desc' });
   });
+
+  it('should return relation count order when sortBy is in relationCountFields array', () => {
+    const dto = new BaseQueryDto();
+    (dto as any).sortBy = 'subjects';
+    (dto as any).sortOrder = 'desc';
+
+    const orderBy = dto.getOrderBy(
+      ['name', 'createdAt'],
+      { createdAt: 'desc' },
+      ['subjects', 'groups', 'enrollments'],
+    );
+    expect(orderBy).toEqual({ subjects: { _count: 'desc' } });
+  });
+
+  it('should return mapped relation count order when relationCountFields is a map', () => {
+    const dto = new BaseQueryDto();
+    (dto as any).sortBy = 'studentsCount';
+    (dto as any).sortOrder = 'asc';
+
+    const orderBy = dto.getOrderBy(
+      ['name', 'createdAt'],
+      { createdAt: 'desc' },
+      { studentsCount: 'enrollments', subjectsCount: 'subjects' },
+    );
+    expect(orderBy).toEqual({ enrollments: { _count: 'asc' } });
+  });
 });
