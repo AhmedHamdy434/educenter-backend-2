@@ -122,7 +122,7 @@
     4. `Subscription Payments` (4 endpoints): `GET /api/subscription-payments/summary`, `GET /api/subscription-payments`, `POST /api/centers/:centerId/subscription-payments`, `GET /api/centers/:centerId/subscription-payments`
     5. `Users` (3 endpoints): `GET /api/users`, `GET /api/users/:id`, `PATCH /api/users/:id`
     6. `Grades` (10 endpoints): `POST /api/grades`, `GET /api/grades`, `GET /api/grades/export/excel`, `GET /api/grades/export/pdf`, `GET /api/grades/export/template`, `POST /api/grades/import/excel`, `GET /api/grades/:id`, `PATCH /api/grades/:id`, `PATCH /api/grades/:id/toggle-status`, `DELETE /api/grades/:id`
-    7. `Subjects` (6 endpoints): `GET /api/subjects/options`, `POST /api/subjects`, `GET /api/subjects`, `GET /api/subjects/:id`, `PATCH /api/subjects/:id`, `PATCH /api/subjects/:id/toggle-status`
+    7. `Subjects` (10 endpoints): `GET /api/subjects/options`, `GET /api/subjects/export/excel`, `GET /api/subjects/export/pdf`, `GET /api/subjects/export/template`, `POST /api/subjects/import/excel`, `POST /api/subjects`, `GET /api/subjects`, `GET /api/subjects/:id`, `PATCH /api/subjects/:id`, `PATCH /api/subjects/:id/toggle-status`
     8. `Teachers` (5 endpoints): `POST /api/teachers`, `GET /api/teachers`, `GET /api/teachers/:id`, `PATCH /api/teachers/:id`, `PATCH /api/teachers/:id/toggle-status`
     9. `Students` (5 endpoints): `POST /api/students`, `GET /api/students`, `GET /api/students/:id`, `PATCH /api/students/:id`, `PATCH /api/students/:id/toggle-status`
     10. `Home Stats` (1 endpoint): `GET /api/home-stats`

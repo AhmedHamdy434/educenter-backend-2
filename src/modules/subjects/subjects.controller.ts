@@ -7,11 +7,21 @@ import {
   Post,
   Query,
   UseGuards,
-  BadRequestException,
   HttpStatus,
   HttpCode,
+  Res,
+  UseInterceptors,
+  UploadedFile,
+  DefaultValuePipe,
+  ParseBoolPipe,
 } from '@nestjs/common';
-import { ResponseMessage } from '../../common/decorators/response-message.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiConsumes } from '@nestjs/swagger';
+import type { Response } from 'express';
+import {
+  BypassInterceptor,
+  ResponseMessage,
+} from '../../common/decorators/response-message.decorator';
 import { CreateSubjectDto } from './dto/create-subject.dto';
 import { SubjectQueryDto } from './dto/get-subjects.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';
@@ -21,9 +31,10 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AppRole } from '../../common/enums/app-role.enum';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import type { RequestUser } from '../auth/interfaces/authenticated-request.interface';
-import { SubjectDetails, SubjectListItem } from './constants/subject.select';
+import { CurrentCenterId } from '../../common/decorators/current-center-id.decorator';
+import { ExcelValidationPipe } from '../../shared/excel/pipes/excel-validation.pipe';
+import { ExcelImportSummary } from '../../shared/excel/interfaces/excel.interface';
+import { SubjectListItem } from './constants/subject.select';
 
 @Controller('subjects')
 @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
@@ -32,21 +43,81 @@ export class SubjectsController {
 
   /**
    * جلب خيارات المواد الدراسية النشطة لاستخدامها في القوائم المنسدلة (Dropdown selectors).
-   * يتم تحديد المسار قبل المسارات المتغيرة `:id` لمنع التعارض.
+   * تم وضعه قبل مسارات :id لمنع التعارض في Express.
    */
   @Get('options')
   @ResponseMessage('تم جلب خيارات المواد الدراسية بنجاح.')
   @Roles(AppRole.OWNER, AppRole.TEACHER, AppRole.STUDENT)
   findOptions(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Query('gradeId') gradeId?: string,
   ): Promise<{ id: string; name: string; grade: { name: string } }[]> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.subjectsService.findOptions(user.centerId, gradeId);
+    return this.subjectsService.findOptions(centerId, gradeId);
+  }
+
+  /**
+   * تصدير المواد الدراسية لملف Excel مع تطبيق الفلاتر والبحث.
+   * تم وضعه قبل مسار :id لتجنب تعارض المسارات في Express.
+   */
+  @Get('export/excel')
+  @Roles(AppRole.OWNER)
+  @BypassInterceptor()
+  async exportExcel(
+    @CurrentCenterId() centerId: string,
+    @Query() query: SubjectQueryDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.subjectsService.exportToExcel(centerId, query, res);
+  }
+
+  /**
+   * تصدير المواد الدراسية لملف PDF مع تطبيق الفلاتر والبحث.
+   * تم وضعه قبل مسار :id لتجنب تعارض المسارات في Express.
+   */
+  @Get('export/pdf')
+  @Roles(AppRole.OWNER)
+  @BypassInterceptor()
+  async exportPdf(
+    @CurrentCenterId() centerId: string,
+    @Query() query: SubjectQueryDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.subjectsService.exportToPdf(centerId, query, res);
+  }
+
+  /**
+   * تحميل قالب Excel فارغ ومجهز لاستيراد المواد الدراسية.
+   * تم وضعه قبل مسار :id لتجنب تعارض المسارات في Express.
+   */
+  @Get('export/template')
+  @Roles(AppRole.OWNER)
+  @BypassInterceptor()
+  async getTemplate(@Res() res: Response): Promise<void> {
+    await this.subjectsService.getImportTemplate(res);
+  }
+
+  /**
+   * استيراد المواد الدراسية من ملف Excel المرفوع.
+   */
+  @Post('import/excel')
+  @HttpCode(HttpStatus.OK)
+  @ResponseMessage('تم استيراد المواد الدراسية بنجاح.')
+  @Roles(AppRole.OWNER)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  async importExcel(
+    @CurrentCenterId() centerId: string,
+    @UploadedFile(new ExcelValidationPipe()) file: Express.Multer.File,
+    @Query('dryRun', new DefaultValuePipe(false), ParseBoolPipe)
+    dryRun: boolean,
+  ): Promise<
+    ExcelImportSummary<{
+      name: string;
+      gradeName: string;
+      description?: string;
+    }>
+  > {
+    return this.subjectsService.importFromExcel(centerId, file.buffer, dryRun);
   }
 
   /**
@@ -57,15 +128,10 @@ export class SubjectsController {
   @ResponseMessage('تم إنشاء المادة الدراسية بنجاح.')
   @Roles(AppRole.OWNER)
   create(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Body() createSubjectDto: CreateSubjectDto,
-  ): Promise<SubjectDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.subjectsService.create(user.centerId, createSubjectDto);
+  ): Promise<SubjectListItem> {
+    return this.subjectsService.create(centerId, createSubjectDto);
   }
 
   /**
@@ -75,15 +141,10 @@ export class SubjectsController {
   @ResponseMessage('تم جلب المواد الدراسية بنجاح.')
   @Roles(AppRole.OWNER, AppRole.TEACHER, AppRole.STUDENT)
   findAll(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Query() query: SubjectQueryDto,
   ): Promise<{ data: SubjectListItem[]; meta: any }> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.subjectsService.findAll(user.centerId, query);
+    return this.subjectsService.findAll(centerId, query);
   }
 
   /**
@@ -93,15 +154,10 @@ export class SubjectsController {
   @ResponseMessage('تم جلب تفاصيل المادة الدراسية بنجاح.')
   @Roles(AppRole.OWNER, AppRole.TEACHER, AppRole.STUDENT)
   findOne(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Param('id') id: string,
-  ): Promise<SubjectDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.subjectsService.findOne(user.centerId, id);
+  ): Promise<SubjectListItem> {
+    return this.subjectsService.findOne(centerId, id);
   }
 
   /**
@@ -111,16 +167,11 @@ export class SubjectsController {
   @ResponseMessage('تم تحديث المادة الدراسية بنجاح.')
   @Roles(AppRole.OWNER)
   update(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Param('id') id: string,
     @Body() updateSubjectDto: UpdateSubjectDto,
-  ): Promise<SubjectDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.subjectsService.update(user.centerId, id, updateSubjectDto);
+  ): Promise<SubjectListItem> {
+    return this.subjectsService.update(centerId, id, updateSubjectDto);
   }
 
   /**
@@ -130,14 +181,9 @@ export class SubjectsController {
   @ResponseMessage('تم تحديث حالة تفعيل المادة الدراسية بنجاح.')
   @Roles(AppRole.OWNER)
   toggleStatus(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Param('id') id: string,
-  ): Promise<SubjectDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.subjectsService.toggleStatus(user.centerId, id);
+  ): Promise<SubjectListItem> {
+    return this.subjectsService.toggleStatus(centerId, id);
   }
 }
