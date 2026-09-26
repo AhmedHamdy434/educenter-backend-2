@@ -81,17 +81,22 @@ export class GradesController {
     @Query() query: GradeQueryDto,
     @Res() res: Response,
   ): Promise<void> {
-    const buffer = await this.gradesService.exportToExcel(centerId, query);
-    const dateStr = new Date().toISOString().split('T')[0];
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    );
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="grades-${dateStr}.xlsx"`,
-    );
-    res.send(buffer);
+    await this.gradesService.exportToExcel(centerId, query, res);
+  }
+
+  /**
+   * تصدير المراحل الدراسية لملف PDF مع تطبيق الفلاتر والبحث.
+   * تم وضعه قبل مسار :id لتجنب تعارض المسارات في Express.
+   */
+  @Get('export/pdf')
+  @Roles(AppRole.OWNER)
+  @BypassInterceptor()
+  async exportPdf(
+    @CurrentCenterId() centerId: string,
+    @Query() query: GradeQueryDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.gradesService.exportToPdf(centerId, query, res);
   }
 
   /**
@@ -102,16 +107,7 @@ export class GradesController {
   @Roles(AppRole.OWNER)
   @BypassInterceptor()
   async getTemplate(@Res() res: Response): Promise<void> {
-    const buffer = await this.gradesService.getImportTemplate();
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    );
-    res.setHeader(
-      'Content-Disposition',
-      'attachment; filename="grades-template.xlsx"',
-    );
-    res.send(buffer);
+    await this.gradesService.getImportTemplate(res);
   }
 
   /**

@@ -29,7 +29,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { AppRole } from '../../common/enums/app-role.enum';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ImageValidationPipe } from '../../shared/cloudinary/pipes/image-validation.pipe';
+import { ImageValidationPipe } from '../../shared/storage/pipes/image-validation.pipe';
 import { ResponseMessage } from '../../common/decorators/response-message.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { RequestUser } from '../auth/interfaces/authenticated-request.interface';

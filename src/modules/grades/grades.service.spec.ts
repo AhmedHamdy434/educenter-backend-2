@@ -3,12 +3,14 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import type { Response } from 'express';
 import { GradesService } from './grades.service';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { ExcelService } from '../../shared/excel/excel.service';
+import { PdfService } from '../../shared/pdf/pdf.service';
 import { GradeQueryDto } from './dto/get-grades.dto';
 
-describe('GradesService - Excel Import & Export', () => {
+describe('GradesService - Excel & PDF Import/Export', () => {
   let service: GradesService;
   let prisma: {
     grade: {
@@ -22,6 +24,9 @@ describe('GradesService - Excel Import & Export', () => {
     buildWorkbookBuffer: jest.Mock;
     buildTemplateBuffer: jest.Mock;
     parseSheetRows: jest.Mock;
+  };
+  let pdfService: {
+    buildTablePdfBuffer: jest.Mock;
   };
 
   const centerId = 'center-123';
@@ -42,11 +47,16 @@ describe('GradesService - Excel Import & Export', () => {
       parseSheetRows: jest.fn(),
     };
 
+    pdfService = {
+      buildTablePdfBuffer: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GradesService,
         { provide: PrismaService, useValue: prisma },
         { provide: ExcelService, useValue: excelService },
+        { provide: PdfService, useValue: pdfService },
       ],
     }).compile();
 
@@ -84,6 +94,82 @@ describe('GradesService - Excel Import & Export', () => {
       );
       expect(result).toBe(mockBuffer);
     });
+
+    it('should stream to res if response object is provided', async () => {
+      prisma.grade.findMany.mockResolvedValue([]);
+      const mockBuffer = Buffer.from('mock-excel-data');
+      excelService.buildWorkbookBuffer.mockResolvedValue(mockBuffer);
+
+      const query = {
+        getWhere: jest.fn().mockReturnValue({}),
+        getOrderBy: jest.fn().mockReturnValue([]),
+      } as unknown as GradeQueryDto;
+
+      const setHeader = jest.fn();
+      const send = jest.fn();
+      const res = { setHeader, send } as unknown as Response;
+
+      await service.exportToExcel(centerId, query, res);
+
+      expect(setHeader).toHaveBeenCalledWith(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      expect(send).toHaveBeenCalledWith(mockBuffer);
+    });
+  });
+
+  describe('exportToPdf', () => {
+    it('should query grades scoped by centerId and generate PDF buffer', async () => {
+      prisma.grade.findMany.mockResolvedValue([
+        {
+          id: 'grade-1',
+          name: 'الصف الأول الثانوي',
+          order: 1,
+          description: 'مرحلة عامة',
+          isActive: true,
+          createdAt: new Date('2026-09-01'),
+          _count: { subjects: 5, groups: 2, enrollments: 30 },
+        },
+      ]);
+      const mockBuffer = Buffer.from('mock-pdf-data');
+      pdfService.buildTablePdfBuffer.mockResolvedValue(mockBuffer);
+
+      const query = {
+        getWhere: jest.fn().mockReturnValue({}),
+        getOrderBy: jest.fn().mockReturnValue([{ order: 'asc' }]),
+      } as unknown as GradeQueryDto;
+
+      const result = await service.exportToPdf(centerId, query);
+
+      expect(prisma.grade.findMany).toHaveBeenCalled();
+      expect(pdfService.buildTablePdfBuffer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'تقرير المراحل الدراسية',
+        }),
+      );
+      expect(result).toBe(mockBuffer);
+    });
+
+    it('should stream to res if response object is provided', async () => {
+      prisma.grade.findMany.mockResolvedValue([]);
+      const mockBuffer = Buffer.from('mock-pdf-data');
+      pdfService.buildTablePdfBuffer.mockResolvedValue(mockBuffer);
+
+      const query = {
+        getWhere: jest.fn().mockReturnValue({}),
+        getOrderBy: jest.fn().mockReturnValue([]),
+      } as unknown as GradeQueryDto;
+
+      const setHeader = jest.fn();
+      const send = jest.fn();
+      const res = { setHeader, send } as unknown as Response;
+
+      await service.exportToPdf(centerId, query, res);
+
+      expect(setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
+      expect(send).toHaveBeenCalledWith(mockBuffer);
+    });
   });
 
   describe('getImportTemplate', () => {
@@ -100,6 +186,23 @@ describe('GradesService - Excel Import & Export', () => {
         }),
       );
       expect(result).toBe(mockBuffer);
+    });
+
+    it('should stream template to res if response object is provided', async () => {
+      const mockBuffer = Buffer.from('mock-template-data');
+      excelService.buildTemplateBuffer.mockResolvedValue(mockBuffer);
+
+      const setHeader = jest.fn();
+      const send = jest.fn();
+      const res = { setHeader, send } as unknown as Response;
+
+      await service.getImportTemplate(res);
+
+      expect(setHeader).toHaveBeenCalledWith(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      expect(send).toHaveBeenCalledWith(mockBuffer);
     });
   });
 

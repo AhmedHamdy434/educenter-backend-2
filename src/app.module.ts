@@ -12,7 +12,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { SubscriptionPlansModule } from './modules/subscription-plans/subscription-plans.module';
 import { CentersModule } from './modules/centers/centers.module';
-import { CloudinaryModule } from './shared/cloudinary/cloudinary.module';
+import { StorageModule } from './shared/storage/storage.module';
 import { GradesModule } from './modules/grades/grades.module';
 import { SubjectsModule } from './modules/subjects/subjects.module';
 import { TeachersModule } from './modules/teachers/teachers.module';
@@ -47,7 +47,7 @@ import { HomeStatsModule } from './modules/home-stats/home-stats.module';
     CentersModule,
     SubscriptionPaymentsModule,
     HomeStatsModule,
-    CloudinaryModule,
+    StorageModule,
     GradesModule,
     SubjectsModule,
     TeachersModule,

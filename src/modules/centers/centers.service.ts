@@ -25,14 +25,14 @@ import {
   getLastDayOfMonth,
 } from '../../common/utils/date.util';
 import { PlanType } from '../../common/enums/plan-type.enum';
-import { CloudinaryService } from '../../shared/cloudinary/cloudinary.service';
-import { UploadFolder } from '../../shared/cloudinary/enums/upload-folder.enum';
+import { StorageService } from '../../shared/storage/storage.service';
+import { UploadFolder } from '../../shared/storage/enums/upload-folder.enum';
 
 @Injectable()
 export class CentersService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly cloudinaryService: CloudinaryService,
+    private readonly storageService: StorageService,
   ) {}
 
   async create(
@@ -46,12 +46,15 @@ export class CentersService {
 
     if (logoFile) {
       try {
-        const uploadResult = await this.cloudinaryService.uploadImage(
+        const uploadResult = await this.storageService.uploadImage(
           logoFile,
           UploadFolder.CENTERS,
         );
-        logoUrl = uploadResult.secure_url;
-      } catch {
+        logoUrl = uploadResult.url;
+      } catch (err: unknown) {
+        if (err instanceof BadRequestException) {
+          throw err;
+        }
         throw new BadRequestException('فشل رفع شعار المركز.');
       }
     }
@@ -143,7 +146,7 @@ export class CentersService {
       });
     } catch (dbError) {
       if (logoFile && logoUrl) {
-        await this.cloudinaryService.deleteFile(logoUrl).catch(() => {});
+        await this.storageService.deleteFile(logoUrl).catch(() => {});
       }
       throw dbError;
     }
@@ -242,12 +245,15 @@ export class CentersService {
 
     if (logoFile) {
       try {
-        const uploadResult = await this.cloudinaryService.uploadImage(
+        const uploadResult = await this.storageService.uploadImage(
           logoFile,
           UploadFolder.CENTERS,
         );
-        logoUrl = uploadResult.secure_url;
-      } catch {
+        logoUrl = uploadResult.url;
+      } catch (err: unknown) {
+        if (err instanceof BadRequestException) {
+          throw err;
+        }
         throw new BadRequestException('فشل رفع شعار المركز الجديد.');
       }
     }
@@ -269,16 +275,16 @@ export class CentersService {
         select: centerDetailsSelect,
       });
 
-      // If update was successful and a new logo was uploaded, delete the old logo from Cloudinary
+      // If update was successful and a new logo was uploaded, safely delete the old local logo if present
       if (logoFile && oldLogoUrl) {
-        await this.cloudinaryService.deleteFile(oldLogoUrl).catch(() => {});
+        await this.storageService.deleteFile(oldLogoUrl).catch(() => {});
       }
 
       return updatedCenter;
     } catch (dbError) {
       // Rollback newly uploaded file on DB error
       if (logoFile && logoUrl) {
-        await this.cloudinaryService.deleteFile(logoUrl).catch(() => {});
+        await this.storageService.deleteFile(logoUrl).catch(() => {});
       }
       throw dbError;
     }
@@ -662,6 +668,29 @@ export class CentersService {
       throw new ConflictException(
         'البريد الإلكتروني لمالك المركز مستخدم بالفعل.',
       );
+    }
+  }
+
+  /**
+   * حذف مركز تعليمي مع تنظيف شعاره المحلي بأمان (دون مساس بالصور القديمة على Cloudinary).
+   */
+  async delete(id: string): Promise<void> {
+    const center = await this.prisma.center.findUnique({
+      where: { id },
+      select: { id: true, logo: true },
+    });
+
+    if (!center) {
+      throw new NotFoundException('المركز التعليمي المطلوب غير موجود.');
+    }
+
+    await this.prisma.center.delete({
+      where: { id },
+    });
+
+    // حذف الشعار المحلي بأمان إذا كان موجوداً ومخزناً محلياً
+    if (center.logo) {
+      await this.storageService.deleteFile(center.logo).catch(() => {});
     }
   }
 }

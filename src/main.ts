@@ -1,13 +1,28 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  const configService = app.get(ConfigService);
+  const uploadDirConfig = configService.get<string>('UPLOAD_DIR') || 'uploads';
+  const uploadsPath = path.isAbsolute(uploadDirConfig)
+    ? uploadDirConfig
+    : path.resolve(process.cwd(), uploadDirConfig);
+
+  // Serve static uploaded files under /uploads/
+  app.useStaticAssets(uploadsPath, {
+    prefix: '/uploads/',
+    maxAge: '1d',
+  });
+
   app.setGlobalPrefix('api');
   const frontendUrls = process.env.FRONTEND_URL
     ? process.env.FRONTEND_URL.split(',').map((url) => url.trim())
@@ -85,17 +100,21 @@ async function bootstrap() {
   const openApiPath = path.join(process.cwd(), 'docs', 'openapi.json');
   if (fs.existsSync(openApiPath)) {
     try {
-      const enrichedDoc = JSON.parse(fs.readFileSync(openApiPath, 'utf8'));
-      for (const [pathKey, methods] of Object.entries(
-        enrichedDoc.paths || {},
-      )) {
-        if (swaggerDocument.paths[pathKey]) {
-          for (const [methodKey, op] of Object.entries(
-            methods as Record<string, any>,
-          )) {
-            if (swaggerDocument.paths[pathKey][methodKey] && op.responses) {
-              swaggerDocument.paths[pathKey][methodKey].responses =
-                op.responses;
+      const rawContent = fs.readFileSync(openApiPath, 'utf8');
+      const enrichedDoc = JSON.parse(rawContent) as {
+        paths?: Record<string, Record<string, { responses?: unknown }>>;
+      };
+      const paths = enrichedDoc.paths ?? {};
+      for (const [pathKey, methods] of Object.entries(paths)) {
+        const swaggerPaths = swaggerDocument.paths as Record<
+          string,
+          Record<string, { responses?: unknown }> | undefined
+        >;
+        const swaggerPath = swaggerPaths[pathKey];
+        if (swaggerPath) {
+          for (const [methodKey, op] of Object.entries(methods)) {
+            if (swaggerPath[methodKey] && op.responses) {
+              swaggerPath[methodKey].responses = op.responses;
             }
           }
         }

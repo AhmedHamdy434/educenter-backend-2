@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CentersService } from './centers.service';
 import { PrismaService } from '../../database/prisma/prisma.service';
-import { CloudinaryService } from '../../shared/cloudinary/cloudinary.service';
+import { StorageService } from '../../shared/storage/storage.service';
 
 describe('CentersService', () => {
   let service: CentersService;
@@ -18,15 +18,17 @@ describe('CentersService', () => {
               findMany: jest.fn(),
               create: jest.fn(),
               update: jest.fn(),
+              delete: jest.fn(),
               count: jest.fn(),
             },
           },
         },
         {
-          provide: CloudinaryService,
+          provide: StorageService,
           useValue: {
             uploadImage: jest.fn(),
             deleteFile: jest.fn(),
+            isLocalFile: jest.fn(),
           },
         },
       ],

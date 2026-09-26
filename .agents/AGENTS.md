@@ -48,7 +48,7 @@
 * Use explicit NestJS HTTP Status constants (e.g., `HttpStatus.OK`, `HttpStatus.CREATED`) in `@HttpCode` decorators.
 * Use the custom decorator `@ResponseMessage('...')` for successful responses.
 * Apply `@UseGuards(ThrottlerGuard)` and `@Throttle({ default: { limit, ttl } })` on public brute-force sensitive endpoints (`/auth/login`, `/auth/forgot-password`, `/auth/reset-password`).
-* Keep controllers lightweight: only validate DTOs, authorize, and invoke services.
+* **Strictly Lightweight Controllers (Zero Business/Formatting Logic):** Controllers must ONLY validate DTOs, authorize, and delegate immediately to services. Controllers must NOT perform date formatting, filename building, buffer handling, or manual response header setting (`Content-Type`, `Content-Disposition`). All export and file download logic belongs entirely in the Service layer.
 
 ## 4. Services & Transactions
 * Use Prisma transactions `this.prisma.$transaction(async (tx) => { ... })` for interconnected operations (such as onboarding or multi-table writes).
@@ -57,6 +57,15 @@
 * Control database fields returned by defining separate select constants: `[entity]ListSelect` for lists, and `[entity]DetailsSelect` for detailed resources. Never expose password hashes.
 * **Audit Logging:** Integrate `AuditLogsService.logAction(centerId, userId, action, entity, entityId, details)` for security-sensitive operations (e.g. payments, status changes, user edits).
 * **Notifications & WhatsApp:** Integrate `NotificationsService.createAndDispatch(...)` for automated event-driven alerts (absence warnings, payment receipts, onboarding credentials).
+* **File Exports & Reporting (Excel & PDF):**
+  - Use `ExcelService` (`src/shared/excel`) for generating formatted spreadsheets and import templates.
+  - Use `PdfService` (`src/shared/pdf`) for generating RTL Arabic PDF reports using Cairo font.
+  - Always enforce tenant scoping (`centerId`) and apply query filters (`search`, `active`, `orderBy`) on exported datasets.
+  - Export service methods should accept `(centerId, query, res?: Response)`. When `res` is provided, the service sets headers and streams the buffer (`res.send(buffer)`). When omitted, it returns `Promise<Buffer>` to maintain clean unit testing.
+  - **Zero-Duplication Export Architecture (DRY):**
+    * When supporting multiple export formats (e.g., Excel & PDF) for the same entity, never duplicate database queries or row mapping logic. Extract a single private helper (e.g. `getExportDataset(centerId, query)`) that runs the filtered Prisma query, formats rows, and returns `{ rows, dateStr }`.
+    * Use a reusable private response helper (e.g. `sendFileDownload(res, buffer, filename, contentType)`) to encapsulate setting `Content-Type`, `Content-Disposition`, and invoking `res.send(buffer)`.
+    * Define centralized MIME type constants (`EXCEL_MIME_TYPE`, `PDF_MIME_TYPE`) instead of repeating hardcoded strings across methods.
 
 ## 5. Query DTOs, Pagination & Sorting
 * Inherit all query DTOs from `BaseQueryDto` to reuse pagination (`page`, `limit`), search (`search`), and sorting (`sortBy`, `sortOrder`).
@@ -110,7 +119,7 @@
     3. `Subscription Plans` (5 endpoints): `POST /api/subscription-plans`, `GET /api/subscription-plans`, `GET /api/subscription-plans/:id`, `PATCH /api/subscription-plans/:id`, `PATCH /api/subscription-plans/:id/toggle-status`
     4. `Subscription Payments` (4 endpoints): `GET /api/subscription-payments/summary`, `GET /api/subscription-payments`, `POST /api/centers/:centerId/subscription-payments`, `GET /api/centers/:centerId/subscription-payments`
     5. `Users` (3 endpoints): `GET /api/users`, `GET /api/users/:id`, `PATCH /api/users/:id`
-    6. `Grades` (6 endpoints): `POST /api/grades`, `GET /api/grades`, `GET /api/grades/:id`, `PATCH /api/grades/:id`, `PATCH /api/grades/:id/toggle-status`, `DELETE /api/grades/:id`
+    6. `Grades` (10 endpoints): `POST /api/grades`, `GET /api/grades`, `GET /api/grades/export/excel`, `GET /api/grades/export/pdf`, `GET /api/grades/export/template`, `POST /api/grades/import/excel`, `GET /api/grades/:id`, `PATCH /api/grades/:id`, `PATCH /api/grades/:id/toggle-status`, `DELETE /api/grades/:id`
     7. `Subjects` (6 endpoints): `GET /api/subjects/options`, `POST /api/subjects`, `GET /api/subjects`, `GET /api/subjects/:id`, `PATCH /api/subjects/:id`, `PATCH /api/subjects/:id/toggle-status`
     8. `Teachers` (5 endpoints): `POST /api/teachers`, `GET /api/teachers`, `GET /api/teachers/:id`, `PATCH /api/teachers/:id`, `PATCH /api/teachers/:id/toggle-status`
     9. `Students` (5 endpoints): `POST /api/students`, `GET /api/students`, `GET /api/students/:id`, `PATCH /api/students/:id`, `PATCH /api/students/:id/toggle-status`

@@ -9,7 +9,9 @@ import {
 import { Prisma } from '@prisma/client';
 import { buildMeta } from '../../common/utils/buildMeta';
 import { PrismaService } from '../../database/prisma/prisma.service';
+import type { Response } from 'express';
 import { ExcelService } from '../../shared/excel/excel.service';
+import { PdfService } from '../../shared/pdf/pdf.service';
 import {
   ExcelImportSummary,
   RowValidationError,
@@ -25,17 +27,22 @@ import { CreateGradeDto } from './dto/create-grade.dto';
 import { GradeQueryDto } from './dto/get-grades.dto';
 import { UpdateGradeDto } from './dto/update-grade.dto';
 
+const EXCEL_MIME_TYPE =
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const PDF_MIME_TYPE = 'application/pdf';
+
 @Injectable()
 export class GradesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly excelService: ExcelService,
+    private readonly pdfService: PdfService,
   ) {}
 
   /**
    * إنشاء مرحلة دراسية جديدة تابعة لمركز معين مع التحقق من عدم تكرار الاسم في نفس المركز.
    */
-  async create(centerId: string, data: CreateGradeDto): Promise<GradeDetails> {
+  async create(centerId: string, data: CreateGradeDto): Promise<GradeListItem> {
     await this.ensureGradeNameIsUnique(centerId, data.name);
 
     return this.prisma.grade.create({
@@ -45,7 +52,7 @@ export class GradesService {
         order: data.order ?? 0,
         centerId,
       },
-      select: gradeDetailsSelect,
+      select: gradeListSelect,
     });
   }
 
@@ -55,7 +62,7 @@ export class GradesService {
   async findAll(
     centerId: string,
     query: GradeQueryDto,
-  ): Promise<{ data: GradeListItem[]; meta: any }> {
+  ): Promise<{ data: GradeDetails[]; meta: any }> {
     const { skip, take, active } = query;
     const where = query.getWhere<Prisma.GradeWhereInput>([
       'name',
@@ -83,7 +90,7 @@ export class GradesService {
         where,
         skip,
         take,
-        select: gradeListSelect,
+        select: gradeDetailsSelect,
         orderBy,
       }),
     ]);
@@ -95,10 +102,10 @@ export class GradesService {
   /**
    * جلب تفاصيل مرحلة دراسية معينة مع التحقق من تبعيتها للمركز.
    */
-  async findOne(centerId: string, id: string): Promise<GradeDetails> {
+  async findOne(centerId: string, id: string): Promise<GradeListItem> {
     const grade = await this.prisma.grade.findFirst({
       where: { id, centerId },
-      select: gradeDetailsSelect,
+      select: gradeListSelect,
     });
 
     if (!grade) {
@@ -115,7 +122,7 @@ export class GradesService {
     centerId: string,
     id: string,
     data: UpdateGradeDto,
-  ): Promise<GradeDetails> {
+  ): Promise<GradeListItem> {
     const currentGrade = await this.findOne(centerId, id);
 
     if (data.name && data.name !== currentGrade.name) {
@@ -130,35 +137,27 @@ export class GradesService {
         order: data.order,
         isActive: data.isActive,
       },
-      select: gradeDetailsSelect,
+      select: gradeListSelect,
     });
   }
 
   /**
    * تبديل حالة تفعيل مرحلة دراسية محددة (تفعيل/إلغاء تفعيل).
    */
-  async toggleStatus(centerId: string, id: string): Promise<GradeDetails> {
+  async toggleStatus(centerId: string, id: string): Promise<GradeListItem> {
     const currentGrade = await this.findOne(centerId, id);
 
     return this.prisma.grade.update({
       where: { id },
       data: { isActive: !currentGrade.isActive },
-      select: gradeDetailsSelect,
+      select: gradeListSelect,
     });
   }
 
   async remove(centerId: string, id: string): Promise<void> {
     const grade = await this.prisma.grade.findFirst({
       where: { id, centerId },
-      include: {
-        _count: {
-          select: {
-            subjects: true,
-            groups: true,
-            enrollments: true,
-          },
-        },
-      },
+      select: gradeDetailsSelect,
     });
 
     if (!grade) {
@@ -181,9 +180,23 @@ export class GradesService {
   }
 
   /**
-   * تصدير المراحل الدراسية لمركز معين إلى ملف Excel.
+   * إرسال ملف للعميل عبر Response مع الهيدرز المناسبة.
    */
-  async exportToExcel(centerId: string, query: GradeQueryDto): Promise<Buffer> {
+  private sendFileDownload(
+    res: Response,
+    buffer: Buffer,
+    filename: string,
+    contentType: string,
+  ): void {
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  }
+
+  /**
+   * جلب وتجهيز بيانات المراحل الدراسية للمركز بصيغة مصفوفة مهيأة للتصدير (Excel / PDF).
+   */
+  private async getExportDataset(centerId: string, query: GradeQueryDto) {
     const { active } = query;
     const where = query.getWhere<Prisma.GradeWhereInput>([
       'name',
@@ -206,24 +219,11 @@ export class GradesService {
     const grades = await this.prisma.grade.findMany({
       where,
       orderBy,
-      select: {
-        id: true,
-        name: true,
-        order: true,
-        description: true,
-        isActive: true,
-        createdAt: true,
-        _count: {
-          select: {
-            subjects: true,
-            groups: true,
-            enrollments: true,
-          },
-        },
-      },
+      select: gradeDetailsSelect,
     });
 
-    const exportRows = grades.map((g) => ({
+    const dateStr = new Date().toISOString().split('T')[0];
+    const rows = grades.map((g) => ({
       name: g.name,
       order: g.order,
       description: g.description || '—',
@@ -236,7 +236,20 @@ export class GradesService {
         : '—',
     }));
 
-    return this.excelService.buildWorkbookBuffer({
+    return { rows, dateStr };
+  }
+
+  /**
+   * تصدير المراحل الدراسية لمركز معين إلى ملف Excel مع تطبيق الفلاتر.
+   */
+  async exportToExcel(
+    centerId: string,
+    query: GradeQueryDto,
+    res?: Response,
+  ): Promise<Buffer | void> {
+    const { rows, dateStr } = await this.getExportDataset(centerId, query);
+
+    const buffer = await this.excelService.buildWorkbookBuffer({
       sheetName: 'المراحل الدراسية',
       columns: [
         { header: 'اسم المرحلة الدراسية', key: 'name', width: 25 },
@@ -248,15 +261,69 @@ export class GradesService {
         { header: 'عدد الطلاب', key: 'studentsCount', width: 14 },
         { header: 'تاريخ الإنشاء', key: 'createdAt', width: 18 },
       ],
-      data: exportRows,
+      data: rows,
     });
+
+    if (res) {
+      return this.sendFileDownload(
+        res,
+        buffer,
+        `grades-${dateStr}.xlsx`,
+        EXCEL_MIME_TYPE,
+      );
+    }
+
+    return buffer;
+  }
+
+  /**
+   * تصدير المراحل الدراسية لمركز معين إلى ملف PDF مع تطبيق الفلاتر والبحث.
+   */
+  async exportToPdf(
+    centerId: string,
+    query: GradeQueryDto,
+    res?: Response,
+  ): Promise<Buffer | void> {
+    const { rows, dateStr } = await this.getExportDataset(centerId, query);
+
+    const buffer = await this.pdfService.buildTablePdfBuffer({
+      title: 'تقرير المراحل الدراسية',
+      dateStr,
+      columns: [
+        { header: 'اسم المرحلة', key: 'name', width: '*', align: 'right' },
+        { header: 'الترتيب', key: 'order', width: 35, align: 'center' },
+        { header: 'الحالة', key: 'status', width: 45, align: 'center' },
+        { header: 'المواد', key: 'subjectsCount', width: 35, align: 'center' },
+        { header: 'المجموعات', key: 'groupsCount', width: 45, align: 'center' },
+        { header: 'الطلاب', key: 'studentsCount', width: 35, align: 'center' },
+        {
+          header: 'تاريخ الإنشاء',
+          key: 'createdAt',
+          width: 65,
+          align: 'center',
+        },
+      ],
+      data: rows,
+      orientation: 'portrait',
+    });
+
+    if (res) {
+      return this.sendFileDownload(
+        res,
+        buffer,
+        `grades-${dateStr}.pdf`,
+        PDF_MIME_TYPE,
+      );
+    }
+
+    return buffer;
   }
 
   /**
    * تحميل قالب Excel فارغ ومجهز لاستيراد المراحل الدراسية.
    */
-  async getImportTemplate(): Promise<Buffer> {
-    return this.excelService.buildTemplateBuffer({
+  async getImportTemplate(res?: Response): Promise<Buffer | void> {
+    const buffer = await this.excelService.buildTemplateBuffer({
       dataSheetName: 'المراحل الدراسية',
       instructionsSheetName: 'دليل الاستيراد',
       columns: [
@@ -299,6 +366,17 @@ export class GradesService {
         'يرجى عدم تعديل أو حذف صف العناوين الأول في ورقة البيانات.',
       ],
     });
+
+    if (res) {
+      return this.sendFileDownload(
+        res,
+        buffer,
+        'grades-template.xlsx',
+        EXCEL_MIME_TYPE,
+      );
+    }
+
+    return buffer;
   }
 
   /**
