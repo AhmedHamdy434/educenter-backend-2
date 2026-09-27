@@ -92,8 +92,11 @@ export class SubjectsController {
   @Get('export/template')
   @Roles(AppRole.OWNER)
   @BypassInterceptor()
-  async getTemplate(@Res() res: Response): Promise<void> {
-    await this.subjectsService.getImportTemplate(res);
+  async getTemplate(
+    @CurrentCenterId() centerId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.subjectsService.getImportTemplate(centerId, res);
   }
 
   /**
@@ -113,6 +116,7 @@ export class SubjectsController {
   ): Promise<
     ExcelImportSummary<{
       name: string;
+      gradeId: string;
       gradeName: string;
       description?: string;
     }>

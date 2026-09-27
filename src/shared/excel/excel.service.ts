@@ -183,8 +183,9 @@ export class ExcelService {
       views: [{ rightToLeft: true }],
     });
 
-    instructionsSheet.getColumn(1).width = 8;
-    instructionsSheet.getColumn(2).width = 75;
+    instructionsSheet.getColumn(1).width = 6;
+    instructionsSheet.getColumn(2).width = 38;
+    instructionsSheet.getColumn(3).width = 42;
 
     // العنوان الرئيسي للورقة
     const titleRow = instructionsSheet.getRow(2);
@@ -196,6 +197,7 @@ export class ExcelService {
       color: { argb: 'FF1E3A8A' },
     };
     titleRow.height = 30;
+    instructionsSheet.mergeCells(2, 2, 2, 3);
 
     let currentRowIdx = 4;
 
@@ -205,11 +207,12 @@ export class ExcelService {
         const row = instructionsSheet.getRow(currentRowIdx);
         row.getCell(1).value = '•';
         row.getCell(1).font = { bold: true, size: 12 };
-        row.getCell(1).alignment = { horizontal: 'center' };
+        row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
         row.getCell(2).value = inst;
         row.getCell(2).font = { name: 'Segoe UI', size: 10 };
         row.getCell(2).alignment = { wrapText: true, vertical: 'middle' };
-        row.height = 22;
+        instructionsSheet.mergeCells(currentRowIdx, 2, currentRowIdx, 3);
+        row.height = 24;
         currentRowIdx++;
       }
       currentRowIdx += 2;
@@ -228,23 +231,106 @@ export class ExcelService {
         tableHeaderRow.getCell(2).fill = {
           type: 'pattern',
           pattern: 'solid',
-          fgColor: { argb: 'FF334155' },
+          fgColor: { argb: 'FF1E293B' },
         };
-        tableHeaderRow.getCell(2).alignment = { vertical: 'middle' };
-        tableHeaderRow.height = 26;
+        tableHeaderRow.getCell(2).alignment = {
+          vertical: 'middle',
+          horizontal: 'center',
+        };
+        instructionsSheet.mergeCells(currentRowIdx, 2, currentRowIdx, 3);
+        tableHeaderRow.height = 28;
         currentRowIdx++;
 
-        for (const item of refTable.items) {
-          const itemRow = instructionsSheet.getRow(currentRowIdx);
-          itemRow.getCell(2).value = item;
-          itemRow.getCell(2).font = { name: 'Segoe UI', size: 10 };
-          itemRow.getCell(2).border = {
-            bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-            left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-            right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-          };
-          itemRow.height = 22;
+        if (refTable.rows && refTable.rows.length > 0) {
+          const subHeaderRow = instructionsSheet.getRow(currentRowIdx);
+          const idHeader =
+            refTable.headers?.[0] || 'معرف الكيان (ID - للنسخ)';
+          const nameHeader = refTable.headers?.[1] || 'الاسم والبيان';
+
+          subHeaderRow.getCell(2).value = idHeader;
+          subHeaderRow.getCell(3).value = nameHeader;
+
+          [subHeaderRow.getCell(2), subHeaderRow.getCell(3)].forEach((cell) => {
+            cell.font = {
+              name: 'Segoe UI',
+              bold: true,
+              size: 10,
+              color: { argb: 'FF0F172A' },
+            };
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFE2E8F0' },
+            };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.border = {
+              top: { style: 'thin', color: { argb: 'FF94A3B8' } },
+              bottom: { style: 'medium', color: { argb: 'FF64748B' } },
+              left: { style: 'thin', color: { argb: 'FF94A3B8' } },
+              right: { style: 'thin', color: { argb: 'FF94A3B8' } },
+            };
+          });
+          subHeaderRow.height = 24;
           currentRowIdx++;
+
+          for (let rIdx = 0; rIdx < refTable.rows.length; rIdx++) {
+            const item = refTable.rows[rIdx];
+            const itemRow = instructionsSheet.getRow(currentRowIdx);
+            const isEven = rIdx % 2 === 0;
+            const bg = isEven ? 'FFFFFFFF' : 'FFF8FAFC';
+
+            const idCell = itemRow.getCell(2);
+            idCell.value = item.id;
+            idCell.numFmt = '@';
+            idCell.font = {
+              name: 'Consolas',
+              size: 10,
+              color: { argb: 'FF0F172A' },
+            };
+            idCell.alignment = { vertical: 'middle', horizontal: 'center' };
+            idCell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: bg },
+            };
+            idCell.border = {
+              bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+              left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+              right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            };
+
+            const nameCell = itemRow.getCell(3);
+            nameCell.value = item.name;
+            nameCell.font = { name: 'Segoe UI', size: 10 };
+            nameCell.alignment = { vertical: 'middle', horizontal: 'right' };
+            nameCell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: bg },
+            };
+            nameCell.border = {
+              bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+              left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+              right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            };
+
+            itemRow.height = 22;
+            currentRowIdx++;
+          }
+        } else if (refTable.items && refTable.items.length > 0) {
+          for (const item of refTable.items) {
+            const itemRow = instructionsSheet.getRow(currentRowIdx);
+            itemRow.getCell(2).value = item;
+            itemRow.getCell(2).font = { name: 'Segoe UI', size: 10 };
+            instructionsSheet.mergeCells(currentRowIdx, 2, currentRowIdx, 3);
+            itemRow.getCell(2).border = {
+              bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+              left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+              right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            };
+            itemRow.height = 22;
+            currentRowIdx++;
+          }
         }
         currentRowIdx += 2;
       }

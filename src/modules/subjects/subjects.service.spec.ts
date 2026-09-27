@@ -236,11 +236,15 @@ describe('SubjectsService - Excel & PDF Import/Export', () => {
 
   describe('getImportTemplate', () => {
     it('should call excelService.buildTemplateBuffer and return template buffer', async () => {
+      prisma.grade.findMany.mockResolvedValue([
+        { id: 'grade-1', name: 'الصف الأول الثانوي' },
+      ]);
       const mockBuffer = Buffer.from('template-buffer');
       excelService.buildTemplateBuffer.mockResolvedValue(mockBuffer);
 
-      const result = await service.getImportTemplate();
+      const result = await service.getImportTemplate(centerId);
 
+      expect(prisma.grade.findMany).toHaveBeenCalled();
       expect(excelService.buildTemplateBuffer).toHaveBeenCalledWith(
         expect.objectContaining({
           dataSheetName: 'المواد الدراسية',
@@ -251,6 +255,7 @@ describe('SubjectsService - Excel & PDF Import/Export', () => {
     });
 
     it('should stream template to res if response object is provided', async () => {
+      prisma.grade.findMany.mockResolvedValue([]);
       const mockBuffer = Buffer.from('template-buffer');
       excelService.buildTemplateBuffer.mockResolvedValue(mockBuffer);
 
@@ -258,7 +263,7 @@ describe('SubjectsService - Excel & PDF Import/Export', () => {
       const send = jest.fn();
       const res = { setHeader, send } as unknown as Response;
 
-      await service.getImportTemplate(res);
+      await service.getImportTemplate(centerId, res);
 
       expect(setHeader).toHaveBeenCalledWith(
         'Content-Type',
@@ -286,7 +291,7 @@ describe('SubjectsService - Excel & PDF Import/Export', () => {
             rowNumber: 2,
             values: {
               'اسم المادة الدراسية': '',
-              'اسم المرحلة الدراسية': 'الصف الأول الثانوي',
+              'معرف المرحلة (Grade ID)': 'grade-1',
             },
           },
         ],
@@ -313,14 +318,14 @@ describe('SubjectsService - Excel & PDF Import/Export', () => {
       }
     });
 
-    it('should throw UnprocessableEntityException (422) if required gradeName is empty', async () => {
+    it('should throw UnprocessableEntityException (422) if required gradeId is empty', async () => {
       excelService.parseSheetRows.mockResolvedValue({
         rows: [
           {
             rowNumber: 2,
             values: {
               'اسم المادة الدراسية': 'اللغة العربية',
-              'اسم المرحلة الدراسية': '',
+              'معرف المرحلة (Grade ID)': '',
             },
           },
         ],
@@ -341,18 +346,18 @@ describe('SubjectsService - Excel & PDF Import/Export', () => {
         };
         expect(response.statusCode).toBe(422);
         expect(response.data.failedRows).toBe(1);
-        expect(response.data.errors[0].field).toBe('gradeName');
+        expect(response.data.errors[0].field).toBe('gradeId');
       }
     });
 
-    it('should throw UnprocessableEntityException (422) if gradeName does not exist in center', async () => {
+    it('should throw UnprocessableEntityException (422) if gradeId does not exist in center or is inactive', async () => {
       excelService.parseSheetRows.mockResolvedValue({
         rows: [
           {
             rowNumber: 2,
             values: {
               'اسم المادة الدراسية': 'اللغة العربية',
-              'اسم المرحلة الدراسية': 'مرحلة غير موجودة',
+              'معرف المرحلة (Grade ID)': 'grade-non-existent',
             },
           },
         ],
@@ -373,39 +378,7 @@ describe('SubjectsService - Excel & PDF Import/Export', () => {
           statusCode: number;
           data: { errors: Array<{ message: string }> };
         };
-        expect(response.data.errors[0].message).toContain('غير مسجلة');
-      }
-    });
-
-    it('should throw UnprocessableEntityException (422) if gradeName is inactive', async () => {
-      excelService.parseSheetRows.mockResolvedValue({
-        rows: [
-          {
-            rowNumber: 2,
-            values: {
-              'اسم المادة الدراسية': 'اللغة العربية',
-              'اسم المرحلة الدراسية': 'الصف الأول الثانوي',
-            },
-          },
-        ],
-      });
-      prisma.grade.findMany.mockResolvedValue([
-        { id: 'grade-1', name: 'الصف الأول الثانوي', isActive: false },
-      ]);
-      prisma.subject.findMany.mockResolvedValue([]);
-
-      try {
-        await service.importFromExcel(centerId, mockFileBuffer);
-        fail('Should have thrown UnprocessableEntityException');
-      } catch (err) {
-        expect(err).toBeInstanceOf(UnprocessableEntityException);
-        const response = (
-          err as UnprocessableEntityException
-        ).getResponse() as {
-          statusCode: number;
-          data: { errors: Array<{ message: string }> };
-        };
-        expect(response.data.errors[0].message).toContain('معطلة');
+        expect(response.data.errors[0].message).toContain('غير صالح');
       }
     });
 
@@ -416,14 +389,14 @@ describe('SubjectsService - Excel & PDF Import/Export', () => {
             rowNumber: 2,
             values: {
               'اسم المادة الدراسية': 'اللغة العربية',
-              'اسم المرحلة الدراسية': 'الصف الأول الثانوي',
+              'معرف المرحلة (Grade ID)': 'grade-1',
             },
           },
           {
             rowNumber: 3,
             values: {
               'اسم المادة الدراسية': 'اللغة العربية',
-              'اسم المرحلة الدراسية': 'الصف الأول الثانوي',
+              'معرف المرحلة (Grade ID)': 'grade-1',
             },
           },
         ],
@@ -456,7 +429,7 @@ describe('SubjectsService - Excel & PDF Import/Export', () => {
             rowNumber: 2,
             values: {
               'اسم المادة الدراسية': 'اللغة العربية',
-              'اسم المرحلة الدراسية': 'الصف الأول الثانوي',
+              'معرف المرحلة (Grade ID)': 'grade-1',
             },
           },
         ],
@@ -491,7 +464,7 @@ describe('SubjectsService - Excel & PDF Import/Export', () => {
             rowNumber: 2,
             values: {
               'اسم المادة الدراسية': 'اللغة العربية',
-              'اسم المرحلة الدراسية': 'الصف الأول الثانوي',
+              'معرف المرحلة (Grade ID)': 'grade-1',
             },
           },
         ],
@@ -517,7 +490,8 @@ describe('SubjectsService - Excel & PDF Import/Export', () => {
             rowNumber: 2,
             values: {
               'اسم المادة الدراسية': 'اللغة العربية',
-              'اسم المرحلة الدراسية': 'الصف الأول الثانوي',
+              'معرف المرحلة (Grade ID)': 'grade-1',
+              'المرحلة الدراسية (للتوضيح)': 'الصف الأول الثانوي',
               الوصف: 'وصف اختياري',
             },
           },
@@ -539,6 +513,7 @@ describe('SubjectsService - Excel & PDF Import/Export', () => {
       expect(result.failedRows).toBe(0);
       expect(result.data).toHaveLength(1);
       expect(result.data![0].name).toBe('اللغة العربية');
+      expect(result.data![0].gradeId).toBe('grade-1');
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
@@ -549,7 +524,8 @@ describe('SubjectsService - Excel & PDF Import/Export', () => {
             rowNumber: 2,
             values: {
               'اسم المادة الدراسية': 'اللغة العربية',
-              'اسم المرحلة الدراسية': 'الصف الأول الثانوي',
+              'معرف المرحلة (Grade ID)': 'grade-1',
+              'المرحلة الدراسية (للتوضيح)': 'الصف الأول الثانوي',
             },
           },
         ],
@@ -594,7 +570,7 @@ describe('SubjectsService - Excel & PDF Import/Export', () => {
             rowNumber: 2,
             values: {
               'اسم المادة الدراسية': 'اللغة العربية',
-              'اسم المرحلة الدراسية': 'الصف الأول الثانوي',
+              'معرف المرحلة (Grade ID)': 'grade-1',
             },
           },
         ],

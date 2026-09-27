@@ -135,6 +135,7 @@ export class StudentsController {
       fullName: string;
       email: string;
       phone?: string;
+      gradeId: string;
       gradeName: string;
     }>
   > {

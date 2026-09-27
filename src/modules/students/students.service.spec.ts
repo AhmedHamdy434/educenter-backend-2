@@ -295,7 +295,7 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
 
       expect(prisma.grade.findMany).toHaveBeenCalledWith({
         where: { centerId, isActive: true },
-        select: { name: true },
+        select: { id: true, name: true },
         orderBy: { order: 'asc' },
       });
       expect(excelService.buildTemplateBuffer).toHaveBeenCalledWith(
@@ -345,7 +345,7 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
           values: {
             'اسم الطالب': 'طالب',
             'البريد الإلكتروني': 't@e.com',
-            'المرحلة الدراسية': 'الصف الأول الثانوي',
+            'معرف المرحلة (Grade ID)': 'grade-1',
           },
         }),
       });
@@ -364,7 +364,7 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
             values: {
               'اسم الطالب': 'أ',
               'البريد الإلكتروني': 'invalid-email',
-              'المرحلة الدراسية': '',
+              'معرف المرحلة (Grade ID)': '',
             },
           },
         ],
@@ -384,7 +384,7 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
             values: {
               'اسم الطالب': 'طالب 1',
               'البريد الإلكتروني': 'student@example.com',
-              'المرحلة الدراسية': 'الصف الأول الثانوي',
+              'معرف المرحلة (Grade ID)': 'grade-1',
             },
           },
           {
@@ -392,7 +392,7 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
             values: {
               'اسم الطالب': 'طالب 2',
               'البريد الإلكتروني': 'student@example.com',
-              'المرحلة الدراسية': 'الصف الأول الثانوي',
+              'معرف المرحلة (Grade ID)': 'grade-1',
             },
           },
         ],
@@ -403,16 +403,16 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
       ).rejects.toThrow(UnprocessableEntityException);
     });
 
-    it('should throw UnprocessableEntityException (422) if grade does not exist in center', async () => {
+    it('should throw UnprocessableEntityException (422) if grade does not exist in center or is inactive', async () => {
       excelService.parseSheetRows.mockResolvedValue({
-        headers: ['اسم الطالب', 'البريد الإلكتروني', 'المرحلة الدراسية'],
+        headers: ['اسم الطالب', 'البريد الإلكتروني'],
         rows: [
           {
             rowNumber: 2,
             values: {
               'اسم الطالب': 'طالب 1',
               'البريد الإلكتروني': 'student1@example.com',
-              'المرحلة الدراسية': 'مرحلة غير مسجلة',
+              'معرف المرحلة (Grade ID)': 'non-existent-grade-id',
             },
           },
         ],
@@ -432,7 +432,7 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
             values: {
               'اسم الطالب': 'أحمد محمود',
               'البريد الإلكتروني': 'ahmed@example.com',
-              'المرحلة الدراسية': 'الصف الأول الثانوي',
+              'معرف المرحلة (Grade ID)': 'grade-1',
             },
           },
         ],
@@ -452,7 +452,7 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
           'اسم الطالب',
           'البريد الإلكتروني',
           'رقم هاتف الطالب',
-          'المرحلة الدراسية',
+          'معرف المرحلة (Grade ID)',
         ],
         rows: [
           {
@@ -461,7 +461,7 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
               'اسم الطالب': 'أحمد محمود',
               'البريد الإلكتروني': 'ahmed@example.com',
               'رقم هاتف الطالب': '01012345678',
-              'المرحلة الدراسية': 'الصف الأول الثانوي',
+              'معرف المرحلة (Grade ID)': 'grade-1',
             },
           },
         ],

@@ -2,27 +2,34 @@
 
 ## 1. Authentication & Authorization
 * Always protect endpoints using `JwtAuthGuard` and `RolesGuard`.
-* Allowed Roles: `AppRole = { SUPER_ADMIN: 'SUPER_ADMIN', OWNER: UserRole.OWNER, ADMIN: UserRole.ADMIN, TEACHER: UserRole.TEACHER, STUDENT: UserRole.STUDENT }`.
+* Allowed Roles: `AppRole = { SUPER_ADMIN: 'SUPER_ADMIN', OWNER: UserRole.OWNER, TEACHER: UserRole.TEACHER, STUDENT: UserRole.STUDENT }`.
+  - Roles are defined in `src/common/enums/app-role.enum.ts` mapping directly to Prisma `UserRole` enum plus `SUPER_ADMIN`.
 * **RolesGuard Behavior:** Return `403 ForbiddenException` for insufficient permissions, and `401 UnauthorizedException` if the user is unauthenticated.
 * **Role Scopes & Permissions:**
-  - `SUPER_ADMIN`: System administrator (`centerId: null`). Full access to global platform operations: managing subscription plans (`/subscription-plans`), provisioning centers, activating/deactivating centers, and assigning initial center subscriptions (`/centers`).
-  - `OWNER`: Center owner. Full control over their center's data (`centerId`), managing administrators (`/admins`), all center users (`/users`), teachers, students, groups, grades, subjects, payments, attendance, notifications, audit logs, and viewing `/centers/me` & `/centers/my-subscription`.
-  - `ADMIN`: Center manager. Operational management within their center (managing users `/users` with hierarchy restrictions, teachers, students, groups, attendance, payments, notifications, and audit logs).
-  - `TEACHER`: Scoped strictly to groups assigned to them, attendance sessions for their classes, taught student payment history, and generating parent portal links (`/p/generate/:studentId`).
-  - `STUDENT`: Read-only access scoped strictly to their own enrolled groups, attendance records, payments, and profile.
+  - `SUPER_ADMIN`: System administrator (`centerId: null`, stored in `SuperAdmin` table). Full access to global platform operations: managing subscription plans (`/subscription-plans`), provisioning centers, activating/deactivating centers, and assigning center subscriptions (`/centers`).
+  - `OWNER`: Center owner (`role: OWNER`, stored in `User` table). Full administrative and operational control over their center's data (`centerId`), managing center users (`/users`), teachers, students, groups, grades, subjects, payments, attendance, notifications, audit logs, and viewing `/centers/me` & `/centers/my-subscription`.
+  - `TEACHER`: Center teacher (`role: TEACHER`, linked to `Teacher` table). Scoped strictly to groups assigned to them, attendance sessions for their classes, taught student payment history, and generating parent portal links (`/p/generate/:studentId`).
+  - `STUDENT`: Enrolled student (`role: STUDENT`, linked to `Student` table). Read-only access scoped strictly to their own enrolled groups, attendance records, payments, and profile.
   - **Public / Unauthenticated**: Public landing endpoints (`/subscription-plans`, `/subscription-plans/:id`), auth endpoints (`/auth/login`, `/auth/forgot-password`, `/auth/reset-password`), and Parent Portal report (`/p/:token`).
 * **Real-time Active Check:** `JwtStrategy.validate()` actively checks `isActive === true` from the database on every authenticated request. Inactive accounts are immediately rejected with `401 UnauthorizedException`.
 * **Privilege Escalation Safeguards:**
-  - `ADMIN` role is strictly forbidden from updating, disabling, or modifying the `OWNER` account or other `ADMIN` accounts in `UsersModule`.
   - User `role` is immutable and cannot be updated via `UpdateUserDto`.
 * To inject the current user into a controller handler, use `@CurrentUser() user: RequestUser`.
 
-## 2. SubscriptionGuard & Multi-Tenancy Rules
-* **SubscriptionGuard Application:** Protect all educational/operational tenant controllers (`admins`, `users`, `teachers`, `students`, `groups`, `attendance`, `payments`, `grades`, `subjects`, `notifications`, `audit-logs`, and `/p/generate/:studentId`) with `SubscriptionGuard` in addition to `JwtAuthGuard` and `RolesGuard`:
+## 2. SubscriptionGuard, Plans & Multi-Tenancy Rules
+* **SubscriptionPlan Data Model (`prisma/schema.prisma`):**
+  - Primary Key: `id String @id @default(cuid())`.
+  - Plan Fields: `name`, `description`, `image`, `price`, `type` (`MONTHLY` | `YEARLY`), `studentLimit`, `teacherLimit`, `canCreateExams`, `isPopular`, `isActive`.
+  - Quota Enforcement:
+    * `studentLimit`: Enforced in `StudentsService` (`create`, `importFromExcel`) via `SubscriptionValidationService.validateStudentLimit(centerId)`.
+    * `teacherLimit`: Enforced in `TeachersService` (`create`) via `SubscriptionValidationService.validateTeacherLimit(centerId)`.
+    * `canCreateExams`: Enforced in Exam features via `SubscriptionValidationService.validateExamCreation(centerId)`.
+    * **No Plan Quotas on Curriculum Entities:** Entities such as `Grades`, `Subjects`, and `Groups` are NOT capped by subscription plans (they are solely tenant-scoped to `centerId` and guarded by uniqueness).
+* **SubscriptionGuard Application:** Protect all educational/operational tenant controllers (`users`, `teachers`, `students`, `groups`, `attendance`, `payments`, `grades`, `subjects`, `notifications`, `audit-logs`, and `/p/generate/:studentId`) with `SubscriptionGuard` in addition to `JwtAuthGuard` and `RolesGuard`:
   `@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)`
 * **SubscriptionGuard Behavior & Lifecycle:**
   - If the user has no `centerId` (e.g., `SUPER_ADMIN`), access is granted immediately.
-  - For center users (`OWNER`, `ADMIN`, `TEACHER`, `STUDENT`), it validates via `SubscriptionValidationService.validateActiveSubscription(centerId)` against the center's active subscription.
+  - For center users (`OWNER`, `TEACHER`, `STUDENT`), it validates via `SubscriptionValidationService.validateActiveSubscription(centerId)` against the center's active subscription.
   - **Inactive / Missing Subscription:** If the center has no subscription, an inactive subscription plan, or the center itself is deactivated, requests are **blocked** with `403 ForbiddenException` returning the fixed error code `CENTER_SUBSCRIPTION_INACTIVE`:
     ```json
     {
@@ -42,13 +49,14 @@
 * **Tenant Isolation Enforcement:**
   - In tenant-scoped controllers, verify that `user.centerId` is present before invoking service methods (throw `BadRequestException('المستخدم الحالي غير مرتبط بأي مركز.')` if missing).
   - In Prisma database queries, always scope by `where: { centerId: user.centerId }` or rely on `RequestContextService` and `tenantExtension`.
+  - Primary keys and tenant foreign keys use `CUID` strings across all models.
 
 ## 3. Controller Standards
 * Put Guards and Roles decorators at the Controller level if they apply globally to all its endpoints (e.g. `@Controller('subscription-plans') @UseGuards(JwtAuthGuard, RolesGuard) @Roles(AppRole.SUPER_ADMIN)`).
 * Use explicit NestJS HTTP Status constants (e.g., `HttpStatus.OK`, `HttpStatus.CREATED`) in `@HttpCode` decorators.
 * Use the custom decorator `@ResponseMessage('...')` for successful responses.
 * In tenant-scoped controllers, inject `@CurrentCenterId() centerId: string` parameter decorator to cleanly pass the center ID directly to service methods.
-* **Express Route Precedence Rule:** Always define static sub-routes (such as `export/excel`, `export/pdf`, `export/template`, `import/excel`) **before** parameterized routes (`:id`, `:id/*`) to prevent Express from intercepting sub-paths as IDs.
+* **Express Route Precedence Rule (CRITICAL):** Always define static sub-routes (such as `export/excel`, `export/pdf`, `export/template`, `import/excel`, `options`) **before** parameterized routes (`:id`, `:id/*`, `:id/toggle-status`) to prevent Express from intercepting sub-paths as IDs.
 * Apply `@UseGuards(ThrottlerGuard)` and `@Throttle({ default: { limit, ttl } })` on public brute-force sensitive endpoints (`/auth/login`, `/auth/forgot-password`, `/auth/reset-password`).
 * **Strictly Lightweight Controllers (Zero Business/Formatting Logic):** Controllers must ONLY validate DTOs, authorize, and delegate immediately to services. Controllers must NOT perform date formatting, filename building, buffer handling, or manual response header setting (`Content-Type`, `Content-Disposition`). All export and file download logic belongs entirely in the Service layer.
 
@@ -74,7 +82,8 @@
 * Use `query.skip` and `query.take` getters inherited from `PaginationDto` to feed offset-based pagination directly.
 * Use `query.getWhere(['searchField1', 'searchField2'])` helper to automatically construct insensitive `OR` search clauses.
 * Use `query.getOrderBy(['allowedField1', 'allowedField2'], defaultOrder, relationCountFields)` helper to safely construct Prisma `orderBy` clauses with whitelisted scalar fields and support ordering by relation counts (`_count: { [relation]: sortOrder }`).
-* Put entity-specific custom filters (such as `active: boolean`, `role: UserRole`, `type: NotificationType`) inside the module's query DTO instead of the base DTO.
+* **Relation Count Sorting Standard:** When supporting sorting by relation counts (e.g. sorting grades by `subjects`, `groups`, `enrollments` or sorting groups by `students`), define a centralized mapping object (e.g. `GRADE_RELATION_COUNT_FIELDS = { subjects: 'subjects', groups: 'groups', enrollments: 'enrollments' }`). Pass the clean relation name directly in the query (e.g., `sortBy=subjects`).
+* Put entity-specific custom filters (such as `active: boolean`, `gradeId: string`, `subjectId: string`, `teacherId: string`) inside the module's query DTO instead of the base DTO.
 
 ## 6. DTO Properties & Validation Rules
 * Mark all DTO properties as `readonly` to enforce immutability.
@@ -94,6 +103,7 @@
 * Avoid using `any` in test helpers, mock execution contexts, and fixtures.
 * Strongly type request objects, payload mocks, and user context using project types (e.g., `Partial<RequestUser>`, `RequestUser`, `ExecutionContext`) to maintain type safety and avoid ESLint `@typescript-eslint/no-unsafe-assignment` errors.
 * Always ensure all unit tests and ESLint checks pass without warnings.
+* Always use relative imports (`../../common/...`) rather than root-relative paths (`src/...`) to prevent Jest module resolution errors.
 
 ## 9. OpenAPI / Swagger Documentation Standards & Status Tracking
 * **Single Source of Truth:** `docs/openapi.json` defines the full OpenAPI specification and is dynamically merged into `SwaggerModule` in `src/main.ts` on startup.
@@ -115,7 +125,7 @@
   - **Error (Default NestJS Format):**
     `{ "statusCode": 400, "message": "..." | ["...", "..."], "error": "Bad Request" }`
 * **Current OpenAPI Documentation Status:**
-  - **Completed Modules (49 Operations Documented & Live in Swagger):**
+  - **Completed Modules (61 Operations Documented & Live in Swagger):**
     1. `Auth` (7 endpoints): `/api/auth/login`, `/api/auth/super-admin/login`, `/api/auth/super-admin/me`, `/api/auth/me`, `/api/auth/change-password`, `/api/auth/forgot-password`, `/api/auth/reset-password`
     2. `Centers` (9 endpoints): `POST /api/centers`, `GET /api/centers`, `GET /api/centers/me`, `GET /api/centers/my-subscription`, `GET /api/centers/:id`, `PATCH /api/centers/:id`, `PATCH /api/centers/:id/status`, `POST /api/centers/:id/subscribe`, `POST /api/centers/:id/renew`
     3. `Subscription Plans` (5 endpoints): `POST /api/subscription-plans`, `GET /api/subscription-plans`, `GET /api/subscription-plans/:id`, `PATCH /api/subscription-plans/:id`, `PATCH /api/subscription-plans/:id/toggle-status`
@@ -125,17 +135,17 @@
     7. `Subjects` (10 endpoints): `GET /api/subjects/options`, `GET /api/subjects/export/excel`, `GET /api/subjects/export/pdf`, `GET /api/subjects/export/template`, `POST /api/subjects/import/excel`, `POST /api/subjects`, `GET /api/subjects`, `GET /api/subjects/:id`, `PATCH /api/subjects/:id`, `PATCH /api/subjects/:id/toggle-status`
     8. `Teachers` (9 endpoints): `POST /api/teachers`, `GET /api/teachers`, `GET /api/teachers/export/excel`, `GET /api/teachers/export/pdf`, `GET /api/teachers/export/template`, `POST /api/teachers/import/excel`, `GET /api/teachers/:id`, `PATCH /api/teachers/:id`, `PATCH /api/teachers/:id/toggle-status`
     9. `Students` (9 endpoints): `POST /api/students`, `GET /api/students`, `GET /api/students/export/excel`, `GET /api/students/export/pdf`, `GET /api/students/export/template`, `POST /api/students/import/excel`, `GET /api/students/:id`, `PATCH /api/students/:id`, `PATCH /api/students/:id/toggle-status`
-    10. `Home Stats` (1 endpoint): `GET /api/home-stats`
+    10. `Groups` (12 endpoints): `POST /api/groups`, `GET /api/groups`, `GET /api/groups/export/excel`, `GET /api/groups/export/pdf`, `GET /api/groups/export/template`, `POST /api/groups/import/excel`, `GET /api/groups/:id`, `PATCH /api/groups/:id`, `PATCH /api/groups/:id/toggle-status`, `POST /api/groups/:id/students`, `DELETE /api/groups/:id/students`, `DELETE /api/groups/:id`
+    11. `Home Stats` (1 endpoint): `GET /api/home-stats`
   - **Pending Modules (Paused until User Finishes Pending Logic Changes):**
-    1. `Groups` (10 endpoints)
-    2. `Attendance` (6 endpoints)
-    3. `Payments` (3 endpoints)
-    4. `Notifications` (1 endpoint)
-    5. `AuditLogs` (1 endpoint)
-    6. `ParentPortal` (2 endpoints)
+    1. `Attendance` (6 endpoints)
+    2. `Payments` (3 endpoints)
+    3. `Notifications` (1 endpoint)
+    4. `AuditLogs` (1 endpoint)
+    5. `ParentPortal` (2 endpoints)
 
-## 10. Standard Entity Module Blueprint (The Grades Module Architecture)
-Every standard educational entity module (e.g. `Grades`, `Subjects`, etc.) MUST strictly mirror the structure, design patterns, and conventions established in `src/modules/grades`:
+## 10. Standard Entity Module Blueprint (The Educational Entity Module Architecture)
+Every standard educational entity module (`Grades`, `Subjects`, `Teachers`, `Students`, `Groups`) MUST strictly mirror the structure, design patterns, and conventions established in this architecture:
 
 ### A. Folder & File Structure
 ```text
@@ -194,23 +204,24 @@ src/modules/[entities]/
   - `@HttpCode(HttpStatus.OK)` for DELETE, status toggle, and import.
   - `@ResponseMessage('...')` with Arabic confirmation text on all standard endpoints.
 * **Express Route Precedence Rule (CRITICAL):**
-  - Static sub-routes (`export/excel`, `export/pdf`, `export/template`, `import/excel`) **MUST** be placed before parameterized routes (`:id`, `:id/toggle-status`) in the controller class to prevent route collisions in Express.
-* **Standard Endpoints Mapping (10 Endpoints):**
+  - Static sub-routes (`export/excel`, `export/pdf`, `export/template`, `import/excel`, `options`) **MUST** be placed before parameterized routes (`:id`, `:id/toggle-status`, `:id/students`) in the controller class to prevent route collisions in Express.
+* **Standard Endpoints Mapping (10 to 12 Endpoints):**
   1. `POST /` -> Create entity (`@Roles(AppRole.OWNER)`)
   2. `GET /` -> Paginated list (`@Roles(AppRole.OWNER, AppRole.TEACHER, AppRole.STUDENT)`)
   3. `GET /export/excel` -> Export to Excel (`@BypassInterceptor()`, `@Res() res: Response`, delegates to service)
   4. `GET /export/pdf` -> Export to PDF (`@BypassInterceptor()`, `@Res() res: Response`, delegates to service)
-  5. `GET /export/template` -> Download empty import template (`@BypassInterceptor()`, `@Res() res: Response`)
+  5. `GET /export/template` -> Download empty import template with reference tables (`@BypassInterceptor()`, `@Res() res: Response`)
   6. `POST /import/excel` -> Import from Excel (`@UseInterceptors(FileInterceptor('file'))`, `@ApiConsumes('multipart/form-data')`, `@UploadedFile(new ExcelValidationPipe())`, `@Query('dryRun', new DefaultValuePipe(false), ParseBoolPipe)`)
   7. `GET /:id` -> Single entity details
   8. `PATCH /:id` -> Update entity
   9. `PATCH /:id/toggle-status` -> Fast status toggle (active/inactive)
   10. `DELETE /:id` -> Safe deletion
+  *(Sub-resource endpoints such as `/options` or `/:id/students` placed appropriately)*
 
 ### E. Service Business Logic & Integrity Standards
 * **Tenant Isolation:** Every Prisma query and mutation must include `centerId` in its filter/data.
 * **Uniqueness Assertion:**
-  - Implement private helper `ensure[Entity]NameIsUnique(centerId, name)` using `prisma.[entity].findUnique({ where: { centerId_name: { centerId, name } } })`.
+  - Implement private helper `ensure[Entity]NameIsUnique(centerId, name)` using `prisma.[entity].findUnique({ where: { centerId_name: { centerId, name } } })` or scoped `findFirst`.
   - Throw `ConflictException` with Arabic message if already taken.
   - In updates: check uniqueness ONLY if the unique field has changed.
 * **Safe Deletion & Relational Protection:**
@@ -221,23 +232,31 @@ src/modules/[entities]/
 * **Paginated Query (`findAll`):**
   - Extract `skip`, `take`, and filters from `query`.
   - Build `where` with `query.getWhere(['name', 'description'])` and set `where.centerId = centerId`.
-  - Build `orderBy` with `query.getOrderBy([...allowed], [defaultOrder])`.
+  - Build `orderBy` with `query.getOrderBy([...allowed], [defaultOrder], relationCountFields)`.
   - Fetch count and items concurrently with `Promise.all([this.prisma.[entity].count({ where }), this.prisma.[entity].findMany({ where, skip, take, select: [entity]DetailsSelect, orderBy })])`.
   - Return `{ data, meta: buildMeta(total, query.page, query.limit) }`.
 
 ### F. File Export Architecture (Excel & PDF - DRY)
 * Define centralized constants: `EXCEL_MIME_TYPE`, `PDF_MIME_TYPE`.
 * **Single Reusable Dataset Extractor:**
-  - Implement `private async getExportDataset(centerId: string, query: [Entity]QueryDto): Promise<{ rows: any[]; dateStr: string }>` to run the Prisma query once, format dates and status labels, and supply rows to both Excel and PDF generators.
+  - Implement `private async getExportDataset(centerId: string, query: [Entity]QueryDto, ...): Promise<{ rows: any[]; dateStr: string }>` to run the Prisma query once, format dates and status labels, and supply rows to both Excel and PDF generators.
 * **Dual-Mode Handler (Stream or Buffer):**
-  - Accept `(centerId: string, query: [Entity]QueryDto, res?: Response): Promise<Buffer | void>`.
+  - Accept `(centerId: string, query: [Entity]QueryDto, ..., res?: Response): Promise<Buffer | void>`.
   - If `res` is passed: call `this.sendFileDownload(res, buffer, filename, mimeType)` to set headers and stream.
   - If `res` is omitted: return `buffer` directly (enabling easy unit testing).
+* **ID Columns in Exports:**
+  - All Excel exports must explicitly include ID columns (formatted with `numFmt: '@'`) for the entity itself (e.g. `معرف المرحلة (Grade ID)`, `معرف المجموعة (Group ID)`) and for all related entities (e.g. `gradeId`, `subjectId`, `teacherId`), allowing users to easily copy IDs for batch editing or cross-module re-importing.
 
 ### G. Excel Import Pipeline & Error Envelope Standard
 * **Validation Pipe:** Use `new ExcelValidationPipe()` on the uploaded file to ensure valid `.xlsx` / `.xls` MIME type and enforce the 5MB file size limit.
 * **Header Verification:** Use `excelService.parseSheetRows(fileBuffer, { expectedHeaders: [...] })`. Throw `BadRequestException` if rows are empty.
-* **Performance & N+1 Prevention:** Pre-fetch all existing names for the center in a single query and normalize into a `Set` using `normalizeArabicText()`.
+* **Performance & N+1 Prevention:** Pre-fetch all active reference entities (`grades`, `subjects`, `teachers`) for the center in single queries and index them directly by their ID (`Map<string, Entity>`).
+* **ID-Based Relational Linking (Zero Textual Matching for Relations):**
+  - Any relation between entities (e.g., Student ↔ Grade, Group ↔ Grade / Subject / Teacher, Teacher ↔ Subjects, Subject ↔ Grade) MUST rely strictly on entity IDs (`gradeId`, `subjectId`, `teacherId`, comma-separated `subjectIds`).
+  - Textual name columns (e.g., `المرحلة الدراسية (للتوضيح)`) are purely optional and informational for the user. They are NOT used for database lookups or validations.
+  - If an ID is missing, does not exist, belongs to another center, or is deactivated (`isActive: false`), record a clear Arabic `RowValidationError`:
+    `'معرف [الكيان] المدخل غير صالح أو لا ينتمي لهذا المركز أو غير نشط.'`
+  - Zero reliance on `normalizeArabicText()` for foreign relation lookups.
 * **Row-by-Row Validation:**
   - Validate all rows sequentially, collecting errors into `errors: RowValidationError[]`.
   - Track duplicates within the same file using a `Set<string>`.
@@ -255,23 +274,23 @@ src/modules/[entities]/
         "failedRows": 2,
         "remainingErrorsCount": 0,
         "errors": [
-          { "row": 3, "field": "name", "value": "...", "message": "..." }
+          { "row": 3, "field": "gradeId", "value": "...", "message": "معرف المرحلة المدخل غير صالح أو لا ينتمي لهذا المركز أو غير نشط." }
         ]
       }
     }
     ```
   - Cap error details to the first 100 errors in `errors.slice(0, 100)` and report `remainingErrorsCount`.
 * **Dry-Run Mode (`dryRun: boolean`):**
-  - If `dryRun === true`, return the summary and parsed rows preview without executing database writes.
+  - If `dryRun === true`, return the summary and parsed rows preview (including resolved IDs) without executing database writes.
 * **Transactional Persistence:**
   - Wrap batch creation in `prisma.$transaction(async (tx) => { await tx.[entity].createMany({ data: validRowsToCreate }); })`.
   - Catch Prisma `P2002` (unique violation) errors and translate to `UnprocessableEntityException`.
 
 ### H. Excel Import Template Standard
-* Provide `getImportTemplate(res?: Response)` leveraging `excelService.buildTemplateBuffer`.
+* Provide `getImportTemplate(centerId: string, res?: Response)` leveraging `excelService.buildTemplateBuffer`.
 * Include two sheets:
-  1. Data sheet: column headers, appropriate column widths, and cell formatting (`numFmt`).
-  2. Instructions sheet: clear Arabic bullet points explaining mandatory vs optional columns, validation constraints, and sample data.
+  1. Data sheet: column headers with clear ID labels (e.g. `معرف المرحلة (Grade ID)`), optional informational name columns, appropriate column widths, and cell formatting (`numFmt: '@'`).
+  2. Instructions sheet: clear Arabic instructions and dedicated 2-column reference tables (`headers: ['معرف ... (ID - للنسخ)', 'الاسم ...']`, `rows: [{ id, name }]`). Column 2 is formatted in `Consolas` with text format `@` and width 38 to allow center admins to copy verified IDs with a single Ctrl+C.
 
 ### I. Unit Testing Standard (`[entity].service.spec.ts`)
 * Mock `PrismaService`, `ExcelService`, and `PdfService`.
@@ -279,5 +298,6 @@ src/modules/[entities]/
   1. Standard CRUD operations, tenant isolation, and `ConflictException` on duplicate names.
   2. Safe deletion blocking when relational counts > 0.
   3. Export to Excel & PDF (verifying buffer return and HTTP response streaming).
-  4. Template generation.
-  5. Import validation: empty file (400), invalid rows (422), duplicate in file (422), duplicate in DB (422), race condition P2002 (422), dry-run preview, and successful batch creation.
+  4. Template generation with reference tables.
+  5. Import validation: empty file (400), invalid rows (422), foreign/inactive ID rejection (422), duplicate in file (422), duplicate in DB (422), race condition P2002 (422), dry-run preview, and successful batch creation.
+

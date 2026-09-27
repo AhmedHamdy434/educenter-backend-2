@@ -23,7 +23,9 @@ export interface BuildTemplateOptions {
   instructions?: string[];
   referenceTables?: Array<{
     title: string;
-    items: string[];
+    items?: string[];
+    headers?: [string, string];
+    rows?: Array<{ id: string; name: string }>;
   }>;
 }
 

@@ -319,6 +319,7 @@ describe('TeachersService - Excel & PDF, Import & Export, Sorting', () => {
       expect(prisma.subject.findMany).toHaveBeenCalledWith({
         where: { centerId, isActive: true },
         select: {
+          id: true,
           name: true,
           grade: { select: { name: true } },
         },
@@ -425,16 +426,16 @@ describe('TeachersService - Excel & PDF, Import & Export, Sorting', () => {
       ).rejects.toThrow(UnprocessableEntityException);
     });
 
-    it('should throw UnprocessableEntityException (422) if subject is not registered in center', async () => {
+    it('should throw UnprocessableEntityException (422) if subject id is not registered in center or inactive', async () => {
       excelService.parseSheetRows.mockResolvedValue({
-        headers: ['اسم المدرس', 'البريد الإلكتروني', 'المواد التعليمية'],
+        headers: ['اسم المدرس', 'البريد الإلكتروني'],
         rows: [
           {
             rowNumber: 2,
             values: {
               'اسم المدرس': 'مدرس 1',
               'البريد الإلكتروني': 'teacher1@example.com',
-              'المواد التعليمية': 'مادة غير موجودة',
+              'معرفات المواد (Subject IDs مفصولة بفاصلة)': 'non-existent-sub-id',
             },
           },
         ],
@@ -473,7 +474,7 @@ describe('TeachersService - Excel & PDF, Import & Export, Sorting', () => {
           'اسم المدرس',
           'البريد الإلكتروني',
           'رقم الهاتف',
-          'المواد التعليمية',
+          'معرفات المواد (Subject IDs مفصولة بفاصلة)',
           'نبذة تعريفية',
         ],
         rows: [
@@ -483,7 +484,7 @@ describe('TeachersService - Excel & PDF, Import & Export, Sorting', () => {
               'اسم المدرس': 'محمد أحمد',
               'البريد الإلكتروني': 'teacher@example.com',
               'رقم الهاتف': '01012345678',
-              'المواد التعليمية': 'رياضيات',
+              'معرفات المواد (Subject IDs مفصولة بفاصلة)': 'sub-1',
               'نبذة تعريفية': 'مدرس أول',
             },
           },

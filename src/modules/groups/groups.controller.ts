@@ -143,8 +143,11 @@ export class GroupsController {
   ): Promise<
     ExcelImportSummary<{
       name: string;
+      gradeId: string;
       gradeName: string;
+      subjectId: string;
       subjectName: string;
+      teacherId: string;
       teacherName: string;
       monthlyFee: number;
     }>

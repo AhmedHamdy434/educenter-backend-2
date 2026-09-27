@@ -262,7 +262,9 @@ export class SubjectsService {
 
     const dateStr = new Date().toISOString().split('T')[0];
     const rows = subjects.map((s) => ({
+      id: s.id,
       name: s.name,
+      gradeId: s.gradeId,
       gradeName: s.grade?.name || '—',
       description: s.description || '—',
       status: s.isActive ? 'نشط' : 'معطل',
@@ -277,7 +279,7 @@ export class SubjectsService {
   }
 
   /**
-   * تصدير المواد الدراسية لمركز معين إلى ملف Excel مع تطبيق الفلاتر.
+   * تصدير المواد الدراسية لمركز معين إلى ملف Excel مع تطبيق الفلاتر ومعرفات الكيانات.
    */
   async exportToExcel(
     centerId: string,
@@ -289,7 +291,14 @@ export class SubjectsService {
     const buffer = await this.excelService.buildWorkbookBuffer({
       sheetName: 'المواد الدراسية',
       columns: [
+        { header: 'معرف المادة (Subject ID)', key: 'id', width: 32, numFmt: '@' },
         { header: 'اسم المادة الدراسية', key: 'name', width: 25 },
+        {
+          header: 'معرف المرحلة (Grade ID)',
+          key: 'gradeId',
+          width: 32,
+          numFmt: '@',
+        },
         { header: 'المرحلة الدراسية', key: 'gradeName', width: 25 },
         { header: 'الوصف', key: 'description', width: 35 },
         { header: 'الحالة', key: 'status', width: 15 },
@@ -365,9 +374,21 @@ export class SubjectsService {
   }
 
   /**
-   * تحميل قالب Excel فارغ ومجهز لاستيراد المواد الدراسية.
+   * تحميل قالب Excel فارغ ومجهز لاستيراد المواد الدراسية مع الجداول المرجعية (ID | Name).
    */
-  async getImportTemplate(res?: Response): Promise<Buffer | void> {
+  async getImportTemplate(
+    centerId: string,
+    res?: Response,
+  ): Promise<Buffer | void> {
+    const grades = await this.prisma.grade.findMany({
+      where: { centerId, isActive: true },
+      select: { id: true, name: true },
+      orderBy: { order: 'asc' },
+    });
+
+    const exampleGradeId = grades[0]?.id || 'grade_id_here';
+    const exampleGradeName = grades[0]?.name || 'الصف الأول الثانوي';
+
     const buffer = await this.excelService.buildTemplateBuffer({
       dataSheetName: 'المواد الدراسية',
       instructionsSheetName: 'دليل الاستيراد',
@@ -379,10 +400,17 @@ export class SubjectsService {
           example: 'اللغة العربية',
         },
         {
-          header: 'اسم المرحلة الدراسية',
+          header: 'معرف المرحلة (Grade ID)',
+          key: 'gradeId',
+          width: 32,
+          numFmt: '@',
+          example: exampleGradeId,
+        },
+        {
+          header: 'المرحلة الدراسية (للتوضيح)',
           key: 'gradeName',
           width: 25,
-          example: 'الصف الأول الثانوي',
+          example: exampleGradeName,
         },
         {
           header: 'الوصف',
@@ -394,25 +422,33 @@ export class SubjectsService {
       sampleRows: [
         {
           name: 'اللغة العربية',
-          gradeName: 'الصف الأول الثانوي',
+          gradeId: exampleGradeId,
+          gradeName: exampleGradeName,
           description: 'منهج اللغة العربية للثانوية العامة',
         },
         {
           name: 'الرياضيات',
-          gradeName: 'الصف الأول الثانوي',
+          gradeId: exampleGradeId,
+          gradeName: exampleGradeName,
           description: 'الرياضيات العامة',
-        },
-        {
-          name: 'الفيزياء',
-          gradeName: 'الصف الثاني الثانوي',
-          description: 'الفيزياء التخصصية',
         },
       ],
       instructions: [
         'عمود "اسم المادة الدراسية" إلزامي وفريد داخل نفس المرحلة الدراسية بالمركز.',
-        'عمود "اسم المرحلة الدراسية" إلزامي، ويجب أن يطابق تماماً اسم مرحلة دراسية مسجلة ونشطة في مركزك.',
+        'عمود "معرف المرحلة (Grade ID)" إلزامي، يرجى نسخه من جدول المراحل المعتمدة في ورقة "دليل الاستيراد".',
+        'عمود "المرحلة الدراسية (للتوضيح)" اختياري وللتوضيح فقط، ولا يُعتمد عليه في عملية التحقق أو الربط.',
         'عمود "الوصف" اختياري لوضع أي ملاحظات إضافية.',
         'يرجى عدم تعديل أو حذف صف العناوين الأول في ورقة البيانات.',
+      ],
+      referenceTables: [
+        {
+          title: 'المراحل الدراسية المتاحة والمعتمدة (Grade IDs)',
+          headers: ['معرف المرحلة (Grade ID - للنسخ)', 'اسم المرحلة الدراسية'],
+          rows:
+            grades.length > 0
+              ? grades.map((g) => ({ id: g.id, name: g.name }))
+              : [{ id: 'لا يوجد', name: 'لا توجد مراحل مسجلة حالياً' }],
+        },
       ],
     });
 
@@ -438,12 +474,13 @@ export class SubjectsService {
   ): Promise<
     ExcelImportSummary<{
       name: string;
+      gradeId: string;
       gradeName: string;
       description?: string;
     }>
   > {
     const { rows } = await this.excelService.parseSheetRows(fileBuffer, {
-      expectedHeaders: ['اسم المادة الدراسية', 'اسم المرحلة الدراسية'],
+      expectedHeaders: ['اسم المادة الدراسية'],
     });
 
     if (rows.length === 0) {
@@ -462,18 +499,14 @@ export class SubjectsService {
       centerId: string;
     }> = [];
 
-    // جلب المراحل الدراسية الحالية للمركز للتحقق المسبق والربط
-    const existingGrades = await this.prisma.grade.findMany({
-      where: { centerId },
-      select: { id: true, name: true, isActive: true },
+    // جلب المراحل الدراسية النشطة للمركز للتحقق المسبق والربط بالـ ID
+    const activeGrades = await this.prisma.grade.findMany({
+      where: { centerId, isActive: true },
+      select: { id: true, name: true },
     });
-    const gradeMap = new Map<
-      string,
-      { id: string; name: string; isActive: boolean }
-    >();
-    existingGrades.forEach((g) => {
-      gradeMap.set(normalizeArabicText(g.name), g);
-    });
+    const validGradeMap = new Map<string, string>(
+      activeGrades.map((g) => [g.id, g.name]),
+    );
 
     // جلب المواد الحالية للمركز للتحقق المسبق من التكرار
     const existingSubjects = await this.prisma.subject.findMany({
@@ -489,7 +522,13 @@ export class SubjectsService {
     for (const rowItem of rows) {
       const { rowNumber, values } = rowItem;
       const rawName: unknown = values['اسم المادة الدراسية'];
-      const rawGradeName: unknown = values['اسم المرحلة الدراسية'];
+      const rawGradeId: unknown =
+        values['معرف المرحلة (Grade ID)'] ??
+        values['معرف المرحلة'] ??
+        values['gradeId'] ??
+        values['اسم المرحلة الدراسية'];
+      const rawGradeName: unknown =
+        values['المرحلة الدراسية (للتوضيح)'] ?? values['اسم المرحلة الدراسية'];
       const rawDescription: unknown = values['الوصف'];
 
       // 1. فحص اسم المادة
@@ -507,75 +546,72 @@ export class SubjectsService {
         continue;
       }
 
-      // 2. فحص اسم المرحلة الدراسية
-      if (
-        !rawGradeName ||
-        typeof rawGradeName !== 'string' ||
-        rawGradeName.trim().length === 0
-      ) {
+      // 2. فحص معرف المرحلة الدراسية (Grade ID)
+      const gradeIdStr =
+        typeof rawGradeId === 'string'
+          ? rawGradeId.trim()
+          : rawGradeId !== undefined && rawGradeId !== null
+            ? String(rawGradeId).trim()
+            : '';
+
+      let gradeId = '';
+      let gradeName =
+        typeof rawGradeName === 'string' ? rawGradeName.trim() : '';
+
+      if (!gradeIdStr) {
         errors.push({
           row: rowNumber,
-          field: 'gradeName',
-          value: rawGradeName,
-          message: 'اسم المرحلة الدراسية حقل إلزامي لربط المادة بها.',
+          field: 'gradeId',
+          value: rawGradeId,
+          message:
+            'معرف المرحلة (Grade ID) حقل إلزامي، يرجى نسخه من ورقة دليل الاستيراد.',
         });
         continue;
       }
+
+      const foundGradeName = validGradeMap.get(gradeIdStr);
+      if (!foundGradeName) {
+        errors.push({
+          row: rowNumber,
+          field: 'gradeId',
+          value: gradeIdStr,
+          message:
+            'معرف المرحلة المدخل غير صالح أو لا ينتمي لهذا المركز أو غير نشط.',
+        });
+        continue;
+      }
+
+      gradeId = gradeIdStr;
+      gradeName = gradeName || foundGradeName;
 
       const name = rawName.trim();
-      const gradeName = rawGradeName.trim();
-      const normalizedGradeName = normalizeArabicText(gradeName);
-      const targetGrade = gradeMap.get(normalizedGradeName);
-
-      // 3. التحقق من وجود المرحلة الدراسية في المركز
-      if (!targetGrade) {
-        errors.push({
-          row: rowNumber,
-          field: 'gradeName',
-          value: gradeName,
-          message: `المرحلة الدراسية "${gradeName}" غير مسجلة في هذا المركز.`,
-        });
-        continue;
-      }
-
-      // 4. التحقق من نشاط المرحلة الدراسية
-      if (!targetGrade.isActive) {
-        errors.push({
-          row: rowNumber,
-          field: 'gradeName',
-          value: gradeName,
-          message: `المرحلة الدراسية "${targetGrade.name}" معطلة، ولا يمكن إضافة مواد إليها.`,
-        });
-        continue;
-      }
-
       const normalizedName = normalizeArabicText(name);
-      const compoundKey = `${targetGrade.id}_${normalizedName}`;
+      const compoundKey = `${gradeId}_${normalizedName}`;
 
-      // 5. التحقق من عدم التكرار داخل نفس الملف
+      // 3. التحقق من عدم التكرار داخل نفس الملف
       if (fileSubjectKeys.has(compoundKey)) {
         errors.push({
           row: rowNumber,
           field: 'name',
           value: name,
-          message: `المادة الدراسية "${name}" مكررة لنفس المرحلة (${targetGrade.name}) داخل نفس الملف المرفوع.`,
+          message: `المادة الدراسية "${name}" مكررة لنفس المرحلة داخل نفس الملف المرفوع.`,
         });
         continue;
       }
       fileSubjectKeys.add(compoundKey);
 
-      // 6. التحقق من عدم التكرار في قاعدة البيانات لنفس المرحلة والمركز
+      // 4. التحقق من عدم التكرار في قاعدة البيانات لنفس المرحلة والمركز
       if (existingSubjectKeys.has(compoundKey)) {
         errors.push({
           row: rowNumber,
           field: 'name',
           value: name,
-          message: `المادة الدراسية "${name}" مسجلة بالفعل في مرحلة "${targetGrade.name}" بهذا المركز.`,
+          message: `المادة الدراسية "${name}" مسجلة بالفعل في هذه المرحلة بهذا المركز.`,
         });
         continue;
       }
 
-      // 7. الوصف
+      // 5. الوصف
       const description =
         rawDescription && typeof rawDescription === 'string'
           ? rawDescription.trim()
@@ -586,8 +622,8 @@ export class SubjectsService {
       validRowsToCreate.push({
         name,
         description,
-        gradeId: targetGrade.id,
-        gradeName: targetGrade.name,
+        gradeId,
+        gradeName,
         centerId,
       });
     }
@@ -637,6 +673,7 @@ export class SubjectsService {
         errors: [],
         data: validRowsToCreate.map((r) => ({
           name: r.name,
+          gradeId: r.gradeId,
           gradeName: r.gradeName,
           description: r.description || undefined,
         })),

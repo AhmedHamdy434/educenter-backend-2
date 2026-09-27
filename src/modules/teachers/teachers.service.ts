@@ -377,6 +377,8 @@ export class TeachersService {
 
     const dateStr = new Date().toISOString().split('T')[0];
     const rows = teachers.map((t) => {
+      const subjectIds =
+        t.subjects.map((s) => s.subject.id).join('، ') || '—';
       const subjectNames =
         t.subjects
           .map((s) => {
@@ -390,6 +392,7 @@ export class TeachersService {
         fullName: t.user.fullName,
         email: t.user.email,
         phone: t.user.phone || '—',
+        subjectIds,
         subjects: subjectNames,
         status: t.user.isActive ? 'نشط' : 'معطل',
         groupsCount: t._count?.groups || 0,
@@ -420,6 +423,12 @@ export class TeachersService {
         { header: 'اسم المدرس', key: 'fullName', width: 25 },
         { header: 'البريد الإلكتروني', key: 'email', width: 28 },
         { header: 'رقم الهاتف', key: 'phone', width: 18, numFmt: '@' },
+        {
+          header: 'معرفات المواد (Subject IDs)',
+          key: 'subjectIds',
+          width: 35,
+          numFmt: '@',
+        },
         { header: 'المواد المسندة', key: 'subjects', width: 35 },
         { header: 'الحالة', key: 'status', width: 14 },
         { header: 'عدد المجموعات', key: 'groupsCount', width: 15 },
@@ -500,16 +509,19 @@ export class TeachersService {
     const subjects = await this.prisma.subject.findMany({
       where: { centerId, isActive: true },
       select: {
+        id: true,
         name: true,
         grade: { select: { name: true } },
       },
       orderBy: { name: 'asc' },
     });
 
-    const subjectItems = subjects.map((s) =>
-      s.grade ? `${s.name} (${s.grade.name})` : s.name,
-    );
-    const exampleSubject = subjects[0]?.name || 'لغة عربية';
+    const exampleSubjectId = subjects[0]?.id || 'subject_id_here';
+    const exampleSubjectText = subjects[0]
+      ? subjects[0].grade
+        ? `${subjects[0].name} (${subjects[0].grade.name})`
+        : subjects[0].name
+      : 'لغة عربية';
 
     const buffer = await this.excelService.buildTemplateBuffer({
       dataSheetName: 'بيانات المدرسين',
@@ -535,10 +547,17 @@ export class TeachersService {
           example: '01012345678',
         },
         {
-          header: 'المواد التعليمية (مفصولة بفاصلة)',
+          header: 'معرفات المواد (Subject IDs مفصولة بفاصلة)',
+          key: 'subjectIds',
+          width: 40,
+          numFmt: '@',
+          example: exampleSubjectId,
+        },
+        {
+          header: 'المواد التعليمية (للتوضيح)',
           key: 'subjects',
           width: 35,
-          example: exampleSubject,
+          example: exampleSubjectText,
         },
         {
           header: 'نبذة تعريفية',
@@ -552,7 +571,8 @@ export class TeachersService {
           fullName: 'محمد أحمد إبراهيم',
           email: 'teacher@example.com',
           phone: '01012345678',
-          subjects: exampleSubject,
+          subjectIds: exampleSubjectId,
+          subjects: exampleSubjectText,
           bio: 'مدرس أول لغة عربية وخبير تربوي',
         },
       ],
@@ -560,17 +580,27 @@ export class TeachersService {
         'الحقول الإلزامية هي: (اسم المدرس، البريد الإلكتروني).',
         'البريد الإلكتروني يجب أن يكون فريداً وغير مستخدم لأي حساب آخر في النظام.',
         'رقم الهاتف اختياري، وفي حال إدخاله يجب أن يكون بصيغة مصرية صحيحة (11 رقماً تبدأ بـ 01).',
-        'المواد التعليمية: يمكن إدخال اسم مادة واحدة أو أكثر مفصولة بفاصلة (مثال: رياضيات، فيزياء). ويجب أن تكون المواد مسجلة مسبقاً في السنتر.',
+        'المواد التعليمية: أدخل معرفات المواد (Subject IDs) مفصولة بفاصلة في عمود "معرفات المواد (Subject IDs مفصولة بفاصلة)" من خلال نسخ الـ ID من جدول المواد المتاحة أدناه (مثال: id1,id2).',
+        'عمود "المواد التعليمية (للتوضيح)" اختياري وللتوضيح فقط، ولا يُعتمد عليه في الربط.',
         'سيتم توليد كلمة مرور أولية موحدة للحسابات مع تفعيل خاصية إلزام تغيير كلمة المرور فور أول تسجيل دخول.',
         'يرجى عدم تعديل أو حذف صف العناوين في ورقة بيانات المدرسين.',
       ],
       referenceTables: [
         {
           title: 'المواد الدراسية المتاحة والمعتمدة في السنتر',
-          items:
-            subjectItems.length > 0
-              ? subjectItems
-              : ['لا توجد مواد دراسية مسجلة حالياً، يرجى إضافة مواد أولاً'],
+          headers: ['معرف المادة (Subject ID - للنسخ)', 'اسم المادة والمرحلة الدراسية'],
+          rows:
+            subjects.length > 0
+              ? subjects.map((s) => ({
+                  id: s.id,
+                  name: s.grade ? `${s.name} (${s.grade.name})` : s.name,
+                }))
+              : [
+                  {
+                    id: 'لا يوجد',
+                    name: 'لا توجد مواد دراسية مسجلة حالياً، يرجى إضافة مواد أولاً',
+                  },
+                ],
         },
       ],
     });
@@ -626,15 +656,21 @@ export class TeachersService {
       );
     }
 
-    // 3. جلب المواد الدراسية النشطة للمركز وتطبيع أسمائها
+    // 3. جلب المواد الدراسية النشطة للمركز
     const centerSubjects = await this.prisma.subject.findMany({
       where: { centerId, isActive: true },
-      select: { id: true, name: true },
+      select: {
+        id: true,
+        name: true,
+        grade: { select: { name: true } },
+      },
     });
-    const subjectMap = new Map<string, string>();
-    for (const s of centerSubjects) {
-      subjectMap.set(normalizeArabicText(s.name), s.id);
-    }
+    const validSubjectMap = new Map<string, string>(
+      centerSubjects.map((s) => [
+        s.id,
+        s.grade ? `${s.name} (${s.grade.name})` : s.name,
+      ]),
+    );
 
     // 4. فحص التكرار مع قاعدة البيانات دفعة واحدة (Prevent N+1)
     const fileCandidateEmails: string[] = [];
@@ -696,9 +732,14 @@ export class TeachersService {
       const rawFullName: unknown = values['اسم المدرس'];
       const rawEmail: unknown = values['البريد الإلكتروني'];
       const rawPhone: unknown = values['رقم الهاتف'];
-      const rawSubjects: unknown =
+      const rawSubjectIds: unknown =
+        values['معرفات المواد (Subject IDs مفصولة بفاصلة)'] ??
+        values['معرفات المواد'] ??
+        values['subjectIds'] ??
         values['المواد التعليمية (مفصولة بفاصلة)'] ??
         values['المواد التعليمية'];
+      const rawSubjectsText: unknown =
+        values['المواد التعليمية (للتوضيح)'] ?? values['المواد التعليمية'];
       const rawBio: unknown = values['نبذة تعريفية'];
 
       // أ. اسم المدرس
@@ -790,28 +831,37 @@ export class TeachersService {
 
       // د. المواد التعليمية
       const subjectIds: string[] = [];
-      let subjectsStr = '';
-      if (rawSubjects && typeof rawSubjects === 'string') {
-        subjectsStr = rawSubjects.trim();
-        const parts = subjectsStr
+      const subjectNamesList: string[] = [];
+      const subjectsInputStr =
+        rawSubjectIds !== undefined && rawSubjectIds !== null
+          ? String(rawSubjectIds).trim()
+          : '';
+
+      if (subjectsInputStr) {
+        const parts = subjectsInputStr
           .split(/[,،]/)
           .map((p) => p.trim())
           .filter(Boolean);
 
         for (const part of parts) {
-          const matchedSubjectId = subjectMap.get(normalizeArabicText(part));
-          if (!matchedSubjectId) {
+          const foundSubjectName = validSubjectMap.get(part);
+          if (!foundSubjectName) {
             errors.push({
               row: rowNumber,
-              field: 'subjects',
+              field: 'subjectIds',
               value: part,
-              message: `المادة التعليمية "${part}" غير مسجلة في المركز أو غير نشطة.`,
+              message: `معرف المادة التعليمية "${part}" غير صالح أو لا ينتمي لهذا المركز أو غير نشط.`,
             });
-          } else if (!subjectIds.includes(matchedSubjectId)) {
-            subjectIds.push(matchedSubjectId);
+          } else if (!subjectIds.includes(part)) {
+            subjectIds.push(part);
+            subjectNamesList.push(foundSubjectName);
           }
         }
       }
+
+      const subjectsStr =
+        subjectNamesList.join('، ') ||
+        (typeof rawSubjectsText === 'string' ? rawSubjectsText.trim() : '');
 
       // هـ. النبذة التعريفية
       const bio =

@@ -617,11 +617,15 @@ export class GroupsService {
       where,
       orderBy,
       select: {
+        id: true,
         name: true,
         capacity: true,
         monthlyFee: true,
         startDate: true,
         isActive: true,
+        gradeId: true,
+        subjectId: true,
+        teacherId: true,
         grade: { select: { name: true } },
         subject: { select: { name: true } },
         teacher: { select: { user: { select: { fullName: true } } } },
@@ -657,9 +661,13 @@ export class GroupsService {
           : '—';
 
       return {
+        id: g.id,
         name: g.name,
+        gradeId: g.gradeId,
         gradeName: g.grade?.name || '—',
+        subjectId: g.subjectId,
         subjectName: g.subject?.name || '—',
+        teacherId: g.teacherId,
         teacherName: g.teacher?.user?.fullName || '—',
         monthlyFee: Number(g.monthlyFee).toFixed(2),
         studentsCount: g._count?.students || 0,
@@ -676,7 +684,7 @@ export class GroupsService {
   }
 
   /**
-   * تصدير المجموعات الدراسية إلى ملف Excel مع حصر الصلاحيات وتنسيق المواعيد.
+   * تصدير المجموعات الدراسية إلى ملف Excel مع حصر الصلاحيات وتنسيق المواعيد ومعرفات الكيانات.
    */
   async exportToExcel(
     centerId: string,
@@ -695,9 +703,28 @@ export class GroupsService {
     const buffer = await this.excelService.buildWorkbookBuffer({
       sheetName: 'المجموعات الدراسية',
       columns: [
+        { header: 'معرف المجموعة (Group ID)', key: 'id', width: 32, numFmt: '@' },
         { header: 'اسم المجموعة', key: 'name', width: 25 },
+        {
+          header: 'معرف المرحلة (Grade ID)',
+          key: 'gradeId',
+          width: 32,
+          numFmt: '@',
+        },
         { header: 'المرحلة الدراسية', key: 'gradeName', width: 22 },
+        {
+          header: 'معرف المادة (Subject ID)',
+          key: 'subjectId',
+          width: 32,
+          numFmt: '@',
+        },
         { header: 'المادة الدراسية', key: 'subjectName', width: 20 },
+        {
+          header: 'معرف المدرس (Teacher ID)',
+          key: 'teacherId',
+          width: 32,
+          numFmt: '@',
+        },
         { header: 'المعلم', key: 'teacherName', width: 22 },
         { header: 'الاشتراك الشهري', key: 'monthlyFee', width: 16 },
         { header: 'عدد الطلاب المسجلين', key: 'studentsCount', width: 18 },
@@ -769,7 +796,7 @@ export class GroupsService {
   }
 
   /**
-   * تحميل قالب Excel فارغ ومجهز لاستيراد بيانات المجموعات الدراسية.
+   * تحميل قالب Excel فارغ ومجهز لاستيراد بيانات المجموعات الدراسية مع الجداول المرجعية (ID | Name).
    */
   async getImportTemplate(
     centerId: string,
@@ -778,26 +805,31 @@ export class GroupsService {
     const [grades, subjects, teachers] = await Promise.all([
       this.prisma.grade.findMany({
         where: { centerId, isActive: true },
-        select: { name: true },
+        select: { id: true, name: true },
         orderBy: { order: 'asc' },
       }),
       this.prisma.subject.findMany({
         where: { centerId, isActive: true },
-        select: { name: true, grade: { select: { name: true } } },
+        select: { id: true, name: true, grade: { select: { name: true } } },
         orderBy: { name: 'asc' },
       }),
       this.prisma.teacher.findMany({
         where: { centerId, user: { isActive: true } },
-        select: { user: { select: { fullName: true } } },
+        select: {
+          id: true,
+          user: { select: { fullName: true } },
+          subjects: { select: { subject: { select: { name: true } } } },
+        },
         orderBy: { user: { fullName: 'asc' } },
       }),
     ]);
 
-    const gradeNames = grades.map((g) => g.name);
-    const subjectNames = subjects.map((s) =>
-      s.grade ? `${s.name} (${s.grade.name})` : s.name,
-    );
-    const teacherNames = teachers.map((t) => t.user.fullName);
+    const exampleGradeId = grades[0]?.id || 'grade_id_here';
+    const exampleGradeName = grades[0]?.name || 'الصف الأول الثانوي';
+    const exampleSubjectId = subjects[0]?.id || 'subject_id_here';
+    const exampleSubjectName = subjects[0]?.name || 'لغة عربية';
+    const exampleTeacherId = teachers[0]?.id || 'teacher_id_here';
+    const exampleTeacherName = teachers[0]?.user.fullName || 'أحمد محمد';
 
     const buffer = await this.excelService.buildTemplateBuffer({
       dataSheetName: 'بيانات المجموعات',
@@ -810,22 +842,43 @@ export class GroupsService {
           example: 'مجموعة النخبة أ',
         },
         {
-          header: 'المرحلة الدراسية',
+          header: 'معرف المرحلة (Grade ID)',
+          key: 'gradeId',
+          width: 32,
+          numFmt: '@',
+          example: exampleGradeId,
+        },
+        {
+          header: 'المرحلة الدراسية (للتوضيح)',
           key: 'gradeName',
           width: 22,
-          example: gradeNames[0] || 'الصف الأول الثانوي',
+          example: exampleGradeName,
         },
         {
-          header: 'المادة الدراسية',
+          header: 'معرف المادة (Subject ID)',
+          key: 'subjectId',
+          width: 32,
+          numFmt: '@',
+          example: exampleSubjectId,
+        },
+        {
+          header: 'المادة الدراسية (للتوضيح)',
           key: 'subjectName',
           width: 22,
-          example: subjects[0]?.name || 'لغة عربية',
+          example: exampleSubjectName,
         },
         {
-          header: 'اسم المدرس',
+          header: 'معرف المدرس (Teacher ID)',
+          key: 'teacherId',
+          width: 32,
+          numFmt: '@',
+          example: exampleTeacherId,
+        },
+        {
+          header: 'اسم المدرس (للتوضيح)',
           key: 'teacherName',
           width: 25,
-          example: teacherNames[0] || 'أحمد محمد',
+          example: exampleTeacherName,
         },
         {
           header: 'الاشتراك الشهري',
@@ -849,36 +902,65 @@ export class GroupsService {
       sampleRows: [
         {
           name: 'مجموعة النخبة أ',
-          gradeName: gradeNames[0] || 'الصف الأول الثانوي',
-          subjectName: subjects[0]?.name || 'لغة عربية',
-          teacherName: teacherNames[0] || 'أحمد محمد',
+          gradeId: exampleGradeId,
+          gradeName: exampleGradeName,
+          subjectId: exampleSubjectId,
+          subjectName: exampleSubjectName,
+          teacherId: exampleTeacherId,
+          teacherName: exampleTeacherName,
           monthlyFee: 250,
           capacity: 30,
           monthsCount: 9,
         },
       ],
       instructions: [
-        'الحقول الإلزامية هي: (اسم المجموعة، المرحلة الدراسية، المادة الدراسية، اسم المدرس، الاشتراك الشهري).',
+        'الحقول الإلزامية هي: (اسم المجموعة، معرف المرحلة Grade ID، معرف المادة Subject ID، معرف المدرس Teacher ID، الاشتراك الشهري).',
+        'يجب نسخ المعرفات المعتمدة (Grade ID, Subject ID, Teacher ID) من ورقة "دليل الاستيراد" ولصقها في الأعمدة المخصصة لها.',
+        'أعمدة الأسماء (للتوضيح) اختيارية فقط ولا يتم الاعتماد عليها في التحقق أو الربط الفعلي.',
         'اسم المجموعة يجب أن يكون فريداً داخل المركز.',
-        'المرحلة الدراسية والمادة الدراسية والمدرس يجب أن تكون مسجلة مسبقاً في السنتر (المدرجة أدناه).',
+        'يجب أن تنتمي المادة الدراسية إلى المرحلة الدراسية المحددة.',
+        'يجب أن يكون المعلم مخصصاً لتدريس المادة الدراسية المختارة.',
         'الاشتراك الشهري يجب أن يكون رقماً أكبر من أو يساوي 0.',
         'السعة الاستيعابية وعدد الأشهر اختيارية (القيمة الافتراضية لعدد الأشهر هي 1).',
         'يرجى عدم تعديل أو حذف صف العناوين في ورقة بيانات المجموعات.',
       ],
       referenceTables: [
         {
-          title: 'المراحل الدراسية المتاحة',
-          items: gradeNames.length > 0 ? gradeNames : ['لا توجد مراحل مسجلة'],
+          title: 'المراحل الدراسية المتاحة والمعتمدة (Grade IDs)',
+          headers: ['معرف المرحلة (Grade ID - للنسخ)', 'اسم المرحلة الدراسية'],
+          rows:
+            grades.length > 0
+              ? grades.map((g) => ({ id: g.id, name: g.name }))
+              : [{ id: 'لا يوجد', name: 'لا توجد مراحل مسجلة حالياً' }],
         },
         {
-          title: 'المواد الدراسية المتاحة',
-          items:
-            subjectNames.length > 0 ? subjectNames : ['لا توجد مواد مسجلة'],
+          title: 'المواد الدراسية المتاحة والمعتمدة (Subject IDs)',
+          headers: ['معرف المادة (Subject ID - للنسخ)', 'اسم المادة والمرحلة التابعة لها'],
+          rows:
+            subjects.length > 0
+              ? subjects.map((s) => ({
+                  id: s.id,
+                  name: s.grade ? `${s.name} (${s.grade.name})` : s.name,
+                }))
+              : [{ id: 'لا يوجد', name: 'لا توجد مواد مسجلة حالياً' }],
         },
         {
-          title: 'المدرسين المتاحين',
-          items:
-            teacherNames.length > 0 ? teacherNames : ['لا يوجد مدرسين مسجلين'],
+          title: 'المدرسين المتاحين والمعتمدين (Teacher IDs)',
+          headers: ['معرف المدرس (Teacher ID - للنسخ)', 'اسم المدرس والمواد المخصصة له'],
+          rows:
+            teachers.length > 0
+              ? teachers.map((t) => {
+                  const subjectList = t.subjects
+                    .map((s) => s.subject.name)
+                    .join('، ');
+                  return {
+                    id: t.id,
+                    name: subjectList
+                      ? `${t.user.fullName} [${subjectList}]`
+                      : t.user.fullName,
+                  };
+                })
+              : [{ id: 'لا يوجد', name: 'لا يوجد مدرسين مسجلين حالياً' }],
         },
       ],
     });
@@ -896,7 +978,7 @@ export class GroupsService {
   }
 
   /**
-   * استيراد المجموعات الدراسية من ملف Excel المرفوع.
+   * استيراد المجموعات الدراسية من ملف Excel المرفوع اعتماداً على المعرفات الصريحة (IDs).
    */
   async importFromExcel(
     centerId: string,
@@ -905,20 +987,17 @@ export class GroupsService {
   ): Promise<
     ExcelImportSummary<{
       name: string;
+      gradeId: string;
       gradeName: string;
+      subjectId: string;
       subjectName: string;
+      teacherId: string;
       teacherName: string;
       monthlyFee: number;
     }>
   > {
     const { rows } = await this.excelService.parseSheetRows(fileBuffer, {
-      expectedHeaders: [
-        'اسم المجموعة',
-        'المرحلة الدراسية',
-        'المادة الدراسية',
-        'اسم المدرس',
-        'الاشتراك الشهري',
-      ],
+      expectedHeaders: ['اسم المجموعة', 'الاشتراك الشهري'],
     });
 
     if (rows.length === 0) {
@@ -951,26 +1030,31 @@ export class GroupsService {
         }),
       ]);
 
-    const gradeMap = new Map<string, string>();
+    const gradeMap = new Map<string, { id: string; name: string }>();
     for (const g of centerGrades) {
-      gradeMap.set(normalizeArabicText(g.name), g.id);
+      gradeMap.set(g.id, { id: g.id, name: g.name });
     }
 
-    const subjectMap = new Map<string, { id: string; gradeId: string }>();
+    const subjectMap = new Map<
+      string,
+      { id: string; name: string; gradeId: string }
+    >();
     for (const s of centerSubjects) {
-      subjectMap.set(normalizeArabicText(s.name), {
+      subjectMap.set(s.id, {
         id: s.id,
+        name: s.name,
         gradeId: s.gradeId,
       });
     }
 
     const teacherMap = new Map<
       string,
-      { id: string; subjectIds: Set<string> }
+      { id: string; name: string; subjectIds: Set<string> }
     >();
     for (const t of centerTeachers) {
-      teacherMap.set(normalizeArabicText(t.user.fullName), {
+      teacherMap.set(t.id, {
         id: t.id,
+        name: t.user.fullName,
         subjectIds: new Set(t.subjects.map((s) => s.subjectId)),
       });
     }
@@ -998,9 +1082,30 @@ export class GroupsService {
     for (const rowItem of rows) {
       const { rowNumber, values } = rowItem;
       const rawName: unknown = values['اسم المجموعة'];
-      const rawGrade: unknown = values['المرحلة الدراسية'];
-      const rawSubject: unknown = values['المادة الدراسية'];
-      const rawTeacher: unknown = values['اسم المدرس'];
+      const rawGradeId: unknown =
+        values['معرف المرحلة (Grade ID)'] ??
+        values['معرف المرحلة'] ??
+        values['gradeId'] ??
+        values['المرحلة الدراسية'];
+      const rawGradeName: unknown =
+        values['المرحلة الدراسية (للتوضيح)'] ?? values['المرحلة الدراسية'];
+
+      const rawSubjectId: unknown =
+        values['معرف المادة (Subject ID)'] ??
+        values['معرف المادة'] ??
+        values['subjectId'] ??
+        values['المادة الدراسية'];
+      const rawSubjectName: unknown =
+        values['المادة الدراسية (للتوضيح)'] ?? values['المادة الدراسية'];
+
+      const rawTeacherId: unknown =
+        values['معرف المدرس (Teacher ID)'] ??
+        values['معرف المدرس'] ??
+        values['teacherId'] ??
+        values['اسم المدرس'];
+      const rawTeacherName: unknown =
+        values['اسم المدرس (للتوضيح)'] ?? values['اسم المدرس'];
+
       const rawFee: unknown = values['الاشتراك الشهري'];
       const rawCapacity: unknown = values['السعة الاستيعابية'];
       const rawMonths: unknown = values['عدد الأشهر'];
@@ -1040,95 +1145,128 @@ export class GroupsService {
         }
       }
 
-      // 2. المرحلة الدراسية
+      // 2. معرف المرحلة الدراسية (Grade ID)
+      const gradeIdStr =
+        typeof rawGradeId === 'string'
+          ? rawGradeId.trim()
+          : rawGradeId !== undefined && rawGradeId !== null
+            ? String(rawGradeId).trim()
+            : '';
+
       let gradeId = '';
-      const gradeStr = typeof rawGrade === 'string' ? rawGrade.trim() : '';
-      if (!gradeStr) {
+      let gradeName =
+        typeof rawGradeName === 'string' ? rawGradeName.trim() : '';
+
+      if (!gradeIdStr) {
         errors.push({
           row: rowNumber,
-          field: 'gradeName',
-          value: rawGrade,
-          message: 'المرحلة الدراسية حقل إلزامي.',
+          field: 'gradeId',
+          value: rawGradeId,
+          message:
+            'معرف المرحلة (Grade ID) حقل إلزامي، يرجى نسخه من ورقة دليل الاستيراد.',
         });
       } else {
-        const foundGradeId = gradeMap.get(normalizeArabicText(gradeStr));
-        if (!foundGradeId) {
+        const foundGrade = gradeMap.get(gradeIdStr);
+        if (!foundGrade) {
           errors.push({
             row: rowNumber,
-            field: 'gradeName',
-            value: gradeStr,
+            field: 'gradeId',
+            value: gradeIdStr,
             message:
-              'المرحلة الدراسية المحددة غير مسجلة في المركز أو غير نشطة.',
+              'معرف المرحلة المدخل غير صالح أو لا ينتمي لهذا المركز أو غير نشط.',
           });
         } else {
-          gradeId = foundGradeId;
+          gradeId = foundGrade.id;
+          gradeName = gradeName || foundGrade.name;
         }
       }
 
-      // 3. المادة الدراسية
+      // 3. معرف المادة الدراسية (Subject ID)
+      const subjectIdStr =
+        typeof rawSubjectId === 'string'
+          ? rawSubjectId.trim()
+          : rawSubjectId !== undefined && rawSubjectId !== null
+            ? String(rawSubjectId).trim()
+            : '';
+
       let subjectId = '';
-      const subjectStr =
-        typeof rawSubject === 'string' ? rawSubject.trim() : '';
-      if (!subjectStr) {
+      let subjectName =
+        typeof rawSubjectName === 'string' ? rawSubjectName.trim() : '';
+
+      if (!subjectIdStr) {
         errors.push({
           row: rowNumber,
-          field: 'subjectName',
-          value: rawSubject,
-          message: 'المادة الدراسية حقل إلزامي.',
+          field: 'subjectId',
+          value: rawSubjectId,
+          message:
+            'معرف المادة (Subject ID) حقل إلزامي، يرجى نسخه من ورقة دليل الاستيراد.',
         });
       } else {
-        const foundSubject = subjectMap.get(normalizeArabicText(subjectStr));
+        const foundSubject = subjectMap.get(subjectIdStr);
         if (!foundSubject) {
           errors.push({
             row: rowNumber,
-            field: 'subjectName',
-            value: subjectStr,
-            message: 'المادة الدراسية المحددة غير مسجلة في المركز أو غير نشطة.',
+            field: 'subjectId',
+            value: subjectIdStr,
+            message:
+              'معرف المادة المدخل غير صالح أو لا ينتمي لهذا المركز أو غير نشط.',
           });
         } else {
           if (gradeId && foundSubject.gradeId !== gradeId) {
             errors.push({
               row: rowNumber,
-              field: 'subjectName',
-              value: subjectStr,
+              field: 'subjectId',
+              value: subjectIdStr,
               message:
                 'المادة الدراسية المحددة لا تنتمي إلى المرحلة الدراسية المختارة.',
             });
           }
           subjectId = foundSubject.id;
+          subjectName = subjectName || foundSubject.name;
         }
       }
 
-      // 4. المدرس
+      // 4. معرف المدرس (Teacher ID)
+      const teacherIdStr =
+        typeof rawTeacherId === 'string'
+          ? rawTeacherId.trim()
+          : rawTeacherId !== undefined && rawTeacherId !== null
+            ? String(rawTeacherId).trim()
+            : '';
+
       let teacherId = '';
-      const teacherStr =
-        typeof rawTeacher === 'string' ? rawTeacher.trim() : '';
-      if (!teacherStr) {
+      let teacherName =
+        typeof rawTeacherName === 'string' ? rawTeacherName.trim() : '';
+
+      if (!teacherIdStr) {
         errors.push({
           row: rowNumber,
-          field: 'teacherName',
-          value: rawTeacher,
-          message: 'اسم المدرس حقل إلزامي.',
+          field: 'teacherId',
+          value: rawTeacherId,
+          message:
+            'معرف المدرس (Teacher ID) حقل إلزامي، يرجى نسخه من ورقة دليل الاستيراد.',
         });
       } else {
-        const foundTeacher = teacherMap.get(normalizeArabicText(teacherStr));
+        const foundTeacher = teacherMap.get(teacherIdStr);
         if (!foundTeacher) {
           errors.push({
             row: rowNumber,
-            field: 'teacherName',
-            value: teacherStr,
-            message: 'المدرس المحدد غير مسجل في المركز أو غير نشط.',
+            field: 'teacherId',
+            value: teacherIdStr,
+            message:
+              'معرف المدرس المدخل غير صالح أو لا ينتمي لهذا المركز أو غير نشط.',
           });
         } else {
           if (subjectId && !foundTeacher.subjectIds.has(subjectId)) {
             errors.push({
               row: rowNumber,
-              field: 'teacherName',
-              value: teacherStr,
+              field: 'teacherId',
+              value: teacherIdStr,
               message: 'المدرس المحدد غير مخصص لتدريس هذه المادة.',
             });
           }
           teacherId = foundTeacher.id;
+          teacherName = teacherName || foundTeacher.name;
         }
       }
 
@@ -1196,11 +1334,11 @@ export class GroupsService {
         validatedRows.push({
           name,
           gradeId,
-          gradeName: gradeStr,
+          gradeName,
           subjectId,
-          subjectName: subjectStr,
+          subjectName,
           teacherId,
-          teacherName: teacherStr,
+          teacherName,
           monthlyFee,
           capacity,
           monthsCount,
@@ -1231,8 +1369,11 @@ export class GroupsService {
         errors: [],
         data: validatedRows.map((r) => ({
           name: r.name,
+          gradeId: r.gradeId,
           gradeName: r.gradeName,
+          subjectId: r.subjectId,
           subjectName: r.subjectName,
+          teacherId: r.teacherId,
           teacherName: r.teacherName,
           monthlyFee: r.monthlyFee,
         })),

@@ -386,6 +386,7 @@ export class StudentsService {
       email: s.user.email,
       phone: s.user.phone || '—',
       parentPhone: s.parentPhone || '—',
+      gradeId: s.enrollments[0]?.grade?.id || '—',
       gradeName: s.enrollments[0]?.grade?.name || '—',
       status: s.user.isActive ? 'نشط' : 'معطل',
       groupsCount: s._count?.groups || 0,
@@ -416,6 +417,12 @@ export class StudentsService {
         { header: 'البريد الإلكتروني', key: 'email', width: 28 },
         { header: 'رقم هاتف الطالب', key: 'phone', width: 18, numFmt: '@' },
         { header: 'رقم ولي الأمر', key: 'parentPhone', width: 18, numFmt: '@' },
+        {
+          header: 'معرف المرحلة (Grade ID)',
+          key: 'gradeId',
+          width: 30,
+          numFmt: '@',
+        },
         { header: 'المرحلة الدراسية', key: 'gradeName', width: 22 },
         { header: 'الحالة', key: 'status', width: 14 },
         { header: 'عدد المجموعات', key: 'groupsCount', width: 15 },
@@ -496,12 +503,12 @@ export class StudentsService {
   ): Promise<Buffer | void> {
     const grades = await this.prisma.grade.findMany({
       where: { centerId, isActive: true },
-      select: { name: true },
+      select: { id: true, name: true },
       orderBy: { order: 'asc' },
     });
 
-    const gradeNames = grades.map((g) => g.name);
-    const exampleGrade = gradeNames[0] || 'الصف الأول الثانوي';
+    const exampleGradeId = grades[0]?.id || 'grade_id_here';
+    const exampleGradeName = grades[0]?.name || 'الصف الأول الثانوي';
 
     const buffer = await this.excelService.buildTemplateBuffer({
       dataSheetName: 'بيانات الطلاب',
@@ -534,10 +541,17 @@ export class StudentsService {
           example: '01198765432',
         },
         {
-          header: 'المرحلة الدراسية',
+          header: 'معرف المرحلة (Grade ID)',
+          key: 'gradeId',
+          width: 32,
+          numFmt: '@',
+          example: exampleGradeId,
+        },
+        {
+          header: 'المرحلة الدراسية (للتوضيح)',
           key: 'gradeName',
           width: 25,
-          example: exampleGrade,
+          example: exampleGradeName,
         },
         {
           header: 'ملاحظات',
@@ -552,25 +566,33 @@ export class StudentsService {
           email: 'ahmed.student@example.com',
           phone: '01012345678',
           parentPhone: '01198765432',
-          gradeName: exampleGrade,
+          gradeId: exampleGradeId,
+          gradeName: exampleGradeName,
           notes: 'طالب مستجد',
         },
       ],
       instructions: [
-        'الحقول الإلزامية هي: (اسم الطالب، البريد الإلكتروني، المرحلة الدراسية).',
+        'الحقول الإلزامية هي: (اسم الطالب، البريد الإلكتروني، معرف المرحلة Grade ID).',
+        'يجب نسخ معرف المرحلة (Grade ID) المعتمد من ورقة "دليل الاستيراد" ولصقه في عمود "معرف المرحلة (Grade ID)".',
+        'عمود "المرحلة الدراسية (للتوضيح)" اختياري وللتوضيح فقط، ولا يُعتمد عليه في عملية التحقق أو الربط.',
         'البريد الإلكتروني يجب أن يكون فريداً وغير مستخدم لأي حساب آخر.',
         'أرقام الهواتف (هاتف الطالب وهاتف ولي الأمر) اختيارية، وفي حال كتابتها يجب أن تكون بصيغة مصرية صحيحة (11 رقماً تبدأ بـ 01).',
-        'المرحلة الدراسية يجب أن تطابق بدقة اسم إحدى المراحل المسجلة في السنتر (المدرجة أدناه).',
         'سيتم توليد كلمة مرور أولية موحدة للحسابات مع تفعيل خاصية إلزام تغيير كلمة المرور فور أول تسجيل دخول.',
         'يرجى عدم تعديل أو حذف صف العناوين في ورقة بيانات الطلاب.',
       ],
       referenceTables: [
         {
           title: 'المراحل الدراسية المتاحة والمعتمدة في السنتر',
-          items:
-            gradeNames.length > 0
-              ? gradeNames
-              : ['لا توجد مراحل مسجلة حالياً، يرجى إضافة مرحلة أولاً'],
+          headers: ['معرف المرحلة (Grade ID - للنسخ)', 'اسم المرحلة الدراسية'],
+          rows:
+            grades.length > 0
+              ? grades.map((g) => ({ id: g.id, name: g.name }))
+              : [
+                  {
+                    id: 'لا يوجد',
+                    name: 'لا توجد مراحل مسجلة حالياً، يرجى إضافة مرحلة أولاً',
+                  },
+                ],
         },
       ],
     });
@@ -599,12 +621,13 @@ export class StudentsService {
       fullName: string;
       email: string;
       phone?: string;
+      gradeId: string;
       gradeName: string;
     }> & { initialDefaultPassword?: string }
   > {
     // 1. قراءة صفوف الشيت وفحص العناوين الإلزامية
     const { rows } = await this.excelService.parseSheetRows(fileBuffer, {
-      expectedHeaders: ['اسم الطالب', 'البريد الإلكتروني', 'المرحلة الدراسية'],
+      expectedHeaders: ['اسم الطالب', 'البريد الإلكتروني'],
     });
 
     if (rows.length === 0) {
@@ -631,10 +654,9 @@ export class StudentsService {
       where: { centerId, isActive: true },
       select: { id: true, name: true },
     });
-    const gradeMap = new Map<string, string>();
-    for (const g of centerGrades) {
-      gradeMap.set(normalizeArabicText(g.name), g.id);
-    }
+    const validGradeMap = new Map<string, string>(
+      centerGrades.map((g) => [g.id, g.name]),
+    );
 
     // 4. استخراج كافة الإيميلات والهواتف لفحص التكرار مع قاعدة البيانات دفعة واحدة
     const fileCandidateEmails: string[] = [];
@@ -698,7 +720,6 @@ export class StudentsService {
       const rawEmail: unknown = values['البريد الإلكتروني'];
       const rawPhone: unknown = values['رقم هاتف الطالب'];
       const rawParentPhone: unknown = values['رقم ولي الأمر'];
-      const rawGradeName: unknown = values['المرحلة الدراسية'];
       const rawNotes: unknown = values['ملاحظات'];
 
       // أ. فحص اسم الطالب
@@ -814,30 +835,47 @@ export class StudentsService {
         }
       }
 
-      // هـ. فحص المرحلة الدراسية
+      // هـ. فحص معرف المرحلة الدراسية (Grade ID)
+      const rawGradeId: unknown =
+        values['معرف المرحلة (Grade ID)'] ??
+        values['معرف المرحلة'] ??
+        values['gradeId'] ??
+        values['المرحلة الدراسية'];
+      const rawGradeName: unknown =
+        values['المرحلة الدراسية (للتوضيح)'] ?? values['المرحلة الدراسية'];
+
+      const gradeIdStr =
+        typeof rawGradeId === 'string'
+          ? rawGradeId.trim()
+          : rawGradeId !== undefined && rawGradeId !== null
+            ? String(rawGradeId).trim()
+            : '';
+
       let gradeId = '';
-      const gradeNameStr =
+      let gradeName =
         typeof rawGradeName === 'string' ? rawGradeName.trim() : '';
 
-      if (!gradeNameStr) {
+      if (!gradeIdStr) {
         errors.push({
           row: rowNumber,
-          field: 'gradeName',
-          value: rawGradeName,
-          message: 'المرحلة الدراسية حقل إلزامي.',
+          field: 'gradeId',
+          value: rawGradeId,
+          message:
+            'معرف المرحلة (Grade ID) حقل إلزامي، يرجى نسخه من ورقة دليل الاستيراد.',
         });
       } else {
-        const foundGradeId = gradeMap.get(normalizeArabicText(gradeNameStr));
-        if (!foundGradeId) {
+        const foundGradeName = validGradeMap.get(gradeIdStr);
+        if (!foundGradeName) {
           errors.push({
             row: rowNumber,
-            field: 'gradeName',
-            value: gradeNameStr,
+            field: 'gradeId',
+            value: gradeIdStr,
             message:
-              'المرحلة الدراسية المحددة غير موجودة في هذا المركز أو غير نشطة.',
+              'معرف المرحلة المدخل غير صالح أو لا ينتمي لهذا المركز أو غير نشط.',
           });
         } else {
-          gradeId = foundGradeId;
+          gradeId = gradeIdStr;
+          gradeName = gradeName || foundGradeName;
         }
       }
 
@@ -856,7 +894,7 @@ export class StudentsService {
           phone,
           parentPhone,
           gradeId,
-          gradeName: gradeNameStr,
+          gradeName,
           notes,
         });
       }
@@ -889,6 +927,7 @@ export class StudentsService {
           fullName: r.fullName,
           email: r.email,
           phone: r.phone || undefined,
+          gradeId: r.gradeId,
           gradeName: r.gradeName,
         })),
       };

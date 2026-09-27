@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { HomeStatsResponseDto } from './dto/home-stats-response.dto';
-import { GRACE_PERIOD_DAYS } from 'src/common/constants';
+import { GRACE_PERIOD_DAYS } from '../../common/constants';
 
 const GRACE_PERIOD_MS = GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000;
 

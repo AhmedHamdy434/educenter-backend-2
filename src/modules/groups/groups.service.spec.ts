@@ -228,12 +228,18 @@ describe('GroupsService - Export, Import & Sort', () => {
 
   describe('getImportTemplate', () => {
     it('should query center grades, subjects, and teachers and return template buffer', async () => {
-      prisma.grade.findMany.mockResolvedValue([{ name: 'الصف الأول الثانوي' }]);
+      prisma.grade.findMany.mockResolvedValue([
+        { id: 'grade-1', name: 'الصف الأول الثانوي' },
+      ]);
       prisma.subject.findMany.mockResolvedValue([
-        { name: 'رياضيات', grade: { name: 'الصف الأول الثانوي' } },
+        { id: 'sub-1', name: 'رياضيات', grade: { name: 'الصف الأول الثانوي' } },
       ]);
       prisma.teacher.findMany.mockResolvedValue([
-        { user: { fullName: 'أحمد محمود' } },
+        {
+          id: 'teacher-1',
+          user: { fullName: 'أحمد محمود' },
+          subjects: [{ subject: { name: 'رياضيات' } }],
+        },
       ]);
 
       const mockBuffer = Buffer.from('mock-groups-template');
@@ -293,10 +299,66 @@ describe('GroupsService - Export, Import & Sort', () => {
             rowNumber: 2,
             values: {
               'اسم المجموعة': 'م',
-              'المرحلة الدراسية': 'مرحلة وهمية',
-              'المادة الدراسية': '',
-              'اسم المدرس': '',
+              'معرف المرحلة (Grade ID)': 'invalid-grade-id',
+              'معرف المادة (Subject ID)': 'invalid-subject-id',
+              'معرف المدرس (Teacher ID)': 'invalid-teacher-id',
               'الاشتراك الشهري': -10,
+            },
+          },
+        ],
+      });
+
+      await expect(
+        service.importFromExcel(centerId, fileBuffer),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('should throw 422 if subject does not belong to grade', async () => {
+      prisma.subject.findMany.mockResolvedValue([
+        { id: 'sub-1', name: 'رياضيات', gradeId: 'other-grade' },
+      ]);
+
+      excelService.parseSheetRows.mockResolvedValue({
+        headers: ['اسم المجموعة'],
+        rows: [
+          {
+            rowNumber: 2,
+            values: {
+              'اسم المجموعة': 'مجموعة النخبة',
+              'معرف المرحلة (Grade ID)': 'grade-1',
+              'معرف المادة (Subject ID)': 'sub-1',
+              'معرف المدرس (Teacher ID)': 'teacher-1',
+              'الاشتراك الشهري': 200,
+            },
+          },
+        ],
+      });
+
+      await expect(
+        service.importFromExcel(centerId, fileBuffer),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('should throw 422 if teacher does not teach subject', async () => {
+      prisma.teacher.findMany.mockResolvedValue([
+        {
+          id: 'teacher-1',
+          user: { fullName: 'أحمد محمود' },
+          subjects: [{ subjectId: 'other-sub' }],
+        },
+      ]);
+
+      excelService.parseSheetRows.mockResolvedValue({
+        headers: ['اسم المجموعة'],
+        rows: [
+          {
+            rowNumber: 2,
+            values: {
+              'اسم المجموعة': 'مجموعة النخبة',
+              'معرف المرحلة (Grade ID)': 'grade-1',
+              'معرف المادة (Subject ID)': 'sub-1',
+              'معرف المدرس (Teacher ID)': 'teacher-1',
+              'الاشتراك الشهري': 200,
             },
           },
         ],
@@ -315,9 +377,9 @@ describe('GroupsService - Export, Import & Sort', () => {
             rowNumber: 2,
             values: {
               'اسم المجموعة': 'مجموعة النخبة',
-              'المرحلة الدراسية': 'الصف الأول الثانوي',
-              'المادة الدراسية': 'رياضيات',
-              'اسم المدرس': 'أحمد محمود',
+              'معرف المرحلة (Grade ID)': 'grade-1',
+              'معرف المادة (Subject ID)': 'sub-1',
+              'معرف المدرس (Teacher ID)': 'teacher-1',
               'الاشتراك الشهري': 200,
             },
           },
@@ -328,6 +390,9 @@ describe('GroupsService - Export, Import & Sort', () => {
 
       expect(result.totalRows).toBe(1);
       expect(result.validRows).toBe(1);
+      expect(result.data?.[0].gradeId).toBe('grade-1');
+      expect(result.data?.[0].subjectId).toBe('sub-1');
+      expect(result.data?.[0].teacherId).toBe('teacher-1');
       expect(prisma.group.createMany).not.toHaveBeenCalled();
     });
 
@@ -339,9 +404,9 @@ describe('GroupsService - Export, Import & Sort', () => {
             rowNumber: 2,
             values: {
               'اسم المجموعة': 'مجموعة النخبة',
-              'المرحلة الدراسية': 'الصف الأول الثانوي',
-              'المادة الدراسية': 'رياضيات',
-              'اسم المدرس': 'أحمد محمود',
+              'معرف المرحلة (Grade ID)': 'grade-1',
+              'معرف المادة (Subject ID)': 'sub-1',
+              'معرف المدرس (Teacher ID)': 'teacher-1',
               'الاشتراك الشهري': 200,
             },
           },

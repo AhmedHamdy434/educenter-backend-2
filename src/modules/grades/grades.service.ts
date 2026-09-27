@@ -228,6 +228,7 @@ export class GradesService {
 
     const dateStr = new Date().toISOString().split('T')[0];
     const rows = grades.map((g) => ({
+      id: g.id,
       name: g.name,
       order: g.order,
       description: g.description || '—',
@@ -244,7 +245,7 @@ export class GradesService {
   }
 
   /**
-   * تصدير المراحل الدراسية لمركز معين إلى ملف Excel مع تطبيق الفلاتر.
+   * تصدير المراحل الدراسية لمركز معين إلى ملف Excel مع تطبيق الفلاتر ومعرفات الكيانات.
    */
   async exportToExcel(
     centerId: string,
@@ -256,6 +257,12 @@ export class GradesService {
     const buffer = await this.excelService.buildWorkbookBuffer({
       sheetName: 'المراحل الدراسية',
       columns: [
+        {
+          header: 'معرف المرحلة (Grade ID)',
+          key: 'id',
+          width: 32,
+          numFmt: '@',
+        },
         { header: 'اسم المرحلة الدراسية', key: 'name', width: 25 },
         { header: 'الترتيب', key: 'order', width: 12 },
         { header: 'الوصف', key: 'description', width: 35 },
