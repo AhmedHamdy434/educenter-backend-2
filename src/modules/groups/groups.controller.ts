@@ -8,11 +8,16 @@ import {
   Post,
   Query,
   UseGuards,
-  BadRequestException,
   HttpStatus,
   HttpCode,
   Res,
+  UseInterceptors,
+  UploadedFile,
+  DefaultValuePipe,
+  ParseBoolPipe,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiConsumes } from '@nestjs/swagger';
 import type { Response } from 'express';
 import {
   BypassInterceptor,
@@ -24,7 +29,10 @@ import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AppRole } from '../../common/enums/app-role.enum';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { CurrentCenterId } from '../../common/decorators/current-center-id.decorator';
 import type { RequestUser } from '../auth/interfaces/authenticated-request.interface';
+import { ExcelValidationPipe } from '../../shared/excel/pipes/excel-validation.pipe';
+import { ExcelImportSummary } from '../../shared/excel/interfaces/excel.interface';
 import { GroupsService } from './groups.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
@@ -42,15 +50,10 @@ export class GroupsController {
   @ResponseMessage('تم إنشاء المجموعة الدراسية بنجاح.')
   @Roles(AppRole.OWNER)
   create(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Body() createGroupDto: CreateGroupDto,
-  ): Promise<GroupDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.groupsService.create(user.centerId, createGroupDto);
+  ): Promise<GroupListItem> {
+    return this.groupsService.create(centerId, createGroupDto);
   }
 
   @Get()
@@ -58,18 +61,14 @@ export class GroupsController {
   @Roles(AppRole.OWNER, AppRole.TEACHER, AppRole.STUDENT)
   findAll(
     @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Query() query: GroupQueryDto,
   ): Promise<{ data: GroupListItem[]; meta: any }> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.groupsService.findAll(user.centerId, query, user.role, user.id);
+    return this.groupsService.findAll(centerId, query, user.role, user.id);
   }
 
   /**
-   * تصدير قائمة المجموعات الدراسية إلى ملف Excel.
+   * تصدير قائمة المجموعات الدراسية إلى ملف Excel مع تطبيق الفلاتر والبحث.
    * تم وضعه قبل مسار :id لتجنب تعارض المسارات في Express.
    */
   @Get('export/excel')
@@ -77,30 +76,80 @@ export class GroupsController {
   @BypassInterceptor()
   async exportExcel(
     @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Query() query: GroupQueryDto,
     @Res() res: Response,
   ): Promise<void> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    const buffer = await this.groupsService.exportToExcel(
-      user.centerId,
+    await this.groupsService.exportToExcel(
+      centerId,
       query,
       user.role,
       user.id,
+      res,
     );
-    const dateStr = new Date().toISOString().split('T')[0];
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  }
+
+  /**
+   * تصدير قائمة المجموعات الدراسية إلى ملف PDF مع تطبيق الفلاتر والبحث.
+   * تم وضعه قبل مسار :id لتجنب تعارض المسارات في Express.
+   */
+  @Get('export/pdf')
+  @Roles(AppRole.OWNER, AppRole.TEACHER)
+  @BypassInterceptor()
+  async exportPdf(
+    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
+    @Query() query: GroupQueryDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.groupsService.exportToPdf(
+      centerId,
+      query,
+      user.role,
+      user.id,
+      res,
     );
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="groups-${dateStr}.xlsx"`,
-    );
-    res.send(buffer);
+  }
+
+  /**
+   * تحميل قالب Excel فارغ ومجهز لاستيراد بيانات المجموعات الدراسية.
+   * تم وضعه قبل مسار :id لتجنب تعارض المسارات في Express.
+   */
+  @Get('export/template')
+  @Roles(AppRole.OWNER)
+  @BypassInterceptor()
+  async getTemplate(
+    @CurrentCenterId() centerId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.groupsService.getImportTemplate(centerId, res);
+  }
+
+  /**
+   * استيراد بيانات المجموعات الدراسية من ملف Excel المرفوع مع دعم فحص المعاينة (dryRun).
+   * تم وضعه قبل مسار :id لتجنب تعارض المسارات في Express.
+   */
+  @Post('import/excel')
+  @HttpCode(HttpStatus.OK)
+  @ResponseMessage('تم استيراد بيانات المجموعات بنجاح.')
+  @Roles(AppRole.OWNER)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  async importExcel(
+    @CurrentCenterId() centerId: string,
+    @UploadedFile(new ExcelValidationPipe()) file: Express.Multer.File,
+    @Query('dryRun', new DefaultValuePipe(false), ParseBoolPipe)
+    dryRun: boolean,
+  ): Promise<
+    ExcelImportSummary<{
+      name: string;
+      gradeName: string;
+      subjectName: string;
+      teacherName: string;
+      monthlyFee: number;
+    }>
+  > {
+    return this.groupsService.importFromExcel(centerId, file.buffer, dryRun);
   }
 
   @Get(':id')
@@ -108,45 +157,31 @@ export class GroupsController {
   @Roles(AppRole.OWNER, AppRole.TEACHER, AppRole.STUDENT)
   findOne(
     @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Param('id') id: string,
   ): Promise<GroupDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.groupsService.findOne(user.centerId, id, user.role, user.id);
+    return this.groupsService.findOne(centerId, id, user.role, user.id);
   }
 
   @Patch(':id')
   @ResponseMessage('تم تحديث المجموعة الدراسية بنجاح.')
   @Roles(AppRole.OWNER)
   update(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Param('id') id: string,
     @Body() updateGroupDto: UpdateGroupDto,
-  ): Promise<GroupDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.groupsService.update(user.centerId, id, updateGroupDto);
+  ): Promise<GroupListItem> {
+    return this.groupsService.update(centerId, id, updateGroupDto);
   }
 
   @Patch(':id/toggle-status')
   @ResponseMessage('تم تحديث حالة تفعيل المجموعة الدراسية بنجاح.')
   @Roles(AppRole.OWNER)
   toggleStatus(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Param('id') id: string,
-  ): Promise<GroupDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.groupsService.toggleStatus(user.centerId, id);
+  ): Promise<GroupListItem> {
+    return this.groupsService.toggleStatus(centerId, id);
   }
 
   @Post(':id/students')
@@ -154,36 +189,22 @@ export class GroupsController {
   @ResponseMessage('تم إضافة الطلاب للمجموعة بنجاح.')
   @Roles(AppRole.OWNER)
   addStudents(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Param('id') id: string,
     @Body() groupStudentsDto: GroupStudentsDto,
   ): Promise<GroupDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.groupsService.addStudents(user.centerId, id, groupStudentsDto);
+    return this.groupsService.addStudents(centerId, id, groupStudentsDto);
   }
 
   @Delete(':id/students')
   @ResponseMessage('تم إزالة الطلاب من المجموعة بنجاح.')
   @Roles(AppRole.OWNER)
   removeStudents(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Param('id') id: string,
     @Body() groupStudentsDto: GroupStudentsDto,
   ): Promise<GroupDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.groupsService.removeStudents(
-      user.centerId,
-      id,
-      groupStudentsDto,
-    );
+    return this.groupsService.removeStudents(centerId, id, groupStudentsDto);
   }
 
   @Delete(':id')
@@ -191,14 +212,9 @@ export class GroupsController {
   @ResponseMessage('تم حذف المجموعة الدراسية بنجاح.')
   @Roles(AppRole.OWNER)
   remove(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Param('id') id: string,
   ): Promise<void> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.groupsService.remove(user.centerId, id);
+    return this.groupsService.remove(centerId, id);
   }
 }

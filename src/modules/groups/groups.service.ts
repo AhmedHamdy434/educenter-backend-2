@@ -2,8 +2,10 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpStatus,
   Injectable,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { buildMeta } from '../../common/utils/buildMeta';
@@ -20,13 +22,27 @@ import { UpdateGroupDto } from './dto/update-group.dto';
 import { GroupQueryDto } from './dto/get-groups.dto';
 import { GroupStudentsDto } from './dto/group-students.dto';
 
+import type { Response } from 'express';
 import { ExcelService } from '../../shared/excel/excel.service';
+import { PdfService } from '../../shared/pdf/pdf.service';
+import {
+  ExcelImportSummary,
+  RowValidationError,
+} from '../../shared/excel/interfaces/excel.interface';
+import { normalizeArabicText } from '../../shared/excel/utils/arabic-normalizer.util';
+
+const EXCEL_MIME_TYPE =
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const PDF_MIME_TYPE = 'application/pdf';
+
+const GROUP_RELATION_COUNT_FIELDS = ['students'];
 
 @Injectable()
 export class GroupsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly excelService: ExcelService,
+    private readonly pdfService: PdfService,
   ) {}
 
   private getPrismaClient(tx?: Prisma.TransactionClient) {
@@ -36,7 +52,7 @@ export class GroupsService {
   /**
    * إنشاء مجموعة جديدة مع التحقق من صحة المدخلات.
    */
-  async create(centerId: string, data: CreateGroupDto): Promise<GroupDetails> {
+  async create(centerId: string, data: CreateGroupDto): Promise<GroupListItem> {
     return this.prisma.$transaction(async (tx) => {
       await this.ensureGroupNameIsUnique(centerId, data.name, undefined, tx);
       await this.ensureGradeBelongsToCenter(centerId, data.gradeId, tx);
@@ -78,8 +94,8 @@ export class GroupsService {
 
       return tx.group.findUnique({
         where: { id: group.id },
-        select: groupDetailsSelect,
-      }) as unknown as GroupDetails;
+        select: groupListSelect,
+      }) as unknown as GroupListItem;
     });
   }
 
@@ -133,6 +149,15 @@ export class GroupsService {
       };
     }
 
+    const orderBy = query.getOrderBy<
+      | Prisma.GroupOrderByWithRelationInput
+      | Prisma.GroupOrderByWithRelationInput[]
+    >(
+      ['name', 'capacity', 'monthlyFee', 'startDate', 'createdAt'],
+      [{ createdAt: 'desc' }],
+      GROUP_RELATION_COUNT_FIELDS,
+    );
+
     const [total, data] = await Promise.all([
       this.prisma.group.count({ where }),
       this.prisma.group.findMany({
@@ -140,7 +165,7 @@ export class GroupsService {
         skip,
         take,
         select: groupListSelect,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
       }),
     ]);
 
@@ -200,7 +225,7 @@ export class GroupsService {
     centerId: string,
     id: string,
     data: UpdateGroupDto,
-  ): Promise<GroupDetails> {
+  ): Promise<GroupListItem> {
     return this.prisma.$transaction(async (tx) => {
       const current = await tx.group.findFirst({
         where: { id, centerId },
@@ -278,15 +303,15 @@ export class GroupsService {
 
       return tx.group.findUnique({
         where: { id },
-        select: groupDetailsSelect,
-      }) as unknown as GroupDetails;
+        select: groupListSelect,
+      }) as unknown as GroupListItem;
     });
   }
 
   /**
    * تبديل حالة نشاط المجموعة.
    */
-  async toggleStatus(centerId: string, id: string): Promise<GroupDetails> {
+  async toggleStatus(centerId: string, id: string): Promise<GroupListItem> {
     const current = await this.prisma.group.findFirst({
       where: { id, centerId },
     });
@@ -296,7 +321,7 @@ export class GroupsService {
     return this.prisma.group.update({
       where: { id },
       data: { isActive: !current.isActive },
-      select: groupDetailsSelect,
+      select: groupListSelect,
     });
   }
 
@@ -424,9 +449,15 @@ export class GroupsService {
   async remove(centerId: string, id: string): Promise<void> {
     const group = await this.prisma.group.findFirst({
       where: { id, centerId },
+      select: groupDetailsSelect,
     });
     if (!group) {
       throw new NotFoundException('المجموعة الدراسية المطلوبة غير موجودة.');
+    }
+    if (group._count.students > 0) {
+      throw new BadRequestException(
+        'لا يمكن حذف المجموعة لوجود طلاب مسجلين بها.',
+      );
     }
     await this.prisma.group.delete({
       where: { id },
@@ -536,14 +567,28 @@ export class GroupsService {
   }
 
   /**
-   * تصدير المجموعات الدراسية إلى ملف Excel مع حصر الصلاحيات وتنسيق المواعيد.
+   * إرسال ملف للعميل عبر Response مع الهيدرز المناسبة.
    */
-  async exportToExcel(
+  private sendFileDownload(
+    res: Response,
+    buffer: Buffer,
+    filename: string,
+    contentType: string,
+  ): void {
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  }
+
+  /**
+   * جلب وتجهيز بيانات المجموعات الدراسية للمركز بصيغة مصفوفة مهيأة للتصدير (Excel / PDF).
+   */
+  private async getExportDataset(
     centerId: string,
     query: GroupQueryDto,
     currentUserRole: AppRole,
     currentUserId: string,
-  ): Promise<Buffer> {
+  ) {
     const { active, gradeId, subjectId, teacherId } = query;
     const where = query.getWhere<Prisma.GroupWhereInput>(['name']);
     where.centerId = centerId;
@@ -562,9 +607,11 @@ export class GroupsService {
     const orderBy = query.getOrderBy<
       | Prisma.GroupOrderByWithRelationInput
       | Prisma.GroupOrderByWithRelationInput[]
-    >(['name', 'capacity', 'monthlyFee', 'startDate', 'createdAt'], {
-      createdAt: 'desc',
-    });
+    >(
+      ['name', 'capacity', 'monthlyFee', 'startDate', 'createdAt'],
+      [{ createdAt: 'desc' }],
+      GROUP_RELATION_COUNT_FIELDS,
+    );
 
     const groups = await this.prisma.group.findMany({
       where,
@@ -580,6 +627,7 @@ export class GroupsService {
         teacher: { select: { user: { select: { fullName: true } } } },
         schedule: { select: { day: true, hour: true, minute: true } },
         _count: { select: { students: true } },
+        createdAt: true,
       },
     });
 
@@ -593,9 +641,11 @@ export class GroupsService {
       SATURDAY: 'السبت',
     };
 
-    const exportRows = groups.map((g) => {
+    const dateStr = new Date().toISOString().split('T')[0];
+
+    const rows = groups.map((g) => {
       const scheduleStr =
-        g.schedule.length > 0
+        g.schedule && g.schedule.length > 0
           ? g.schedule
               .map((s) => {
                 const day = DAY_NAMES[s.day] || s.day;
@@ -622,7 +672,27 @@ export class GroupsService {
       };
     });
 
-    return this.excelService.buildWorkbookBuffer({
+    return { rows, dateStr };
+  }
+
+  /**
+   * تصدير المجموعات الدراسية إلى ملف Excel مع حصر الصلاحيات وتنسيق المواعيد.
+   */
+  async exportToExcel(
+    centerId: string,
+    query: GroupQueryDto,
+    currentUserRole: AppRole,
+    currentUserId: string,
+    res?: Response,
+  ): Promise<Buffer | void> {
+    const { rows, dateStr } = await this.getExportDataset(
+      centerId,
+      query,
+      currentUserRole,
+      currentUserId,
+    );
+
+    const buffer = await this.excelService.buildWorkbookBuffer({
       sheetName: 'المجموعات الدراسية',
       columns: [
         { header: 'اسم المجموعة', key: 'name', width: 25 },
@@ -636,7 +706,560 @@ export class GroupsService {
         { header: 'الحالة', key: 'status', width: 12 },
         { header: 'تاريخ البدء', key: 'startDate', width: 16 },
       ],
-      data: exportRows,
+      data: rows,
     });
+
+    if (res) {
+      return this.sendFileDownload(
+        res,
+        buffer,
+        `groups-${dateStr}.xlsx`,
+        EXCEL_MIME_TYPE,
+      );
+    }
+
+    return buffer;
+  }
+
+  /**
+   * تصدير المجموعات الدراسية إلى ملف PDF مع حصر الصلاحيات وتنسيق المواعيد.
+   */
+  async exportToPdf(
+    centerId: string,
+    query: GroupQueryDto,
+    currentUserRole: AppRole,
+    currentUserId: string,
+    res?: Response,
+  ): Promise<Buffer | void> {
+    const { rows, dateStr } = await this.getExportDataset(
+      centerId,
+      query,
+      currentUserRole,
+      currentUserId,
+    );
+
+    const buffer = await this.pdfService.buildTablePdfBuffer({
+      title: 'تقرير المجموعات الدراسية',
+      dateStr,
+      columns: [
+        { header: 'اسم المجموعة', key: 'name', width: '*', align: 'right' },
+        { header: 'المرحلة', key: 'gradeName', width: 70, align: 'right' },
+        { header: 'المادة', key: 'subjectName', width: 70, align: 'right' },
+        { header: 'المعلم', key: 'teacherName', width: 80, align: 'right' },
+        { header: 'الطلاب', key: 'studentsCount', width: 40, align: 'center' },
+        { header: 'السعة', key: 'capacity', width: 40, align: 'center' },
+        { header: 'الاشتراك', key: 'monthlyFee', width: 50, align: 'center' },
+        { header: 'المواعيد', key: 'schedule', width: 110, align: 'right' },
+        { header: 'الحالة', key: 'status', width: 40, align: 'center' },
+      ],
+      data: rows,
+      orientation: 'landscape',
+    });
+
+    if (res) {
+      return this.sendFileDownload(
+        res,
+        buffer,
+        `groups-${dateStr}.pdf`,
+        PDF_MIME_TYPE,
+      );
+    }
+
+    return buffer;
+  }
+
+  /**
+   * تحميل قالب Excel فارغ ومجهز لاستيراد بيانات المجموعات الدراسية.
+   */
+  async getImportTemplate(
+    centerId: string,
+    res?: Response,
+  ): Promise<Buffer | void> {
+    const [grades, subjects, teachers] = await Promise.all([
+      this.prisma.grade.findMany({
+        where: { centerId, isActive: true },
+        select: { name: true },
+        orderBy: { order: 'asc' },
+      }),
+      this.prisma.subject.findMany({
+        where: { centerId, isActive: true },
+        select: { name: true, grade: { select: { name: true } } },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.teacher.findMany({
+        where: { centerId, user: { isActive: true } },
+        select: { user: { select: { fullName: true } } },
+        orderBy: { user: { fullName: 'asc' } },
+      }),
+    ]);
+
+    const gradeNames = grades.map((g) => g.name);
+    const subjectNames = subjects.map((s) =>
+      s.grade ? `${s.name} (${s.grade.name})` : s.name,
+    );
+    const teacherNames = teachers.map((t) => t.user.fullName);
+
+    const buffer = await this.excelService.buildTemplateBuffer({
+      dataSheetName: 'بيانات المجموعات',
+      instructionsSheetName: 'دليل الاستيراد',
+      columns: [
+        {
+          header: 'اسم المجموعة',
+          key: 'name',
+          width: 25,
+          example: 'مجموعة النخبة أ',
+        },
+        {
+          header: 'المرحلة الدراسية',
+          key: 'gradeName',
+          width: 22,
+          example: gradeNames[0] || 'الصف الأول الثانوي',
+        },
+        {
+          header: 'المادة الدراسية',
+          key: 'subjectName',
+          width: 22,
+          example: subjects[0]?.name || 'لغة عربية',
+        },
+        {
+          header: 'اسم المدرس',
+          key: 'teacherName',
+          width: 25,
+          example: teacherNames[0] || 'أحمد محمد',
+        },
+        {
+          header: 'الاشتراك الشهري',
+          key: 'monthlyFee',
+          width: 18,
+          example: 250,
+        },
+        {
+          header: 'السعة الاستيعابية',
+          key: 'capacity',
+          width: 18,
+          example: 30,
+        },
+        {
+          header: 'عدد الأشهر',
+          key: 'monthsCount',
+          width: 14,
+          example: 9,
+        },
+      ],
+      sampleRows: [
+        {
+          name: 'مجموعة النخبة أ',
+          gradeName: gradeNames[0] || 'الصف الأول الثانوي',
+          subjectName: subjects[0]?.name || 'لغة عربية',
+          teacherName: teacherNames[0] || 'أحمد محمد',
+          monthlyFee: 250,
+          capacity: 30,
+          monthsCount: 9,
+        },
+      ],
+      instructions: [
+        'الحقول الإلزامية هي: (اسم المجموعة، المرحلة الدراسية، المادة الدراسية، اسم المدرس، الاشتراك الشهري).',
+        'اسم المجموعة يجب أن يكون فريداً داخل المركز.',
+        'المرحلة الدراسية والمادة الدراسية والمدرس يجب أن تكون مسجلة مسبقاً في السنتر (المدرجة أدناه).',
+        'الاشتراك الشهري يجب أن يكون رقماً أكبر من أو يساوي 0.',
+        'السعة الاستيعابية وعدد الأشهر اختيارية (القيمة الافتراضية لعدد الأشهر هي 1).',
+        'يرجى عدم تعديل أو حذف صف العناوين في ورقة بيانات المجموعات.',
+      ],
+      referenceTables: [
+        {
+          title: 'المراحل الدراسية المتاحة',
+          items: gradeNames.length > 0 ? gradeNames : ['لا توجد مراحل مسجلة'],
+        },
+        {
+          title: 'المواد الدراسية المتاحة',
+          items:
+            subjectNames.length > 0 ? subjectNames : ['لا توجد مواد مسجلة'],
+        },
+        {
+          title: 'المدرسين المتاحين',
+          items:
+            teacherNames.length > 0 ? teacherNames : ['لا يوجد مدرسين مسجلين'],
+        },
+      ],
+    });
+
+    if (res) {
+      return this.sendFileDownload(
+        res,
+        buffer,
+        'groups-template.xlsx',
+        EXCEL_MIME_TYPE,
+      );
+    }
+
+    return buffer;
+  }
+
+  /**
+   * استيراد المجموعات الدراسية من ملف Excel المرفوع.
+   */
+  async importFromExcel(
+    centerId: string,
+    fileBuffer: Buffer,
+    dryRun = false,
+  ): Promise<
+    ExcelImportSummary<{
+      name: string;
+      gradeName: string;
+      subjectName: string;
+      teacherName: string;
+      monthlyFee: number;
+    }>
+  > {
+    const { rows } = await this.excelService.parseSheetRows(fileBuffer, {
+      expectedHeaders: [
+        'اسم المجموعة',
+        'المرحلة الدراسية',
+        'المادة الدراسية',
+        'اسم المدرس',
+        'الاشتراك الشهري',
+      ],
+    });
+
+    if (rows.length === 0) {
+      throw new BadRequestException(
+        'ملف Excel لا يحتوي على أي صفوف بيانات للاستيراد.',
+      );
+    }
+
+    const [centerGrades, centerSubjects, centerTeachers, existingGroups] =
+      await Promise.all([
+        this.prisma.grade.findMany({
+          where: { centerId, isActive: true },
+          select: { id: true, name: true },
+        }),
+        this.prisma.subject.findMany({
+          where: { centerId, isActive: true },
+          select: { id: true, name: true, gradeId: true },
+        }),
+        this.prisma.teacher.findMany({
+          where: { centerId, user: { isActive: true } },
+          select: {
+            id: true,
+            user: { select: { fullName: true } },
+            subjects: { select: { subjectId: true } },
+          },
+        }),
+        this.prisma.group.findMany({
+          where: { centerId },
+          select: { name: true },
+        }),
+      ]);
+
+    const gradeMap = new Map<string, string>();
+    for (const g of centerGrades) {
+      gradeMap.set(normalizeArabicText(g.name), g.id);
+    }
+
+    const subjectMap = new Map<string, { id: string; gradeId: string }>();
+    for (const s of centerSubjects) {
+      subjectMap.set(normalizeArabicText(s.name), {
+        id: s.id,
+        gradeId: s.gradeId,
+      });
+    }
+
+    const teacherMap = new Map<
+      string,
+      { id: string; subjectIds: Set<string> }
+    >();
+    for (const t of centerTeachers) {
+      teacherMap.set(normalizeArabicText(t.user.fullName), {
+        id: t.id,
+        subjectIds: new Set(t.subjects.map((s) => s.subjectId)),
+      });
+    }
+
+    const dbExistingNames = new Set(
+      existingGroups.map((g) => normalizeArabicText(g.name)),
+    );
+
+    const errors: RowValidationError[] = [];
+    const fileSeenNames = new Set<string>();
+
+    const validatedRows: Array<{
+      name: string;
+      gradeId: string;
+      gradeName: string;
+      subjectId: string;
+      subjectName: string;
+      teacherId: string;
+      teacherName: string;
+      monthlyFee: number;
+      capacity: number | null;
+      monthsCount: number;
+    }> = [];
+
+    for (const rowItem of rows) {
+      const { rowNumber, values } = rowItem;
+      const rawName: unknown = values['اسم المجموعة'];
+      const rawGrade: unknown = values['المرحلة الدراسية'];
+      const rawSubject: unknown = values['المادة الدراسية'];
+      const rawTeacher: unknown = values['اسم المدرس'];
+      const rawFee: unknown = values['الاشتراك الشهري'];
+      const rawCapacity: unknown = values['السعة الاستيعابية'];
+      const rawMonths: unknown = values['عدد الأشهر'];
+
+      // 1. اسم المجموعة
+      let name = '';
+      if (
+        !rawName ||
+        typeof rawName !== 'string' ||
+        rawName.trim().length < 2
+      ) {
+        errors.push({
+          row: rowNumber,
+          field: 'name',
+          value: rawName,
+          message: 'اسم المجموعة إلزامي ويجب ألا يقل عن حرفين.',
+        });
+      } else {
+        name = rawName.trim();
+        const normName = normalizeArabicText(name);
+        if (fileSeenNames.has(normName)) {
+          errors.push({
+            row: rowNumber,
+            field: 'name',
+            value: name,
+            message: 'اسم المجموعة مكرر داخل نفس الملف المرفوع.',
+          });
+        } else if (dbExistingNames.has(normName)) {
+          errors.push({
+            row: rowNumber,
+            field: 'name',
+            value: name,
+            message: 'اسم المجموعة مسجل بالفعل في هذا المركز.',
+          });
+        } else {
+          fileSeenNames.add(normName);
+        }
+      }
+
+      // 2. المرحلة الدراسية
+      let gradeId = '';
+      const gradeStr = typeof rawGrade === 'string' ? rawGrade.trim() : '';
+      if (!gradeStr) {
+        errors.push({
+          row: rowNumber,
+          field: 'gradeName',
+          value: rawGrade,
+          message: 'المرحلة الدراسية حقل إلزامي.',
+        });
+      } else {
+        const foundGradeId = gradeMap.get(normalizeArabicText(gradeStr));
+        if (!foundGradeId) {
+          errors.push({
+            row: rowNumber,
+            field: 'gradeName',
+            value: gradeStr,
+            message:
+              'المرحلة الدراسية المحددة غير مسجلة في المركز أو غير نشطة.',
+          });
+        } else {
+          gradeId = foundGradeId;
+        }
+      }
+
+      // 3. المادة الدراسية
+      let subjectId = '';
+      const subjectStr =
+        typeof rawSubject === 'string' ? rawSubject.trim() : '';
+      if (!subjectStr) {
+        errors.push({
+          row: rowNumber,
+          field: 'subjectName',
+          value: rawSubject,
+          message: 'المادة الدراسية حقل إلزامي.',
+        });
+      } else {
+        const foundSubject = subjectMap.get(normalizeArabicText(subjectStr));
+        if (!foundSubject) {
+          errors.push({
+            row: rowNumber,
+            field: 'subjectName',
+            value: subjectStr,
+            message: 'المادة الدراسية المحددة غير مسجلة في المركز أو غير نشطة.',
+          });
+        } else {
+          if (gradeId && foundSubject.gradeId !== gradeId) {
+            errors.push({
+              row: rowNumber,
+              field: 'subjectName',
+              value: subjectStr,
+              message:
+                'المادة الدراسية المحددة لا تنتمي إلى المرحلة الدراسية المختارة.',
+            });
+          }
+          subjectId = foundSubject.id;
+        }
+      }
+
+      // 4. المدرس
+      let teacherId = '';
+      const teacherStr =
+        typeof rawTeacher === 'string' ? rawTeacher.trim() : '';
+      if (!teacherStr) {
+        errors.push({
+          row: rowNumber,
+          field: 'teacherName',
+          value: rawTeacher,
+          message: 'اسم المدرس حقل إلزامي.',
+        });
+      } else {
+        const foundTeacher = teacherMap.get(normalizeArabicText(teacherStr));
+        if (!foundTeacher) {
+          errors.push({
+            row: rowNumber,
+            field: 'teacherName',
+            value: teacherStr,
+            message: 'المدرس المحدد غير مسجل في المركز أو غير نشط.',
+          });
+        } else {
+          if (subjectId && !foundTeacher.subjectIds.has(subjectId)) {
+            errors.push({
+              row: rowNumber,
+              field: 'teacherName',
+              value: teacherStr,
+              message: 'المدرس المحدد غير مخصص لتدريس هذه المادة.',
+            });
+          }
+          teacherId = foundTeacher.id;
+        }
+      }
+
+      // 5. الاشتراك الشهري
+      let monthlyFee = 0;
+      if (rawFee === undefined || rawFee === null || rawFee === '') {
+        errors.push({
+          row: rowNumber,
+          field: 'monthlyFee',
+          value: rawFee,
+          message: 'قيمة الاشتراك الشهري حقل إلزامي.',
+        });
+      } else {
+        const parsedFee = Number(rawFee);
+        if (Number.isNaN(parsedFee) || parsedFee < 0) {
+          errors.push({
+            row: rowNumber,
+            field: 'monthlyFee',
+            value: rawFee,
+            message:
+              'قيمة الاشتراك الشهري يجب أن تكون رقماً أكبر من أو يساوي 0.',
+          });
+        } else {
+          monthlyFee = parsedFee;
+        }
+      }
+
+      // 6. السعة الاستيعابية
+      let capacity: number | null = null;
+      if (
+        rawCapacity !== undefined &&
+        rawCapacity !== null &&
+        rawCapacity !== ''
+      ) {
+        const parsedCap = Number(rawCapacity);
+        if (Number.isNaN(parsedCap) || parsedCap < 1) {
+          errors.push({
+            row: rowNumber,
+            field: 'capacity',
+            value: rawCapacity,
+            message: 'السعة الاستيعابية يجب أن تكون رقماً أكبر من أو يساوي 1.',
+          });
+        } else {
+          capacity = Math.floor(parsedCap);
+        }
+      }
+
+      // 7. عدد الأشهر
+      let monthsCount = 1;
+      if (rawMonths !== undefined && rawMonths !== null && rawMonths !== '') {
+        const parsedMonths = Number(rawMonths);
+        if (Number.isNaN(parsedMonths) || parsedMonths < 1) {
+          errors.push({
+            row: rowNumber,
+            field: 'monthsCount',
+            value: rawMonths,
+            message: 'عدد الأشهر يجب أن يكون رقماً أكبر من أو يساوي 1.',
+          });
+        } else {
+          monthsCount = Math.floor(parsedMonths);
+        }
+      }
+
+      if (errors.length === 0 || errors[errors.length - 1]?.row !== rowNumber) {
+        validatedRows.push({
+          name,
+          gradeId,
+          gradeName: gradeStr,
+          subjectId,
+          subjectName: subjectStr,
+          teacherId,
+          teacherName: teacherStr,
+          monthlyFee,
+          capacity,
+          monthsCount,
+        });
+      }
+    }
+
+    if (errors.length > 0) {
+      throw new UnprocessableEntityException({
+        statusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+        message: 'تعذر استيراد الملف لوجود أخطاء في بيانات بعض المجموعات.',
+        error: 'Unprocessable Entity',
+        data: {
+          totalRows: rows.length,
+          validRows: rows.length - errors.length,
+          failedRows: errors.length,
+          remainingErrorsCount: Math.max(0, errors.length - 100),
+          errors: errors.slice(0, 100),
+        },
+      });
+    }
+
+    if (dryRun) {
+      return {
+        totalRows: rows.length,
+        validRows: validatedRows.length,
+        failedRows: 0,
+        errors: [],
+        data: validatedRows.map((r) => ({
+          name: r.name,
+          gradeName: r.gradeName,
+          subjectName: r.subjectName,
+          teacherName: r.teacherName,
+          monthlyFee: r.monthlyFee,
+        })),
+      };
+    }
+
+    const groupsToInsert = validatedRows.map((r) => ({
+      centerId,
+      name: r.name,
+      gradeId: r.gradeId,
+      subjectId: r.subjectId,
+      teacherId: r.teacherId,
+      monthlyFee: r.monthlyFee,
+      capacity: r.capacity,
+      monthsCount: r.monthsCount,
+      isActive: true,
+    }));
+
+    await this.prisma.group.createMany({
+      data: groupsToInsert,
+    });
+
+    return {
+      totalRows: rows.length,
+      validRows: validatedRows.length,
+      failedRows: 0,
+      errors: [],
+    };
   }
 }

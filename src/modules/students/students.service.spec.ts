@@ -3,14 +3,16 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import type { Response } from 'express';
 import { StudentsService } from './students.service';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { SubscriptionValidationService } from '../subscription-plans/subscription-validation.service';
 import { ExcelService } from '../../shared/excel/excel.service';
+import { PdfService } from '../../shared/pdf/pdf.service';
 import { StudentQueryDto } from './dto/get-students.dto';
 
-describe('StudentsService - Excel Import & Export', () => {
+describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
   let service: StudentsService;
   let prisma: {
     student: {
@@ -42,6 +44,9 @@ describe('StudentsService - Excel Import & Export', () => {
     buildWorkbookBuffer: jest.Mock;
     buildTemplateBuffer: jest.Mock;
     parseSheetRows: jest.Mock;
+  };
+  let pdfService: {
+    buildTablePdfBuffer: jest.Mock;
   };
 
   const centerId = 'center-test-123';
@@ -82,6 +87,10 @@ describe('StudentsService - Excel Import & Export', () => {
       parseSheetRows: jest.fn(),
     };
 
+    pdfService = {
+      buildTablePdfBuffer: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         StudentsService,
@@ -92,10 +101,58 @@ describe('StudentsService - Excel Import & Export', () => {
           useValue: subscriptionValidationService,
         },
         { provide: ExcelService, useValue: excelService },
+        { provide: PdfService, useValue: pdfService },
       ],
     }).compile();
 
     service = module.get<StudentsService>(StudentsService);
+  });
+
+  describe('findAll', () => {
+    it('should sort by relation counts when sortBy is groups', async () => {
+      prisma.student.count.mockResolvedValue(1);
+      prisma.student.findMany.mockResolvedValue([]);
+
+      const getOrderByMock = jest
+        .fn()
+        .mockReturnValue({ groups: { _count: 'asc' } });
+      const query = {
+        page: 1,
+        limit: 10,
+        sortBy: 'groups',
+        sortOrder: 'asc',
+        getOrderBy: getOrderByMock,
+      } as unknown as StudentQueryDto;
+
+      await service.findAll(centerId, query);
+
+      expect(getOrderByMock).toHaveBeenCalled();
+      expect(prisma.student.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: { groups: { _count: 'asc' } },
+        }),
+      );
+    });
+
+    it('should sort by user fields when sortBy is fullName', async () => {
+      prisma.student.count.mockResolvedValue(1);
+      prisma.student.findMany.mockResolvedValue([]);
+
+      const query = {
+        page: 1,
+        limit: 10,
+        sortBy: 'fullName',
+        sortOrder: 'asc',
+      } as unknown as StudentQueryDto;
+
+      await service.findAll(centerId, query);
+
+      expect(prisma.student.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: { user: { fullName: 'asc' } },
+        }),
+      );
+    });
   });
 
   describe('exportToExcel', () => {
@@ -117,6 +174,10 @@ describe('StudentsService - Excel Import & Export', () => {
               grade: { name: 'الصف الأول الثانوي' },
             },
           ],
+          _count: {
+            groups: 2,
+            attendance: 5,
+          },
         },
       ]);
       const mockBuffer = Buffer.from('mock-excel-students');
@@ -136,6 +197,88 @@ describe('StudentsService - Excel Import & Export', () => {
         }),
       );
       expect(result).toBe(mockBuffer);
+    });
+
+    it('should stream to res when response object is provided', async () => {
+      prisma.student.findMany.mockResolvedValue([]);
+      const mockBuffer = Buffer.from('mock-excel');
+      excelService.buildWorkbookBuffer.mockResolvedValue(mockBuffer);
+
+      const setHeaderMock = jest.fn();
+      const sendMock = jest.fn();
+      const mockRes = {
+        setHeader: setHeaderMock,
+        send: sendMock,
+      } as unknown as Response;
+
+      const query = {
+        getWhere: jest.fn().mockReturnValue({}),
+        getOrderBy: jest.fn().mockReturnValue([{ createdAt: 'desc' }]),
+      } as unknown as StudentQueryDto;
+
+      await service.exportToExcel(centerId, query, mockRes);
+
+      expect(setHeaderMock).toHaveBeenCalledWith(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      expect(sendMock).toHaveBeenCalledWith(mockBuffer);
+    });
+  });
+
+  describe('exportToPdf', () => {
+    it('should generate RTL PDF buffer and stream to res', async () => {
+      prisma.student.findMany.mockResolvedValue([
+        {
+          id: 'student-1',
+          parentPhone: '01198765432',
+          notes: 'طالب ممتاز',
+          createdAt: new Date('2026-09-01'),
+          user: {
+            fullName: 'أحمد محمود',
+            email: 'ahmed@example.com',
+            phone: '01012345678',
+            isActive: true,
+          },
+          enrollments: [
+            {
+              grade: { name: 'الصف الأول الثانوي' },
+            },
+          ],
+          _count: {
+            groups: 1,
+            attendance: 3,
+          },
+        },
+      ]);
+      const mockBuffer = Buffer.from('mock-pdf-students');
+      pdfService.buildTablePdfBuffer.mockResolvedValue(mockBuffer);
+
+      const setHeaderMock = jest.fn();
+      const sendMock = jest.fn();
+      const mockRes = {
+        setHeader: setHeaderMock,
+        send: sendMock,
+      } as unknown as Response;
+
+      const query = {
+        getWhere: jest.fn().mockReturnValue({}),
+        getOrderBy: jest.fn().mockReturnValue([{ createdAt: 'desc' }]),
+      } as unknown as StudentQueryDto;
+
+      await service.exportToPdf(centerId, query, mockRes);
+
+      expect(pdfService.buildTablePdfBuffer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'تقرير الطلاب',
+          orientation: 'landscape',
+        }),
+      );
+      expect(setHeaderMock).toHaveBeenCalledWith(
+        'Content-Type',
+        'application/pdf',
+      );
+      expect(sendMock).toHaveBeenCalledWith(mockBuffer);
     });
   });
 

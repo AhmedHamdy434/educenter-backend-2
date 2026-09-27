@@ -43,39 +43,12 @@ export const groupListSelect = {
       minute: true,
     },
   },
-  _count: {
-    select: {
-      students: true,
-    },
-  },
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.GroupSelect;
 
 export const groupDetailsSelect = {
-  id: true,
-  name: true,
-  capacity: true,
-  monthlyFee: true,
-  startDate: true,
-  monthsCount: true,
-  isActive: true,
-  centerId: true,
-  gradeId: true,
-  grade: {
-    select: {
-      id: true,
-      name: true,
-    },
-  },
-  subjectId: true,
-  subject: {
-    select: {
-      id: true,
-      name: true,
-    },
-  },
-  teacherId: true,
+  ...groupListSelect,
   teacher: {
     select: {
       id: true,
@@ -88,14 +61,6 @@ export const groupDetailsSelect = {
           avatar: true,
         },
       },
-    },
-  },
-  schedule: {
-    select: {
-      id: true,
-      day: true,
-      hour: true,
-      minute: true,
     },
   },
   students: {
@@ -120,8 +85,11 @@ export const groupDetailsSelect = {
       },
     },
   },
-  createdAt: true,
-  updatedAt: true,
+  _count: {
+    select: {
+      students: true,
+    },
+  },
 } satisfies Prisma.GroupSelect;
 
 export type GroupListItem = Prisma.GroupGetPayload<{

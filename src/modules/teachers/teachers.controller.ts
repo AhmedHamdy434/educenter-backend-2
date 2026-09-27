@@ -7,23 +7,34 @@ import {
   Post,
   Query,
   UseGuards,
-  BadRequestException,
   HttpStatus,
   HttpCode,
+  Res,
+  UseInterceptors,
+  UploadedFile,
+  DefaultValuePipe,
+  ParseBoolPipe,
 } from '@nestjs/common';
-import { ResponseMessage } from '../../common/decorators/response-message.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiConsumes } from '@nestjs/swagger';
+import type { Response } from 'express';
+import {
+  BypassInterceptor,
+  ResponseMessage,
+} from '../../common/decorators/response-message.decorator';
+import { CurrentCenterId } from '../../common/decorators/current-center-id.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { AppRole } from '../../common/enums/app-role.enum';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
+import { ExcelValidationPipe } from '../../shared/excel/pipes/excel-validation.pipe';
+import { ExcelImportSummary } from '../../shared/excel/interfaces/excel.interface';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { TeacherDetails, TeacherListItem } from './constants/teacher.select';
 import { CreateTeacherDto } from './dto/create-teacher.dto';
 import { TeacherQueryDto } from './dto/get-teachers.dto';
 import { UpdateTeacherDto } from './dto/update-teacher.dto';
 import { TeachersService } from './teachers.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { SubscriptionGuard } from '../../common/guards/subscription.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { AppRole } from '../../common/enums/app-role.enum';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import type { RequestUser } from '../auth/interfaces/authenticated-request.interface';
-import { TeacherDetails, TeacherListItem } from './constants/teacher.select';
 
 @Controller('teachers')
 @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
@@ -38,33 +49,93 @@ export class TeachersController {
   @ResponseMessage('تم إضافة المدرس بنجاح.')
   @Roles(AppRole.OWNER)
   create(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Body() createTeacherDto: CreateTeacherDto,
-  ): Promise<TeacherDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.teachersService.create(user.centerId, createTeacherDto);
+  ): Promise<TeacherListItem> {
+    return this.teachersService.create(centerId, createTeacherDto);
   }
 
   /**
-   * جلب قائمة المدرسين للمركز الحالي.
+   * جلب قائمة المدرسين للمركز الحالي مع دعم البحث، التصفية والفرز.
    */
   @Get()
   @ResponseMessage('تم جلب قائمة المدرسين بنجاح.')
   @Roles(AppRole.OWNER, AppRole.TEACHER, AppRole.STUDENT)
   findAll(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Query() query: TeacherQueryDto,
   ): Promise<{ data: TeacherListItem[]; meta: any }> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.teachersService.findAll(user.centerId, query);
+    return this.teachersService.findAll(centerId, query);
+  }
+
+  /**
+   * تصدير قائمة المدرسين للمركز الحالي إلى ملف Excel.
+   * تم وضعه قبل مسار :id لتجنب تعارض المسارات في Express.
+   */
+  @Get('export/excel')
+  @Roles(AppRole.OWNER, AppRole.TEACHER)
+  @BypassInterceptor()
+  async exportExcel(
+    @CurrentCenterId() centerId: string,
+    @Query() query: TeacherQueryDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.teachersService.exportToExcel(centerId, query, res);
+  }
+
+  /**
+   * تصدير قائمة المدرسين للمركز الحالي إلى ملف PDF (Cairo Font RTL).
+   * تم وضعه قبل مسار :id لتجنب تعارض المسارات في Express.
+   */
+  @Get('export/pdf')
+  @Roles(AppRole.OWNER, AppRole.TEACHER)
+  @BypassInterceptor()
+  async exportPdf(
+    @CurrentCenterId() centerId: string,
+    @Query() query: TeacherQueryDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.teachersService.exportToPdf(centerId, query, res);
+  }
+
+  /**
+   * تحميل قالب Excel فارغ ومجهز لاستيراد بيانات المدرسين مع المواد المعتمدة.
+   * تم وضعه قبل مسار :id لتجنب تعارض المسارات في Express.
+   */
+  @Get('export/template')
+  @Roles(AppRole.OWNER)
+  @BypassInterceptor()
+  async getTemplate(
+    @CurrentCenterId() centerId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.teachersService.getImportTemplate(centerId, res);
+  }
+
+  /**
+   * استيراد بيانات المدرسين من ملف Excel المرفوع مع دعم فحص المعاينة (dryRun).
+   * تم وضعه قبل مسار :id لتجنب تعارض المسارات في Express.
+   */
+  @Post('import/excel')
+  @HttpCode(HttpStatus.OK)
+  @ResponseMessage('تم استيراد بيانات المدرسين بنجاح.')
+  @Roles(AppRole.OWNER)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  async importExcel(
+    @CurrentCenterId() centerId: string,
+    @UploadedFile(new ExcelValidationPipe()) file: Express.Multer.File,
+    @Query('dryRun', new DefaultValuePipe(false), ParseBoolPipe)
+    dryRun: boolean,
+  ): Promise<
+    ExcelImportSummary<{
+      fullName: string;
+      email: string;
+      phone?: string;
+      subjectNames?: string;
+    }>
+  > {
+    return this.teachersService.importFromExcel(centerId, file.buffer, dryRun);
   }
 
   /**
@@ -74,15 +145,10 @@ export class TeachersController {
   @ResponseMessage('تم جلب تفاصيل المدرس بنجاح.')
   @Roles(AppRole.OWNER, AppRole.TEACHER, AppRole.STUDENT)
   findOne(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Param('id') id: string,
   ): Promise<TeacherDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.teachersService.findOne(user.centerId, id);
+    return this.teachersService.findOne(centerId, id);
   }
 
   /**
@@ -92,16 +158,11 @@ export class TeachersController {
   @ResponseMessage('تم تحديث بيانات المدرس بنجاح.')
   @Roles(AppRole.OWNER)
   update(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Param('id') id: string,
     @Body() updateTeacherDto: UpdateTeacherDto,
-  ): Promise<TeacherDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.teachersService.update(user.centerId, id, updateTeacherDto);
+  ): Promise<TeacherListItem> {
+    return this.teachersService.update(centerId, id, updateTeacherDto);
   }
 
   /**
@@ -111,14 +172,9 @@ export class TeachersController {
   @ResponseMessage('تم تحديث حالة تفعيل حساب المدرس بنجاح.')
   @Roles(AppRole.OWNER)
   toggleStatus(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Param('id') id: string,
-  ): Promise<TeacherDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.teachersService.toggleStatus(user.centerId, id);
+  ): Promise<TeacherListItem> {
+    return this.teachersService.toggleStatus(centerId, id);
   }
 }

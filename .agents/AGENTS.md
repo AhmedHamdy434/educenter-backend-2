@@ -123,11 +123,11 @@
     5. `Users` (3 endpoints): `GET /api/users`, `GET /api/users/:id`, `PATCH /api/users/:id`
     6. `Grades` (10 endpoints): `POST /api/grades`, `GET /api/grades`, `GET /api/grades/export/excel`, `GET /api/grades/export/pdf`, `GET /api/grades/export/template`, `POST /api/grades/import/excel`, `GET /api/grades/:id`, `PATCH /api/grades/:id`, `PATCH /api/grades/:id/toggle-status`, `DELETE /api/grades/:id`
     7. `Subjects` (10 endpoints): `GET /api/subjects/options`, `GET /api/subjects/export/excel`, `GET /api/subjects/export/pdf`, `GET /api/subjects/export/template`, `POST /api/subjects/import/excel`, `POST /api/subjects`, `GET /api/subjects`, `GET /api/subjects/:id`, `PATCH /api/subjects/:id`, `PATCH /api/subjects/:id/toggle-status`
-    8. `Teachers` (5 endpoints): `POST /api/teachers`, `GET /api/teachers`, `GET /api/teachers/:id`, `PATCH /api/teachers/:id`, `PATCH /api/teachers/:id/toggle-status`
-    9. `Students` (5 endpoints): `POST /api/students`, `GET /api/students`, `GET /api/students/:id`, `PATCH /api/students/:id`, `PATCH /api/students/:id/toggle-status`
+    8. `Teachers` (9 endpoints): `POST /api/teachers`, `GET /api/teachers`, `GET /api/teachers/export/excel`, `GET /api/teachers/export/pdf`, `GET /api/teachers/export/template`, `POST /api/teachers/import/excel`, `GET /api/teachers/:id`, `PATCH /api/teachers/:id`, `PATCH /api/teachers/:id/toggle-status`
+    9. `Students` (9 endpoints): `POST /api/students`, `GET /api/students`, `GET /api/students/export/excel`, `GET /api/students/export/pdf`, `GET /api/students/export/template`, `POST /api/students/import/excel`, `GET /api/students/:id`, `PATCH /api/students/:id`, `PATCH /api/students/:id/toggle-status`
     10. `Home Stats` (1 endpoint): `GET /api/home-stats`
   - **Pending Modules (Paused until User Finishes Pending Logic Changes):**
-    1. `Groups` (8 endpoints)
+    1. `Groups` (10 endpoints)
     2. `Attendance` (6 endpoints)
     3. `Payments` (3 endpoints)
     4. `Notifications` (1 endpoint)
@@ -154,8 +154,14 @@ src/modules/[entities]/
 
 ### B. Select Constants & Type System (`constants/[entity].select.ts`)
 * Define distinct select objects using the `satisfies Prisma.[Entity]Select` pattern:
-  - `[entity]ListSelect`: Essential fields for list queries, creations, updates, and fast lookups. Excludes heavy relations and sensitive hashes.
-  - `[entity]DetailsSelect`: Composes `...[entity]ListSelect` and includes relational counters `_count: { select: { ... } }` or necessary relationships.
+  - `[entity]ListSelect`: Essential scalar and shallow relational fields for fast lookups, creations, updates, and toggle-status. **MUST NOT CONTAIN `_count`**.
+  - `[entity]DetailsSelect`: Composes `...[entity]ListSelect` and adds relational counters `_count: { select: { ... } }` and deep relational fields.
+* **Usage Rules across Operations:**
+  - `create`, `update`, `toggleStatus`: MUST select `[entity]ListSelect` and return `Promise<[Entity]ListItem>` to avoid slow relational joins and unnecessary `_count` overhead during mutations.
+  - `remove` (Delete): MUST fetch the target record using `[entity]DetailsSelect` specifically to inspect `_count` for relational protection, throwing `BadRequestException` if dependent records exist.
+  - `findOne`: Returns `Promise<[Entity]Details>` or `Promise<[Entity]ListItem>` depending on whether deep details are exposed, using the respective select.
+  - `findAll`: Uses `[entity]DetailsSelect` when count aggregates are displayed in data tables, or `[entity]ListSelect` for lightweight listings.
+  - Data Exports (`getExportDataset`): Uses `[entity]DetailsSelect` when spreadsheet/PDF reports display counts of related entities.
 * Derive and export payload types directly from Prisma:
   ```typescript
   export type [Entity]ListItem = Prisma.[Entity]GetPayload<{ select: typeof [entity]ListSelect }>;

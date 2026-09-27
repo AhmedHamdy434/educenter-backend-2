@@ -1,10 +1,8 @@
 import { Prisma } from '@prisma/client';
 
-export const teacherDetailsSelect = {
+export const teacherListSelect = {
   id: true,
-  bio: true,
   createdAt: true,
-  updatedAt: true,
   user: {
     select: {
       id: true,
@@ -24,42 +22,33 @@ export const teacherDetailsSelect = {
           id: true,
           name: true,
           gradeId: true,
+          grade: {
+            select: {
+              name: true,
+            },
+          },
         },
       },
     },
   },
 } satisfies Prisma.TeacherSelect;
 
-export const teacherListSelect = {
-  id: true,
-  createdAt: true,
-  user: {
+export const teacherDetailsSelect = {
+  ...teacherListSelect,
+  bio: true,
+  updatedAt: true,
+  _count: {
     select: {
-      id: true,
-      fullName: true,
-      email: true,
-      phone: true,
-      avatar: true,
-      isActive: true,
-    },
-  },
-  subjects: {
-    select: {
-      id: true,
-      subject: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
+      groups: true,
+      subjects: true,
     },
   },
 } satisfies Prisma.TeacherSelect;
-
-export type TeacherDetails = Prisma.TeacherGetPayload<{
-  select: typeof teacherDetailsSelect;
-}>;
 
 export type TeacherListItem = Prisma.TeacherGetPayload<{
   select: typeof teacherListSelect;
+}>;
+
+export type TeacherDetails = Prisma.TeacherGetPayload<{
+  select: typeof teacherDetailsSelect;
 }>;

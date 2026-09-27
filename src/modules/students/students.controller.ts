@@ -7,7 +7,6 @@ import {
   Post,
   Query,
   UseGuards,
-  BadRequestException,
   HttpStatus,
   HttpCode,
   ForbiddenException,
@@ -24,20 +23,21 @@ import {
   BypassInterceptor,
   ResponseMessage,
 } from '../../common/decorators/response-message.decorator';
+import { CurrentCenterId } from '../../common/decorators/current-center-id.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { AppRole } from '../../common/enums/app-role.enum';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
+import { ExcelValidationPipe } from '../../shared/excel/pipes/excel-validation.pipe';
+import { ExcelImportSummary } from '../../shared/excel/interfaces/excel.interface';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import type { RequestUser } from '../auth/interfaces/authenticated-request.interface';
+import { StudentDetails, StudentListItem } from './constants/student.select';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { StudentQueryDto } from './dto/get-students.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { StudentsService } from './students.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { SubscriptionGuard } from '../../common/guards/subscription.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { AppRole } from '../../common/enums/app-role.enum';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import type { RequestUser } from '../auth/interfaces/authenticated-request.interface';
-import { ExcelValidationPipe } from '../../shared/excel/pipes/excel-validation.pipe';
-import { ExcelImportSummary } from '../../shared/excel/interfaces/excel.interface';
-import { StudentDetails, StudentListItem } from './constants/student.select';
 
 @Controller('students')
 @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
@@ -52,33 +52,23 @@ export class StudentsController {
   @ResponseMessage('تم إضافة الطالب بنجاح.')
   @Roles(AppRole.OWNER)
   create(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Body() createStudentDto: CreateStudentDto,
-  ): Promise<StudentDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.studentsService.create(user.centerId, createStudentDto);
+  ): Promise<StudentListItem> {
+    return this.studentsService.create(centerId, createStudentDto);
   }
 
   /**
-   * جلب قائمة الطلاب للمركز الحالي.
+   * جلب قائمة الطلاب للمركز الحالي مع دعم البحث، التصفية والفرز.
    */
   @Get()
   @ResponseMessage('تم جلب قائمة الطلاب بنجاح.')
   @Roles(AppRole.OWNER, AppRole.TEACHER)
   findAll(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Query() query: StudentQueryDto,
   ): Promise<{ data: StudentListItem[]; meta: any }> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.studentsService.findAll(user.centerId, query);
+    return this.studentsService.findAll(centerId, query);
   }
 
   /**
@@ -89,61 +79,45 @@ export class StudentsController {
   @Roles(AppRole.OWNER, AppRole.TEACHER)
   @BypassInterceptor()
   async exportExcel(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Query() query: StudentQueryDto,
     @Res() res: Response,
   ): Promise<void> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    const buffer = await this.studentsService.exportToExcel(
-      user.centerId,
-      query,
-    );
-    const dateStr = new Date().toISOString().split('T')[0];
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    );
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="students-${dateStr}.xlsx"`,
-    );
-    res.send(buffer);
+    await this.studentsService.exportToExcel(centerId, query, res);
   }
 
   /**
-   * تحميل قالب Excel فارغ ومجهز لاستيراد بيانات الطلاب.
+   * تصدير قائمة الطلاب للمركز الحالي إلى ملف PDF (Cairo Font RTL).
+   * تم وضعه قبل مسار :id لتجنب تعارض المسارات في Express.
+   */
+  @Get('export/pdf')
+  @Roles(AppRole.OWNER, AppRole.TEACHER)
+  @BypassInterceptor()
+  async exportPdf(
+    @CurrentCenterId() centerId: string,
+    @Query() query: StudentQueryDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.studentsService.exportToPdf(centerId, query, res);
+  }
+
+  /**
+   * تحميل قالب Excel فارغ ومجهز لاستيراد بيانات الطلاب مع المراحل المعتمدة.
    * تم وضعه قبل مسار :id لتجنب تعارض المسارات في Express.
    */
   @Get('export/template')
   @Roles(AppRole.OWNER)
   @BypassInterceptor()
   async getTemplate(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Res() res: Response,
   ): Promise<void> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    const buffer = await this.studentsService.getImportTemplate(user.centerId);
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    );
-    res.setHeader(
-      'Content-Disposition',
-      'attachment; filename="students-template.xlsx"',
-    );
-    res.send(buffer);
+    await this.studentsService.getImportTemplate(centerId, res);
   }
 
   /**
-   * استيراد بيانات الطلاب من ملف Excel المرفوع.
+   * استيراد بيانات الطلاب من ملف Excel المرفوع مع دعم فحص المعاينة (dryRun).
+   * تم وضعه قبل مسار :id لتجنب تعارض المسارات في Express.
    */
   @Post('import/excel')
   @HttpCode(HttpStatus.OK)
@@ -152,7 +126,7 @@ export class StudentsController {
   @UseInterceptors(FileInterceptor('file'))
   @ApiConsumes('multipart/form-data')
   async importExcel(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @UploadedFile(new ExcelValidationPipe()) file: Express.Multer.File,
     @Query('dryRun', new DefaultValuePipe(false), ParseBoolPipe)
     dryRun: boolean,
@@ -164,16 +138,7 @@ export class StudentsController {
       gradeName: string;
     }>
   > {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.studentsService.importFromExcel(
-      user.centerId,
-      file.buffer,
-      dryRun,
-    );
+    return this.studentsService.importFromExcel(centerId, file.buffer, dryRun);
   }
 
   /**
@@ -183,15 +148,11 @@ export class StudentsController {
   @ResponseMessage('تم جلب تفاصيل الطالب بنجاح.')
   @Roles(AppRole.OWNER, AppRole.TEACHER, AppRole.STUDENT)
   async findOne(
+    @CurrentCenterId() centerId: string,
     @CurrentUser() user: RequestUser,
     @Param('id') id: string,
   ): Promise<StudentDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    const student = await this.studentsService.findOne(user.centerId, id);
+    const student = await this.studentsService.findOne(centerId, id);
 
     // التحقق من صلاحيات الطالب: يمكنه فقط استعراض حسابه الشخصي
     if (user.role === AppRole.STUDENT && student.user.id !== user.id) {
@@ -210,16 +171,11 @@ export class StudentsController {
   @ResponseMessage('تم تحديث بيانات الطالب بنجاح.')
   @Roles(AppRole.OWNER)
   update(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Param('id') id: string,
     @Body() updateStudentDto: UpdateStudentDto,
-  ): Promise<StudentDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.studentsService.update(user.centerId, id, updateStudentDto);
+  ): Promise<StudentListItem> {
+    return this.studentsService.update(centerId, id, updateStudentDto);
   }
 
   /**
@@ -229,14 +185,9 @@ export class StudentsController {
   @ResponseMessage('تم تحديث حالة تفعيل حساب الطالب بنجاح.')
   @Roles(AppRole.OWNER)
   toggleStatus(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Param('id') id: string,
-  ): Promise<StudentDetails> {
-    if (!user.centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return this.studentsService.toggleStatus(user.centerId, id);
+  ): Promise<StudentListItem> {
+    return this.studentsService.toggleStatus(centerId, id);
   }
 }

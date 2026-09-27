@@ -6,12 +6,14 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import type { Response } from 'express';
 import { buildMeta } from '../../common/utils/buildMeta';
 import { hashPassword } from '../../common/utils/password.util';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { SubscriptionValidationService } from '../subscription-plans/subscription-validation.service';
 import { ExcelService } from '../../shared/excel/excel.service';
+import { PdfService } from '../../shared/pdf/pdf.service';
 import {
   ExcelImportSummary,
   RowValidationError,
@@ -32,6 +34,13 @@ import { UpdateStudentDto } from './dto/update-student.dto';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EGYPT_PHONE_REGEX = /^01[0125]\d{8}$/;
+const EXCEL_MIME_TYPE =
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const PDF_MIME_TYPE = 'application/pdf';
+const STUDENT_RELATION_COUNT_FIELDS = {
+  groups: 'groups',
+  attendance: 'attendance',
+};
 
 @Injectable()
 export class StudentsService {
@@ -40,6 +49,7 @@ export class StudentsService {
     private readonly usersService: UsersService,
     private readonly subscriptionValidationService: SubscriptionValidationService,
     private readonly excelService: ExcelService,
+    private readonly pdfService: PdfService,
   ) {}
 
   /**
@@ -48,7 +58,7 @@ export class StudentsService {
   async create(
     centerId: string,
     data: CreateStudentDto,
-  ): Promise<StudentDetails> {
+  ): Promise<StudentListItem> {
     await this.subscriptionValidationService.validateStudentLimit(centerId);
     return this.prisma.$transaction(async (tx) => {
       // 1. التحقق من المرحلة الدراسية وصلاحيتها
@@ -87,10 +97,10 @@ export class StudentsService {
         },
       });
 
-      // 5. استرجاع تفاصيل الطالب كاملة
+      // 5. استرجاع بيانات الطالب المنشأ
       const result = await tx.student.findUnique({
         where: { id: student.id },
-        select: studentDetailsSelect,
+        select: studentListSelect,
       });
 
       if (!result) {
@@ -141,6 +151,8 @@ export class StudentsService {
       };
     }
 
+    const orderBy = this.buildOrderBy(query);
+
     const [total, data] = await Promise.all([
       this.prisma.student.count({ where }),
       this.prisma.student.findMany({
@@ -148,7 +160,7 @@ export class StudentsService {
         skip,
         take,
         select: studentListSelect,
-        orderBy: [{ createdAt: 'desc' }], // ترتيب تنازلي مستقر
+        orderBy,
       }),
     ]);
 
@@ -182,7 +194,7 @@ export class StudentsService {
     centerId: string,
     id: string,
     data: UpdateStudentDto,
-  ): Promise<StudentDetails> {
+  ): Promise<StudentListItem> {
     const currentStudent = await this.findOne(centerId, id);
 
     return this.prisma.$transaction(async (tx) => {
@@ -240,10 +252,10 @@ export class StudentsService {
         });
       }
 
-      // 4. استرجاع تفاصيل الطالب المحدثة
+      // 4. استرجاع بيانات الطالب المحدثة
       const result = await tx.student.findUnique({
         where: { id },
-        select: studentDetailsSelect,
+        select: studentListSelect,
       });
 
       if (!result) {
@@ -257,7 +269,7 @@ export class StudentsService {
   /**
    * تبديل حالة تفعيل حساب الطالب (نشط/معطل).
    */
-  async toggleStatus(centerId: string, id: string): Promise<StudentDetails> {
+  async toggleStatus(centerId: string, id: string): Promise<StudentListItem> {
     const currentStudent = await this.findOne(centerId, id);
 
     return this.prisma.$transaction(async (tx) => {
@@ -267,7 +279,7 @@ export class StudentsService {
 
       const result = await tx.student.findUnique({
         where: { id },
-        select: studentDetailsSelect,
+        select: studentListSelect,
       });
 
       if (!result) {
@@ -279,12 +291,54 @@ export class StudentsService {
   }
 
   /**
-   * تصدير قائمة الطلاب للمركز إلى ملف Excel.
+   * إرسال ملف للعميل عبر Response مع الهيدرز المناسبة.
    */
-  async exportToExcel(
-    centerId: string,
+  private sendFileDownload(
+    res: Response,
+    buffer: Buffer,
+    filename: string,
+    contentType: string,
+  ): void {
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  }
+
+  /**
+   * بناء كائن الترتيب (orderBy) للطلاب مع دعم حقول المستخدم وعدادات العلاقات.
+   */
+  private buildOrderBy(
     query: StudentQueryDto,
-  ): Promise<Buffer> {
+  ):
+    | Prisma.StudentOrderByWithRelationInput
+    | Prisma.StudentOrderByWithRelationInput[] {
+    const { sortBy, sortOrder } = query;
+    const order = sortOrder || 'desc';
+
+    if (
+      sortBy === 'fullName' ||
+      sortBy === 'name' ||
+      sortBy === 'email' ||
+      sortBy === 'phone'
+    ) {
+      const field = sortBy === 'name' ? 'fullName' : sortBy;
+      return { user: { [field]: order } };
+    }
+
+    return query.getOrderBy<
+      | Prisma.StudentOrderByWithRelationInput
+      | Prisma.StudentOrderByWithRelationInput[]
+    >(
+      ['createdAt', 'parentPhone'],
+      [{ createdAt: 'desc' }],
+      STUDENT_RELATION_COUNT_FIELDS,
+    );
+  }
+
+  /**
+   * جلب وتجهيز بيانات الطلاب للمركز بصيغة مصفوفة مهيأة للتصدير (Excel / PDF).
+   */
+  private async getExportDataset(centerId: string, query: StudentQueryDto) {
     const { active, gradeId } = query;
 
     const userWhere: Prisma.UserWhereInput = {
@@ -318,47 +372,44 @@ export class StudentsService {
       };
     }
 
+    const orderBy = this.buildOrderBy(query);
+
     const students = await this.prisma.student.findMany({
       where,
-      select: {
-        id: true,
-        parentPhone: true,
-        notes: true,
-        createdAt: true,
-        user: {
-          select: {
-            fullName: true,
-            email: true,
-            phone: true,
-            isActive: true,
-          },
-        },
-        enrollments: {
-          where: { isActive: true },
-          select: {
-            grade: {
-              select: { name: true },
-            },
-          },
-        },
-      },
-      orderBy: [{ createdAt: 'desc' }],
+      select: studentDetailsSelect,
+      orderBy,
     });
 
-    const exportRows = students.map((s) => ({
+    const dateStr = new Date().toISOString().split('T')[0];
+    const rows = students.map((s) => ({
       fullName: s.user.fullName,
       email: s.user.email,
       phone: s.user.phone || '—',
       parentPhone: s.parentPhone || '—',
       gradeName: s.enrollments[0]?.grade?.name || '—',
       status: s.user.isActive ? 'نشط' : 'معطل',
+      groupsCount: s._count?.groups || 0,
+      attendanceCount: s._count?.attendance || 0,
       notes: s.notes || '—',
       createdAt: s.createdAt
         ? new Date(s.createdAt).toISOString().split('T')[0]
         : '—',
     }));
 
-    return this.excelService.buildWorkbookBuffer({
+    return { rows, dateStr };
+  }
+
+  /**
+   * تصدير قائمة الطلاب للمركز إلى ملف Excel مع دعم الفلاتر والفرز.
+   */
+  async exportToExcel(
+    centerId: string,
+    query: StudentQueryDto,
+    res?: Response,
+  ): Promise<Buffer | void> {
+    const { rows, dateStr } = await this.getExportDataset(centerId, query);
+
+    const buffer = await this.excelService.buildWorkbookBuffer({
       sheetName: 'الطلاب',
       columns: [
         { header: 'اسم الطالب', key: 'fullName', width: 25 },
@@ -367,17 +418,82 @@ export class StudentsService {
         { header: 'رقم ولي الأمر', key: 'parentPhone', width: 18, numFmt: '@' },
         { header: 'المرحلة الدراسية', key: 'gradeName', width: 22 },
         { header: 'الحالة', key: 'status', width: 14 },
-        { header: 'ملاحظات', key: 'notes', width: 30 },
+        { header: 'عدد المجموعات', key: 'groupsCount', width: 15 },
+        { header: 'مرات الحضور', key: 'attendanceCount', width: 15 },
         { header: 'تاريخ التسجيل', key: 'createdAt', width: 18 },
+        { header: 'ملاحظات', key: 'notes', width: 30 },
       ],
-      data: exportRows,
+      data: rows,
     });
+
+    if (res) {
+      return this.sendFileDownload(
+        res,
+        buffer,
+        `students-${dateStr}.xlsx`,
+        EXCEL_MIME_TYPE,
+      );
+    }
+
+    return buffer;
+  }
+
+  /**
+   * تصدير قائمة الطلاب للمركز إلى ملف PDF (Cairo Font RTL).
+   */
+  async exportToPdf(
+    centerId: string,
+    query: StudentQueryDto,
+    res?: Response,
+  ): Promise<Buffer | void> {
+    const { rows, dateStr } = await this.getExportDataset(centerId, query);
+
+    const buffer = await this.pdfService.buildTablePdfBuffer({
+      title: 'تقرير الطلاب',
+      dateStr,
+      columns: [
+        { header: 'اسم الطالب', key: 'fullName', width: '*', align: 'right' },
+        { header: 'الهاتف', key: 'phone', width: 75, align: 'center' },
+        { header: 'ولي الأمر', key: 'parentPhone', width: 75, align: 'center' },
+        { header: 'المرحلة', key: 'gradeName', width: 85, align: 'right' },
+        { header: 'الحالة', key: 'status', width: 45, align: 'center' },
+        { header: 'المجموعات', key: 'groupsCount', width: 45, align: 'center' },
+        {
+          header: 'الحضور',
+          key: 'attendanceCount',
+          width: 45,
+          align: 'center',
+        },
+        {
+          header: 'تاريخ التسجيل',
+          key: 'createdAt',
+          width: 65,
+          align: 'center',
+        },
+      ],
+      data: rows,
+      orientation: 'landscape',
+    });
+
+    if (res) {
+      return this.sendFileDownload(
+        res,
+        buffer,
+        `students-${dateStr}.pdf`,
+        PDF_MIME_TYPE,
+      );
+    }
+
+    return buffer;
   }
 
   /**
    * تحميل قالب Excel فارغ ومجهز لاستيراد الطلاب مع قائمة المراحل المعتمدة بالمركز.
    */
-  async getImportTemplate(centerId: string): Promise<Buffer> {
+  async getImportTemplate(
+    centerId: string,
+    res?: Response,
+  ): Promise<Buffer | void> {
     const grades = await this.prisma.grade.findMany({
       where: { centerId, isActive: true },
       select: { name: true },
@@ -387,7 +503,7 @@ export class StudentsService {
     const gradeNames = grades.map((g) => g.name);
     const exampleGrade = gradeNames[0] || 'الصف الأول الثانوي';
 
-    return this.excelService.buildTemplateBuffer({
+    const buffer = await this.excelService.buildTemplateBuffer({
       dataSheetName: 'بيانات الطلاب',
       instructionsSheetName: 'دليل الاستيراد',
       columns: [
@@ -458,6 +574,17 @@ export class StudentsService {
         },
       ],
     });
+
+    if (res) {
+      return this.sendFileDownload(
+        res,
+        buffer,
+        'students-template.xlsx',
+        EXCEL_MIME_TYPE,
+      );
+    }
+
+    return buffer;
   }
 
   /**
