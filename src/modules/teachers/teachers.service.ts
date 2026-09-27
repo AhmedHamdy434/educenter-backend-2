@@ -319,6 +319,28 @@ export class TeachersService {
   }
 
   /**
+   * حذف معلم معين مع حسابه بعد التحقق من عدم ارتباطه بأي مجموعات دراسية أو مواد.
+   */
+  async remove(centerId: string, id: string): Promise<void> {
+    const teacher = await this.findOne(centerId, id);
+
+    if (teacher._count.groups > 0 || teacher._count.subjects > 0) {
+      throw new BadRequestException(
+        'لا يمكن حذف المعلم لوجود مجموعات دراسية أو مواد دراسية مرتبطة به.',
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.teacher.delete({
+        where: { id },
+      });
+      await tx.user.delete({
+        where: { id: teacher.user.id },
+      });
+    });
+  }
+
+  /**
    * إرسال ملف للعميل عبر Response مع الهيدرز المناسبة.
    */
   private sendFileDownload(

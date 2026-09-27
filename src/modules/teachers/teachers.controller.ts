@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -176,5 +177,19 @@ export class TeachersController {
     @Param('id') id: string,
   ): Promise<TeacherListItem> {
     return this.teachersService.toggleStatus(centerId, id);
+  }
+
+  /**
+   * حذف مدرس معين مع حسابه بعد التحقق من عدم ارتباطه بأي بيانات.
+   */
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  @ResponseMessage('تم حذف المدرس بنجاح.')
+  @Roles(AppRole.OWNER)
+  remove(
+    @CurrentCenterId() centerId: string,
+    @Param('id') id: string,
+  ): Promise<void> {
+    return this.teachersService.remove(centerId, id);
   }
 }

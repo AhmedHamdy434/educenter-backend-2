@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -16,7 +17,9 @@ describe('TeachersService - Excel & PDF, Import & Export, Sorting', () => {
   let service: TeachersService;
   let prisma: {
     teacher: {
+      findFirst: jest.Mock;
       findMany: jest.Mock;
+      delete: jest.Mock;
       count: jest.Mock;
       createManyAndReturn: jest.Mock;
     };
@@ -25,6 +28,7 @@ describe('TeachersService - Excel & PDF, Import & Export, Sorting', () => {
     };
     user: {
       findMany: jest.Mock;
+      delete: jest.Mock;
       createManyAndReturn: jest.Mock;
     };
     teacherSubject: {
@@ -54,7 +58,9 @@ describe('TeachersService - Excel & PDF, Import & Export, Sorting', () => {
   beforeEach(async () => {
     prisma = {
       teacher: {
+        findFirst: jest.fn(),
         findMany: jest.fn(),
+        delete: jest.fn(),
         count: jest.fn(),
         createManyAndReturn: jest.fn(),
       },
@@ -63,6 +69,7 @@ describe('TeachersService - Excel & PDF, Import & Export, Sorting', () => {
       },
       user: {
         findMany: jest.fn(),
+        delete: jest.fn(),
         createManyAndReturn: jest.fn(),
       },
       teacherSubject: {
@@ -435,7 +442,8 @@ describe('TeachersService - Excel & PDF, Import & Export, Sorting', () => {
             values: {
               'اسم المدرس': 'مدرس 1',
               'البريد الإلكتروني': 'teacher1@example.com',
-              'معرفات المواد (Subject IDs مفصولة بفاصلة)': 'non-existent-sub-id',
+              'معرفات المواد (Subject IDs مفصولة بفاصلة)':
+                'non-existent-sub-id',
             },
           },
         ],
@@ -534,6 +542,68 @@ describe('TeachersService - Excel & PDF, Import & Export, Sorting', () => {
       });
       expect(mockTx.teacher.createManyAndReturn).toHaveBeenCalled();
       expect(mockTx.teacherSubject.createMany).toHaveBeenCalled();
+    });
+  });
+
+  describe('remove', () => {
+    it('should throw NotFoundException if teacher does not exist', async () => {
+      prisma.teacher.findFirst.mockResolvedValue(null);
+
+      await expect(service.remove(centerId, 'teacher-1')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should throw BadRequestException if teacher is linked to groups', async () => {
+      prisma.teacher.findFirst.mockResolvedValue({
+        id: 'teacher-1',
+        user: { id: 'user-1' },
+        _count: { groups: 2, subjects: 0 },
+      });
+
+      await expect(service.remove(centerId, 'teacher-1')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should throw BadRequestException if teacher is linked to subjects', async () => {
+      prisma.teacher.findFirst.mockResolvedValue({
+        id: 'teacher-1',
+        user: { id: 'user-1' },
+        _count: { groups: 0, subjects: 1 },
+      });
+
+      await expect(service.remove(centerId, 'teacher-1')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should successfully delete teacher and associated user in transaction when no relations', async () => {
+      prisma.teacher.findFirst.mockResolvedValue({
+        id: 'teacher-1',
+        user: { id: 'user-1' },
+        _count: { groups: 0, subjects: 0 },
+      });
+
+      const mockTx = {
+        teacher: { delete: jest.fn().mockResolvedValue({ id: 'teacher-1' }) },
+        user: { delete: jest.fn().mockResolvedValue({ id: 'user-1' }) },
+      };
+      prisma.$transaction.mockImplementation(
+        async (cb: (tx: typeof mockTx) => Promise<unknown>) => {
+          return await cb(mockTx);
+        },
+      );
+
+      await service.remove(centerId, 'teacher-1');
+
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(mockTx.teacher.delete).toHaveBeenCalledWith({
+        where: { id: 'teacher-1' },
+      });
+      expect(mockTx.user.delete).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+      });
     });
   });
 });

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -189,5 +190,19 @@ export class SubjectsController {
     @Param('id') id: string,
   ): Promise<SubjectListItem> {
     return this.subjectsService.toggleStatus(centerId, id);
+  }
+
+  /**
+   * حذف مادة دراسية معينة تابعة للمركز الحالي.
+   */
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  @ResponseMessage('تم حذف المادة الدراسية بنجاح.')
+  @Roles(AppRole.OWNER)
+  remove(
+    @CurrentCenterId() centerId: string,
+    @Param('id') id: string,
+  ): Promise<void> {
+    return this.subjectsService.remove(centerId, id);
   }
 }

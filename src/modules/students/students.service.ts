@@ -291,6 +291,28 @@ export class StudentsService {
   }
 
   /**
+   * حذف طالب معين مع حسابه بعد التحقق من عدم ارتباطه بأي مجموعات دراسية أو سجلات حضور.
+   */
+  async remove(centerId: string, id: string): Promise<void> {
+    const student = await this.findOne(centerId, id);
+
+    if (student._count.groups > 0 || student._count.attendance > 0) {
+      throw new BadRequestException(
+        'لا يمكن حذف الطالب لوجود مجموعات دراسية أو سجلات حضور مرتبطة به.',
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.student.delete({
+        where: { id },
+      });
+      await tx.user.delete({
+        where: { id: student.user.id },
+      });
+    });
+  }
+
+  /**
    * إرسال ملف للعميل عبر Response مع الهيدرز المناسبة.
    */
   private sendFileDownload(

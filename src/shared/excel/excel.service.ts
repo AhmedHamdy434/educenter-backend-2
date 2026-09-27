@@ -243,8 +243,7 @@ export class ExcelService {
 
         if (refTable.rows && refTable.rows.length > 0) {
           const subHeaderRow = instructionsSheet.getRow(currentRowIdx);
-          const idHeader =
-            refTable.headers?.[0] || 'معرف الكيان (ID - للنسخ)';
+          const idHeader = refTable.headers?.[0] || 'معرف الكيان (ID - للنسخ)';
           const nameHeader = refTable.headers?.[1] || 'الاسم والبيان';
 
           subHeaderRow.getCell(2).value = idHeader;

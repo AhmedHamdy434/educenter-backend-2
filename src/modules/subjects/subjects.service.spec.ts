@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -21,6 +22,7 @@ describe('SubjectsService - Excel & PDF Import/Export', () => {
       create: jest.Mock;
       createMany: jest.Mock;
       update: jest.Mock;
+      delete: jest.Mock;
       count: jest.Mock;
     };
     grade: {
@@ -52,6 +54,7 @@ describe('SubjectsService - Excel & PDF Import/Export', () => {
         create: jest.fn(),
         createMany: jest.fn(),
         update: jest.fn(),
+        delete: jest.fn(),
         count: jest.fn(),
       },
       grade: {
@@ -590,6 +593,52 @@ describe('SubjectsService - Excel & PDF Import/Export', () => {
       await expect(
         service.importFromExcel(centerId, mockFileBuffer, false),
       ).rejects.toThrow(UnprocessableEntityException);
+    });
+  });
+
+  describe('remove', () => {
+    it('should throw NotFoundException if subject does not exist', async () => {
+      prisma.subject.findFirst.mockResolvedValue(null);
+
+      await expect(service.remove(centerId, 'subject-1')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should throw BadRequestException if subject is linked to groups', async () => {
+      prisma.subject.findFirst.mockResolvedValue({
+        id: 'subject-1',
+        _count: { groups: 1, teacherSubjects: 0 },
+      });
+
+      await expect(service.remove(centerId, 'subject-1')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should throw BadRequestException if subject is linked to teacherSubjects', async () => {
+      prisma.subject.findFirst.mockResolvedValue({
+        id: 'subject-1',
+        _count: { groups: 0, teacherSubjects: 2 },
+      });
+
+      await expect(service.remove(centerId, 'subject-1')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should successfully delete subject if not linked to any groups or teachers', async () => {
+      prisma.subject.findFirst.mockResolvedValue({
+        id: 'subject-1',
+        _count: { groups: 0, teacherSubjects: 0 },
+      });
+      prisma.subject.delete.mockResolvedValue({ id: 'subject-1' });
+
+      await service.remove(centerId, 'subject-1');
+
+      expect(prisma.subject.delete).toHaveBeenCalledWith({
+        where: { id: 'subject-1' },
+      });
     });
   });
 });

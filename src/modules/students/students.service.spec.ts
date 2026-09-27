@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -16,7 +17,9 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
   let service: StudentsService;
   let prisma: {
     student: {
+      findFirst: jest.Mock;
       findMany: jest.Mock;
+      delete: jest.Mock;
       count: jest.Mock;
       createManyAndReturn: jest.Mock;
     };
@@ -25,6 +28,7 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
     };
     user: {
       findMany: jest.Mock;
+      delete: jest.Mock;
       createManyAndReturn: jest.Mock;
     };
     studentEnrollment: {
@@ -54,7 +58,9 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
   beforeEach(async () => {
     prisma = {
       student: {
+        findFirst: jest.fn(),
         findMany: jest.fn(),
+        delete: jest.fn(),
         count: jest.fn(),
         createManyAndReturn: jest.fn(),
       },
@@ -63,6 +69,7 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
       },
       user: {
         findMany: jest.fn(),
+        delete: jest.fn(),
         createManyAndReturn: jest.fn(),
       },
       studentEnrollment: {
@@ -508,6 +515,68 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
       });
       expect(mockTx.student.createManyAndReturn).toHaveBeenCalled();
       expect(mockTx.studentEnrollment.createMany).toHaveBeenCalled();
+    });
+  });
+
+  describe('remove', () => {
+    it('should throw NotFoundException if student does not exist', async () => {
+      prisma.student.findFirst.mockResolvedValue(null);
+
+      await expect(service.remove(centerId, 'student-1')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should throw BadRequestException if student is linked to groups', async () => {
+      prisma.student.findFirst.mockResolvedValue({
+        id: 'student-1',
+        user: { id: 'user-1' },
+        _count: { groups: 1, attendance: 0 },
+      });
+
+      await expect(service.remove(centerId, 'student-1')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should throw BadRequestException if student has attendance records', async () => {
+      prisma.student.findFirst.mockResolvedValue({
+        id: 'student-1',
+        user: { id: 'user-1' },
+        _count: { groups: 0, attendance: 3 },
+      });
+
+      await expect(service.remove(centerId, 'student-1')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should successfully delete student and associated user in transaction when no relations', async () => {
+      prisma.student.findFirst.mockResolvedValue({
+        id: 'student-1',
+        user: { id: 'user-1' },
+        _count: { groups: 0, attendance: 0 },
+      });
+
+      const mockTx = {
+        student: { delete: jest.fn().mockResolvedValue({ id: 'student-1' }) },
+        user: { delete: jest.fn().mockResolvedValue({ id: 'user-1' }) },
+      };
+      prisma.$transaction.mockImplementation(
+        async (cb: (tx: typeof mockTx) => Promise<unknown>) => {
+          return await cb(mockTx);
+        },
+      );
+
+      await service.remove(centerId, 'student-1');
+
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(mockTx.student.delete).toHaveBeenCalledWith({
+        where: { id: 'student-1' },
+      });
+      expect(mockTx.user.delete).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+      });
     });
   });
 });

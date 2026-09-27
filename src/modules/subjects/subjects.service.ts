@@ -182,6 +182,30 @@ export class SubjectsService {
   }
 
   /**
+   * حذف مادة دراسية معينة بعد التحقق من عدم ارتباطها بأي مجموعات دراسية أو معلمين.
+   */
+  async remove(centerId: string, id: string): Promise<void> {
+    const subject = await this.prisma.subject.findFirst({
+      where: { id, centerId },
+      select: subjectDetailsSelect,
+    });
+
+    if (!subject) {
+      throw new NotFoundException('المادة الدراسية المطلوبة غير موجودة.');
+    }
+
+    if (subject._count.groups > 0 || subject._count.teacherSubjects > 0) {
+      throw new BadRequestException(
+        'لا يمكن حذف المادة الدراسية لوجود مجموعات دراسية أو معلمين مرتبطين بها.',
+      );
+    }
+
+    await this.prisma.subject.delete({
+      where: { id },
+    });
+  }
+
+  /**
    * جلب قائمة خيارات المواد الدراسية النشطة لاستخدامها في حقول الاختيار (Select Options).
    */
   async findOptions(
