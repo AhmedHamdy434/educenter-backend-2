@@ -18,13 +18,12 @@ import {
   ExcelImportSummary,
   RowValidationError,
 } from '../../shared/excel/interfaces/excel.interface';
+import { normalizeEgyptianPhone } from '../../shared/excel/utils/arabic-normalizer.util';
 import {
-  normalizeArabicText,
-  normalizeEgyptianPhone,
-} from '../../shared/excel/utils/arabic-normalizer.util';
-import {
+  studentByCodeSelect,
   studentDetailsSelect,
   studentListSelect,
+  StudentByCodeDetails,
   StudentDetails,
   StudentListItem,
 } from './constants/student.select';
@@ -53,6 +52,62 @@ export class StudentsService {
   ) {}
 
   /**
+   * توليد كود فريد للطالب غير مستخدم مسبقاً في النظام.
+   * بصيغة ملائمة للباركود والـ QR Code والقراءة البشرية (مثل STU-104928).
+   */
+  async generateUniqueStudentCode(
+    tx?: Prisma.TransactionClient,
+  ): Promise<string> {
+    const client = tx ?? this.prisma;
+    const maxAttempts = 15;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const randomDigits = Math.floor(100000 + Math.random() * 900000);
+      const candidateCode = `STU-${randomDigits}`;
+
+      const existing = await client.student.findUnique({
+        where: { code: candidateCode },
+        select: { id: true },
+      });
+
+      if (!existing) {
+        return candidateCode;
+      }
+    }
+
+    const timestampSuffix = Date.now().toString().slice(-6);
+    const randomSuffix = Math.floor(10 + Math.random() * 90);
+    return `STU-${timestampSuffix}${randomSuffix}`;
+  }
+
+  /**
+   * توليد مجموعة أكواد فريدة دفعة واحدة لعمليات الاستيراد الجماعي.
+   */
+  async generateBatchUniqueStudentCodes(
+    count: number,
+    tx?: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const client = tx ?? this.prisma;
+    const codes = new Set<string>();
+
+    while (codes.size < count) {
+      const randomDigits = Math.floor(100000 + Math.random() * 900000);
+      const candidateCode = `STU-${randomDigits}`;
+      if (!codes.has(candidateCode)) {
+        const existing = await client.student.findUnique({
+          where: { code: candidateCode },
+          select: { id: true },
+        });
+        if (!existing) {
+          codes.add(candidateCode);
+        }
+      }
+    }
+
+    return Array.from(codes);
+  }
+
+  /**
    * إنشاء طالب جديد مع حسابه وسجله الدراسي في معاملة واحدة.
    */
   async create(
@@ -78,11 +133,13 @@ export class StudentsService {
         },
       );
 
-      // 3. إنشاء سجل الطالب
+      // 3. توليد كود الطالب وإنشاء سجل الطالب
+      const code = await this.generateUniqueStudentCode(tx);
       const student = await tx.student.create({
         data: {
           userId: user.id,
           centerId,
+          code,
           parentPhone: data.parentPhone || null,
           notes: data.notes || null,
         },
@@ -134,6 +191,7 @@ export class StudentsService {
 
     if (query.search) {
       where.OR = [
+        { code: { contains: query.search, mode: 'insensitive' } },
         { user: { fullName: { contains: query.search, mode: 'insensitive' } } },
         { user: { email: { contains: query.search, mode: 'insensitive' } } },
         { user: { phone: { contains: query.search, mode: 'insensitive' } } },
@@ -182,6 +240,40 @@ export class StudentsService {
 
     if (!student) {
       throw new NotFoundException('الطالب المطلوب غير موجود.');
+    }
+
+    return student;
+  }
+
+  /**
+   * جلب بيانات الطالب للتعرف عليه بواسطة الكود أو الباركود مع مراعاة العزل التام للمركز.
+   */
+  async findByCode(
+    centerId: string,
+    rawCode: string,
+  ): Promise<StudentByCodeDetails> {
+    const code = rawCode?.trim();
+    if (!code) {
+      throw new BadRequestException('كود الطالب مطلوب.');
+    }
+
+    const searchCodes = [code.toUpperCase()];
+    if (!code.toUpperCase().startsWith('STU-')) {
+      searchCodes.push(`STU-${code.toUpperCase()}`);
+    }
+
+    const student = await this.prisma.student.findFirst({
+      where: {
+        centerId,
+        code: { in: searchCodes },
+      },
+      select: studentByCodeSelect,
+    });
+
+    if (!student) {
+      throw new NotFoundException(
+        'لم يتم العثور على طالب بهذا الكود في هذا المركز.',
+      );
     }
 
     return student;
@@ -377,6 +469,7 @@ export class StudentsService {
 
     if (query.search) {
       where.OR = [
+        { code: { contains: query.search, mode: 'insensitive' } },
         { user: { fullName: { contains: query.search, mode: 'insensitive' } } },
         { user: { email: { contains: query.search, mode: 'insensitive' } } },
         { user: { phone: { contains: query.search, mode: 'insensitive' } } },
@@ -404,6 +497,7 @@ export class StudentsService {
 
     const dateStr = new Date().toISOString().split('T')[0];
     const rows = students.map((s) => ({
+      code: s.code,
       fullName: s.user.fullName,
       email: s.user.email,
       phone: s.user.phone || '—',
@@ -435,6 +529,12 @@ export class StudentsService {
     const buffer = await this.excelService.buildWorkbookBuffer({
       sheetName: 'الطلاب',
       columns: [
+        {
+          header: 'كود الطالب (Code / Barcode)',
+          key: 'code',
+          width: 22,
+          numFmt: '@',
+        },
         { header: 'اسم الطالب', key: 'fullName', width: 25 },
         { header: 'البريد الإلكتروني', key: 'email', width: 28 },
         { header: 'رقم هاتف الطالب', key: 'phone', width: 18, numFmt: '@' },
@@ -985,8 +1085,13 @@ export class StudentsService {
           emailToUserId.set(u.email.toLowerCase(), u.id);
         }
 
+        const generatedCodes = await this.generateBatchUniqueStudentCodes(
+          validatedRows.length,
+          tx,
+        );
+
         // ب. إدخال سجلات الطلاب دفعة واحدة والحصول على الـ IDs
-        const studentsToInsert = validatedRows.map((r) => {
+        const studentsToInsert = validatedRows.map((r, index) => {
           const userId = emailToUserId.get(r.email.toLowerCase());
           if (!userId) {
             throw new NotFoundException(
@@ -996,6 +1101,7 @@ export class StudentsService {
           return {
             userId,
             centerId,
+            code: generatedCodes[index],
             parentPhone: r.parentPhone,
             notes: r.notes,
           };

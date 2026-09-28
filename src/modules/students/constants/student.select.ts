@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 
 export const studentListSelect = {
   id: true,
+  code: true,
   parentPhone: true,
   createdAt: true,
   centerId: true,
@@ -44,10 +45,34 @@ export const studentDetailsSelect = {
   },
 } satisfies Prisma.StudentSelect;
 
+export const studentByCodeSelect = {
+  ...studentListSelect,
+  notes: true,
+  groups: {
+    select: {
+      id: true,
+      groupId: true,
+      joinedAt: true,
+      group: {
+        select: {
+          id: true,
+          name: true,
+          isActive: true,
+          monthlyFee: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.StudentSelect;
+
 export type StudentListItem = Prisma.StudentGetPayload<{
   select: typeof studentListSelect;
 }>;
 
 export type StudentDetails = Prisma.StudentGetPayload<{
   select: typeof studentDetailsSelect;
+}>;
+
+export type StudentByCodeDetails = Prisma.StudentGetPayload<{
+  select: typeof studentByCodeSelect;
 }>;

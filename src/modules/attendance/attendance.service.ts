@@ -163,6 +163,7 @@ export class AttendanceService {
       const record = recordsMap.get(item.studentId);
       return {
         studentId: item.studentId,
+        studentCode: item.student.code,
         fullName: item.student.user.fullName,
         phone: item.student.user.phone,
         avatar: item.student.user.avatar,
@@ -206,7 +207,64 @@ export class AttendanceService {
       throw new NotFoundException('جلسة تحضير الحضور المطلوبة غير موجودة.');
     }
 
-    const studentIds = dto.records.map((r) => r.studentId);
+    // Verify each record has either studentId or studentCode
+    for (const record of dto.records) {
+      if (!record.studentId && !record.studentCode) {
+        throw new BadRequestException(
+          'معرف الطالب أو كود الطالب مطلوب لكل سجل حضور.',
+        );
+      }
+    }
+
+    // Resolve studentCode to studentId for records lacking studentId
+    const recordsNeedingResolution = dto.records.filter(
+      (r) => !r.studentId && r.studentCode,
+    );
+
+    if (recordsNeedingResolution.length > 0) {
+      const candidateCodes = new Set<string>();
+      for (const r of recordsNeedingResolution) {
+        const raw = r.studentCode!.trim();
+        const upper = raw.toUpperCase();
+        candidateCodes.add(upper);
+        if (!upper.startsWith('STU-')) {
+          candidateCodes.add(`STU-${upper}`);
+        }
+      }
+
+      const students = await this.prisma.student.findMany({
+        where: {
+          centerId,
+          code: { in: Array.from(candidateCodes) },
+        },
+        select: {
+          id: true,
+          code: true,
+        },
+      });
+
+      const codeMap = new Map<string, string>();
+      for (const s of students) {
+        codeMap.set(s.code.toUpperCase(), s.id);
+        if (s.code.toUpperCase().startsWith('STU-')) {
+          codeMap.set(s.code.toUpperCase().replace(/^STU-/, ''), s.id);
+        }
+      }
+
+      for (const r of recordsNeedingResolution) {
+        const trimmed = r.studentCode!.trim().toUpperCase();
+        const resolvedId =
+          codeMap.get(trimmed) || codeMap.get(trimmed.replace(/^STU-/, ''));
+        if (!resolvedId) {
+          throw new BadRequestException(
+            `لم يتم العثور على طالب بالكود "${r.studentCode}" في هذا المركز.`,
+          );
+        }
+        r.studentId = resolvedId;
+      }
+    }
+
+    const studentIds = dto.records.map((r) => r.studentId as string);
 
     // Verify all students are enrolled in this group
     const enrollments = await this.prisma.groupStudent.findMany({
@@ -228,16 +286,17 @@ export class AttendanceService {
     // Upsert attendance records inside a transaction
     await this.prisma.$transaction(async (tx) => {
       for (const record of dto.records) {
+        const studentId = record.studentId!;
         await tx.studentAttendance.upsert({
           where: {
             sessionId_studentId: {
               sessionId,
-              studentId: record.studentId,
+              studentId,
             },
           },
           create: {
             sessionId,
-            studentId: record.studentId,
+            studentId,
             centerId,
             status: record.status,
             absenceReason: record.absenceReason || null,

@@ -18,10 +18,7 @@ import {
   ExcelImportSummary,
   RowValidationError,
 } from '../../shared/excel/interfaces/excel.interface';
-import {
-  normalizeArabicText,
-  normalizeEgyptianPhone,
-} from '../../shared/excel/utils/arabic-normalizer.util';
+import { normalizeEgyptianPhone } from '../../shared/excel/utils/arabic-normalizer.util';
 import {
   teacherDetailsSelect,
   teacherListSelect,
@@ -399,8 +396,7 @@ export class TeachersService {
 
     const dateStr = new Date().toISOString().split('T')[0];
     const rows = teachers.map((t) => {
-      const subjectIds =
-        t.subjects.map((s) => s.subject.id).join('، ') || '—';
+      const subjectIds = t.subjects.map((s) => s.subject.id).join('، ') || '—';
       const subjectNames =
         t.subjects
           .map((s) => {
@@ -610,7 +606,10 @@ export class TeachersService {
       referenceTables: [
         {
           title: 'المواد الدراسية المتاحة والمعتمدة في السنتر',
-          headers: ['معرف المادة (Subject ID - للنسخ)', 'اسم المادة والمرحلة الدراسية'],
+          headers: [
+            'معرف المادة (Subject ID - للنسخ)',
+            'اسم المادة والمرحلة الدراسية',
+          ],
           rows:
             subjects.length > 0
               ? subjects.map((s) => ({

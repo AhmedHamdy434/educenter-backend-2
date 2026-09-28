@@ -10,9 +10,13 @@ import {
 import { AttendanceStatus } from '@prisma/client';
 
 export class AttendanceRecordDto {
-  @IsNotEmpty({ message: 'معرف الطالب مطلوب.' })
-  @IsString()
-  readonly studentId: string;
+  @IsOptional()
+  @IsString({ message: 'معرف الطالب يجب أن يكون نصياً.' })
+  studentId?: string;
+
+  @IsOptional()
+  @IsString({ message: 'كود الطالب يجب أن يكون نصياً.' })
+  readonly studentCode?: string;
 
   @IsNotEmpty({ message: 'حالة الحضور مطلوبة.' })
   @IsEnum(AttendanceStatus, { message: 'حالة حضور غير صالحة.' })

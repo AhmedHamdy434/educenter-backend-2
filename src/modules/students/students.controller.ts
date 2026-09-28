@@ -34,7 +34,11 @@ import { ExcelValidationPipe } from '../../shared/excel/pipes/excel-validation.p
 import { ExcelImportSummary } from '../../shared/excel/interfaces/excel.interface';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { RequestUser } from '../auth/interfaces/authenticated-request.interface';
-import { StudentDetails, StudentListItem } from './constants/student.select';
+import {
+  StudentByCodeDetails,
+  StudentDetails,
+  StudentListItem,
+} from './constants/student.select';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { StudentQueryDto } from './dto/get-students.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
@@ -141,6 +145,19 @@ export class StudentsController {
     }>
   > {
     return this.studentsService.importFromExcel(centerId, file.buffer, dryRun);
+  }
+
+  /**
+   * جلب بيانات الطالب للتعرف عليه بواسطة الكود أو الباركود.
+   */
+  @Get('by-code/:code')
+  @ResponseMessage('تم جلب بيانات الطالب بنجاح.')
+  @Roles(AppRole.OWNER, AppRole.TEACHER)
+  findByCode(
+    @CurrentCenterId() centerId: string,
+    @Param('code') code: string,
+  ): Promise<StudentByCodeDetails> {
+    return this.studentsService.findByCode(centerId, code);
   }
 
   /**

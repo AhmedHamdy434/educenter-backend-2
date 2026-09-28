@@ -207,6 +207,8 @@ model Student {
   centerId String
   center   Center @relation(fields: [centerId], references: [id], onDelete: Cascade)
 
+  code String @unique
+
   parentPhone String?
 
   notes String?

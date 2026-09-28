@@ -18,7 +18,9 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
   let prisma: {
     student: {
       findFirst: jest.Mock;
+      findUnique: jest.Mock;
       findMany: jest.Mock;
+      create: jest.Mock;
       delete: jest.Mock;
       count: jest.Mock;
       createManyAndReturn: jest.Mock;
@@ -59,7 +61,9 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
     prisma = {
       student: {
         findFirst: jest.fn(),
+        findUnique: jest.fn().mockResolvedValue(null),
         findMany: jest.fn(),
+        create: jest.fn(),
         delete: jest.fn(),
         count: jest.fn(),
         createManyAndReturn: jest.fn(),
@@ -481,6 +485,7 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
             .mockResolvedValue([{ id: 'user-1', email: 'ahmed@example.com' }]),
         },
         student: {
+          findUnique: jest.fn().mockResolvedValue(null),
           createManyAndReturn: jest
             .fn()
             .mockResolvedValue([{ id: 'student-1', userId: 'user-1' }]),
@@ -577,6 +582,56 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
       expect(mockTx.user.delete).toHaveBeenCalledWith({
         where: { id: 'user-1' },
       });
+    });
+  });
+
+  describe('findByCode', () => {
+    it('should throw BadRequestException if code is empty', async () => {
+      await expect(service.findByCode(centerId, '   ')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should throw NotFoundException if student with code does not exist in center', async () => {
+      prisma.student.findFirst.mockResolvedValue(null);
+
+      await expect(service.findByCode(centerId, 'STU-999999')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should return student details when code matches in the same center', async () => {
+      const mockStudent = {
+        id: 'student-1',
+        code: 'STU-100234',
+        centerId,
+        user: { fullName: 'أحمد محمود', phone: '01012345678' },
+        enrollments: [{ grade: { name: 'الأول الثانوي' } }],
+        groups: [{ group: { name: 'المجموعة 1' } }],
+      };
+      prisma.student.findFirst.mockResolvedValue(mockStudent);
+
+      const result = await service.findByCode(centerId, '100234');
+
+      expect(prisma.student.findFirst).toHaveBeenCalledWith({
+        where: {
+          centerId,
+          code: { in: ['100234', 'STU-100234'] },
+        },
+        select: expect.any(Object),
+      });
+      expect(result).toEqual(mockStudent);
+    });
+  });
+
+  describe('generateUniqueStudentCode', () => {
+    it('should generate a code with STU- prefix and ensure uniqueness', async () => {
+      prisma.student.findUnique.mockResolvedValue(null);
+
+      const code = await service.generateUniqueStudentCode();
+
+      expect(code).toMatch(/^STU-\d{6}$/);
+      expect(prisma.student.findUnique).toHaveBeenCalled();
     });
   });
 });
