@@ -144,7 +144,7 @@ export class TeachersService {
     centerId: string,
     query: TeacherQueryDto,
   ): Promise<{ data: TeacherListItem[]; meta: any }> {
-    const { skip, take, active, subjectId } = query;
+    const { skip, take, active, subjectId, gradeId } = query;
 
     const userWhere: Prisma.UserWhereInput = {
       centerId,
@@ -167,10 +167,11 @@ export class TeachersService {
       ];
     }
 
-    if (subjectId) {
+    if (subjectId || gradeId) {
       where.subjects = {
         some: {
-          subjectId,
+          ...(subjectId && { subjectId }),
+          ...(gradeId && { subject: { gradeId } }),
         },
       };
     }
@@ -316,14 +317,14 @@ export class TeachersService {
   }
 
   /**
-   * حذف معلم معين مع حسابه بعد التحقق من عدم ارتباطه بأي مجموعات دراسية أو مواد.
+   * حذف معلم معين مع حسابه بعد التحقق من عدم ارتباطه بأي مجموعات دراسية.
    */
   async remove(centerId: string, id: string): Promise<void> {
     const teacher = await this.findOne(centerId, id);
 
-    if (teacher._count.groups > 0 || teacher._count.subjects > 0) {
+    if (teacher._count.groups > 0) {
       throw new BadRequestException(
-        'لا يمكن حذف المعلم لوجود مجموعات دراسية أو مواد دراسية مرتبطة به.',
+        'لا يمكن حذف المعلم لوجود مجموعات دراسية مرتبطة به.',
       );
     }
 

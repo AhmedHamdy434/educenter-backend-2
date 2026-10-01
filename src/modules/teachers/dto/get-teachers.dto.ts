@@ -22,6 +22,14 @@ export class TeacherQueryDto extends BaseQueryDto {
   readonly subjectId?: string;
 
   @ApiPropertyOptional({
+    description: 'تصفية المدرسين حسب معرف المرحلة الدراسية',
+    example: 'cm123456789',
+  })
+  @IsOptional()
+  @IsString()
+  readonly gradeId?: string;
+
+  @ApiPropertyOptional({
     description: 'البحث باسم المدرس، البريد، رقم الهاتف أو النبذة التعريفية',
     example: 'محمد',
   })
