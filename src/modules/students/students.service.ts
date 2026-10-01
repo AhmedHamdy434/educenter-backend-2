@@ -310,8 +310,14 @@ export class StudentsService {
         },
       });
 
-      // 3. تحديث التسجيل في المرحلة الدراسية إذا تم تمريره
-      if (data.gradeId !== undefined) {
+      // 3. تحديث التسجيل في المرحلة الدراسية إذا تم تمريره وتغييره
+      const currentActiveEnrollment =
+        currentStudent.enrollments.find((e) => e.isActive) ??
+        currentStudent.enrollments[0];
+      const currentGradeId =
+        currentActiveEnrollment?.grade?.id || currentActiveEnrollment?.gradeId;
+
+      if (data.gradeId !== undefined && data.gradeId !== currentGradeId) {
         await this.getAndValidateGrade(tx, centerId, data.gradeId);
 
         // إلغاء تفعيل التسجيلات النشطة الأخرى للطالب

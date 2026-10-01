@@ -341,11 +341,17 @@ export class GroupsService {
         throw new NotFoundException('المجموعة الدراسية المطلوبة غير موجودة.');
       }
 
-      // التحقق من صحة وجود الطلاب في نفس المركز والمرحلة الدراسية للمجموعة
+      if (!group.isActive) {
+        throw new BadRequestException(
+          'لا يمكن إضافة طلاب إلى مجموعة دراسية معطلة.',
+        );
+      }
+
+      // التحقق من صحة وجود الطلاب ونشاطهم في نفس المركز والمرحلة الدراسية للمجموعة
       const students = await tx.student.findMany({
         where: {
           id: { in: data.studentIds },
-          user: { centerId },
+          user: { centerId, isActive: true },
           enrollments: {
             some: {
               gradeId: group.gradeId,
@@ -357,7 +363,7 @@ export class GroupsService {
 
       if (students.length !== data.studentIds.length) {
         throw new BadRequestException(
-          'بعض الطلاب المحددين غير مسجلين في المركز، أو ليسوا مسجلين في نفس المرحلة الدراسية للمجموعة.',
+          'بعض الطلاب المحددين غير مسجلين في المركز، أو حساباتهم معطلة، أو ليسوا مسجلين في نفس المرحلة الدراسية للمجموعة.',
         );
       }
 
@@ -537,10 +543,18 @@ export class GroupsService {
     const client = this.getPrismaClient(tx);
     const teacher = await client.teacher.findFirst({
       where: { id: teacherId, user: { centerId } },
+      select: {
+        id: true,
+        user: { select: { isActive: true } },
+      },
     });
 
     if (!teacher) {
       throw new NotFoundException('المعلم المحدد غير موجود في هذا المركز.');
+    }
+
+    if (!teacher.user.isActive) {
+      throw new BadRequestException('حساب المعلم المحدد معطل حالياً.');
     }
   }
 
@@ -703,7 +717,12 @@ export class GroupsService {
     const buffer = await this.excelService.buildWorkbookBuffer({
       sheetName: 'المجموعات الدراسية',
       columns: [
-        { header: 'معرف المجموعة (Group ID)', key: 'id', width: 32, numFmt: '@' },
+        {
+          header: 'معرف المجموعة (Group ID)',
+          key: 'id',
+          width: 32,
+          numFmt: '@',
+        },
         { header: 'اسم المجموعة', key: 'name', width: 25 },
         {
           header: 'معرف المرحلة (Grade ID)',
@@ -935,7 +954,10 @@ export class GroupsService {
         },
         {
           title: 'المواد الدراسية المتاحة والمعتمدة (Subject IDs)',
-          headers: ['معرف المادة (Subject ID - للنسخ)', 'اسم المادة والمرحلة التابعة لها'],
+          headers: [
+            'معرف المادة (Subject ID - للنسخ)',
+            'اسم المادة والمرحلة التابعة لها',
+          ],
           rows:
             subjects.length > 0
               ? subjects.map((s) => ({
@@ -946,7 +968,10 @@ export class GroupsService {
         },
         {
           title: 'المدرسين المتاحين والمعتمدين (Teacher IDs)',
-          headers: ['معرف المدرس (Teacher ID - للنسخ)', 'اسم المدرس والمواد المخصصة له'],
+          headers: [
+            'معرف المدرس (Teacher ID - للنسخ)',
+            'اسم المدرس والمواد المخصصة له',
+          ],
           rows:
             teachers.length > 0
               ? teachers.map((t) => {
@@ -1013,7 +1038,7 @@ export class GroupsService {
           select: { id: true, name: true },
         }),
         this.prisma.subject.findMany({
-          where: { centerId, isActive: true },
+          where: { centerId, isActive: true, grade: { isActive: true } },
           select: { id: true, name: true, gradeId: true },
         }),
         this.prisma.teacher.findMany({

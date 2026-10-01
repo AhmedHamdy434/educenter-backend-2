@@ -215,6 +215,9 @@ export class SubjectsService {
     const where: Prisma.SubjectWhereInput = {
       centerId,
       isActive: true,
+      grade: {
+        isActive: true,
+      },
     };
 
     if (gradeId) {
@@ -315,7 +318,12 @@ export class SubjectsService {
     const buffer = await this.excelService.buildWorkbookBuffer({
       sheetName: 'المواد الدراسية',
       columns: [
-        { header: 'معرف المادة (Subject ID)', key: 'id', width: 32, numFmt: '@' },
+        {
+          header: 'معرف المادة (Subject ID)',
+          key: 'id',
+          width: 32,
+          numFmt: '@',
+        },
         { header: 'اسم المادة الدراسية', key: 'name', width: 25 },
         {
           header: 'معرف المرحلة (Grade ID)',

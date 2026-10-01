@@ -16,6 +16,7 @@ export const userDetailsSelect = {
       id: true,
       name: true,
       slug: true,
+      logo: true,
     },
   },
 } satisfies Prisma.UserSelect;

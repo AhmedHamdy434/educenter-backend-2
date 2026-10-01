@@ -23,6 +23,7 @@ export const studentListSelect = {
     select: {
       id: true,
       isActive: true,
+      gradeId: true,
       grade: {
         select: {
           id: true,

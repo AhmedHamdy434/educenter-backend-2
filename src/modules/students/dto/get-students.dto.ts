@@ -31,35 +31,14 @@ export class StudentQueryDto extends BaseQueryDto {
 
   @ApiPropertyOptional({
     description:
-      'حقل الترتيب: fullName, name, email, phone, parentPhone, createdAt أو عدد المجموعات groups, الحضور attendance',
-    enum: [
-      'fullName',
-      'name',
-      'email',
-      'phone',
-      'parentPhone',
-      'createdAt',
-      'groups',
-      'attendance',
-    ],
+      'حقل الترتيب: fullName, name, email, createdAt أو عدد المجموعات groups, الحضور attendance',
+    enum: ['fullName', 'name', 'email', 'createdAt', 'groups', 'attendance'],
     example: 'createdAt',
   })
   @IsOptional()
-  @IsIn(
-    [
-      'fullName',
-      'name',
-      'email',
-      'phone',
-      'parentPhone',
-      'createdAt',
-      'groups',
-      'attendance',
-    ],
-    {
-      message:
-        'حقل الترتيب يجب أن يكون أحد الحقول التالية: fullName, name, email, phone, parentPhone, createdAt, groups, attendance.',
-    },
-  )
+  @IsIn(['fullName', 'name', 'email', 'createdAt', 'groups', 'attendance'], {
+    message:
+      'حقل الترتيب يجب أن يكون أحد الحقول التالية: fullName, name, email, createdAt, groups, attendance.',
+  })
   declare readonly sortBy?: string;
 }

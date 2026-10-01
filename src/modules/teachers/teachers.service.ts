@@ -244,7 +244,21 @@ export class TeachersService {
 
       // 3. تحديث علاقات المواد التعليمية باستخدام Diff
       if (data.subjectIds !== undefined) {
-        await this.getAndValidateSubjects(tx, centerId, data.subjectIds);
+        const uniqueSubjectIds = Array.from(new Set(data.subjectIds));
+        if (uniqueSubjectIds.length > 0) {
+          const centerSubjects = await tx.subject.findMany({
+            where: {
+              id: { in: uniqueSubjectIds },
+              centerId,
+            },
+            select: { id: true },
+          });
+          if (centerSubjects.length !== uniqueSubjectIds.length) {
+            throw new BadRequestException(
+              'بعض المواد الدراسية المحددة غير موجودة أو لا تنتمي لهذا المركز.',
+            );
+          }
+        }
 
         const existingRelations = await tx.teacherSubject.findMany({
           where: { teacherId: id },
@@ -258,6 +272,10 @@ export class TeachersService {
         const toCreate = data.subjectIds.filter(
           (sid) => !existingSubjectIds.includes(sid),
         );
+
+        if (toCreate.length > 0) {
+          await this.getAndValidateSubjects(tx, centerId, toCreate);
+        }
 
         if (toDelete.length > 0) {
           await tx.teacherSubject.deleteMany({
@@ -678,9 +696,9 @@ export class TeachersService {
       );
     }
 
-    // 3. جلب المواد الدراسية النشطة للمركز
+    // 3. جلب المواد الدراسية النشطة للمركز والتي تتبع لمراحل دراسية نشطة
     const centerSubjects = await this.prisma.subject.findMany({
-      where: { centerId, isActive: true },
+      where: { centerId, isActive: true, grade: { isActive: true } },
       select: {
         id: true,
         name: true,
@@ -1061,13 +1079,16 @@ export class TeachersService {
         id: { in: uniqueSubjectIds },
         centerId,
         isActive: true,
+        grade: {
+          isActive: true,
+        },
       },
       select: { id: true },
     });
 
     if (subjects.length !== uniqueSubjectIds.length) {
       throw new BadRequestException(
-        'بعض المواد الدراسية المحددة غير موجودة، أو لا تنتمي لهذا المركز، أو معطلة.',
+        'بعض المواد الدراسية المحددة غير موجودة، أو لا تنتمي لهذا المركز، أو معطلة، أو تتبع لمرحلة دراسية معطلة.',
       );
     }
   }
