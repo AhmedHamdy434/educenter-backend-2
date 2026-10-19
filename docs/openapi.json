@@ -6123,6 +6123,106 @@
         ],
         "summary": "تحديث بيانات مادة دراسية معينة",
         "description": "تحديث بيانات مادة دراسية معينة تابعة للمركز الحالي (متاح لمالك المركز OWNER فقط، ولا يمكن تعديل المرحلة الدراسية)."
+      },
+      "delete": {
+        "operationId": "SubjectsController_remove",
+        "tags": [
+          "Subjects"
+        ],
+        "summary": "حذف مادة دراسية",
+        "description": "حذف مادة دراسية محددة تابعة للمركز بعد التحقق من عدم وجود مجموعات دراسية أو معلمين مرتبطين بها (متاح لـ OWNER فقط).",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "معرف المادة الدراسية"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "تم حذف المادة الدراسية بنجاح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم حذف المادة الدراسية بنجاح.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "وجود مجموعات دراسية أو معلمين مرتبطين بالمادة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "لا يمكن حذف المادة الدراسية لوجود مجموعات دراسية أو معلمين مرتبطين بها.",
+                  "error": "Bad Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "المادة الدراسية غير موجودة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 404,
+                  "message": "المادة الدراسية المطلوبة غير موجودة.",
+                  "error": "Not Found"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/subjects/{id}/toggle-status": {
@@ -6806,6 +6906,106 @@
         ],
         "summary": "تحديث بيانات مدرس معين",
         "description": "تحديث بيانات المدرس وحسابه وقائمة المواد المرتبطة به (متاح لمالك المركز OWNER فقط)."
+      },
+      "delete": {
+        "operationId": "TeachersController_remove",
+        "tags": [
+          "Teachers"
+        ],
+        "summary": "حذف معلم",
+        "description": "حذف سجل المعلم وحسابه المستخدم نهائياً بعد التحقق من عدم وجود مجموعات دراسية مرتبطة به (متاح لـ OWNER فقط).",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "معرف المعلم"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "تم حذف المعلم بنجاح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم حذف المعلم بنجاح.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "وجود مجموعات دراسية مرتبطة بالمعلم",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "لا يمكن حذف المعلم لوجود مجموعات دراسية مرتبطة به.",
+                  "error": "Bad Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "المعلم غير موجود",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 404,
+                  "message": "المعلم غير موجود أو لا ينتمي لهذا المركز.",
+                  "error": "Not Found"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/teachers/{id}/toggle-status": {
@@ -7508,6 +7708,106 @@
         ],
         "summary": "تحديث بيانات طالب معين",
         "description": "تحديث بيانات الطالب وحسابه وهاتف ولي الأمر وتعديل تسجيل المرحلة الدراسية (متاح لمالك المركز OWNER فقط)."
+      },
+      "delete": {
+        "operationId": "StudentsController_remove",
+        "tags": [
+          "Students"
+        ],
+        "summary": "حذف طالب",
+        "description": "حذف سجل الطالب وحسابه نهائياً بعد التحقق من عدم وجود مجموعات دراسية أو سجلات حضور مرتبطة به (متاح لـ OWNER فقط).",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "معرف الطالب"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "تم حذف الطالب بنجاح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم حذف الطالب بنجاح.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "وجود مجموعات دراسية أو سجلات حضور مرتبطة بالطالب",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "لا يمكن حذف الطالب لوجود مجموعات دراسية أو سجلات حضور مرتبطة به.",
+                  "error": "Bad Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "الطالب غير موجود",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 404,
+                  "message": "الطالب المطلوب غير موجود أو لا ينتمي لهذا المركز.",
+                  "error": "Not Found"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/students/{id}/toggle-status": {
@@ -8436,6 +8736,2562 @@
         "tags": [
           "Home Stats"
         ]
+      }
+    },
+    "/api/grades/export/excel": {
+      "get": {
+        "operationId": "GradesController_exportExcel",
+        "tags": [
+          "Grades"
+        ],
+        "summary": "تصدير المراحل الدراسية إلى Excel",
+        "description": "تصدير قائمة المراحل الدراسية للمركز إلى ملف Excel مع تطبيق معايير البحث والترتيب وحالة النشاط.",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "البحث في اسم المرحلة أو الوصف"
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "تصفية حسب حالة التفعيل"
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "order",
+                "createdAt"
+              ]
+            },
+            "description": "حقل الترتيب"
+          },
+          {
+            "name": "sortOrder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            },
+            "description": "اتجاه الترتيب"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ملف Excel جاهز للتحميل يحتوي على قائمة المراحل",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "attachment; filename=\"grades-export-2026-10-19.xlsx\""
+              }
+            },
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/grades/export/pdf": {
+      "get": {
+        "operationId": "GradesController_exportPdf",
+        "tags": [
+          "Grades"
+        ],
+        "summary": "تصدير المراحل الدراسية إلى PDF",
+        "description": "تصدير تقرير منسق بنظام RTL وخط Cairo لقائمة المراحل الدراسية بالمركز.",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "order",
+                "createdAt"
+              ]
+            }
+          },
+          {
+            "name": "sortOrder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "تقرير PDF جاهز للتحميل يحتوي على قائمة المراحل",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "attachment; filename=\"grades-export-2026-10-19.pdf\""
+              }
+            },
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/grades/export/template": {
+      "get": {
+        "operationId": "GradesController_exportTemplate",
+        "tags": [
+          "Grades"
+        ],
+        "summary": "تحميل نموذج استيراد المراحل الدراسية (Template)",
+        "description": "تحميل قالب Excel جاهز للإدخال يتضمن شيت البيانات وشيت التعليمات والجداول المرجعية (متاح لـ OWNER فقط).",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "قالب استيراد المراحل الدراسية",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "attachment; filename=\"grades-import-template.xlsx\""
+              }
+            },
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/grades/import/excel": {
+      "post": {
+        "operationId": "GradesController_importExcel",
+        "tags": [
+          "Grades"
+        ],
+        "summary": "استيراد مراحل دراسية من ملف Excel",
+        "description": "استيراد قائمة بالمراحل الدراسية دفعة واحدة من ملف Excel مع إمكانية المعاينة (dryRun). متاح لـ OWNER فقط.",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dryRun",
+            "in": "query",
+            "required": false,
+            "description": "وضع الفحص المسبق والمعاينة دون حفظ فعلي في قاعدة البيانات (true / false)",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "ملف Excel بصيغة .xlsx أو .xls (الحد الأقصى للحجم: 5 ميجابايت)"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "تم استيراد المراحل أو فحص الملف بنجاح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم استيراد المراحل الدراسية بنجاح.",
+                  "data": {
+                    "totalRows": 3,
+                    "validRows": 3,
+                    "failedRows": 0,
+                    "errors": [],
+                    "data": [
+                      {
+                        "name": "الصف الأول الثانوي",
+                        "order": 1,
+                        "description": "المرحلة الثانوية"
+                      },
+                      {
+                        "name": "الصف الثاني الثانوي",
+                        "order": 2,
+                        "description": "المرحلة الثانوية"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "الملف فارغ أو غير مدعوم أو لا يحتوي على البيانات المطلوبة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "ملف الإكسيل لا يحتوي على أي صفوف بيانات.",
+                  "error": "Bad Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "بيانات الملف المرفوع غير صالحة أو تحتوي على تضارب في المعرفات والأسماء",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 422,
+                  "message": "تعذر استيراد الملف لوجود أخطاء في البيانات المرفقة.",
+                  "error": "Unprocessable Entity",
+                  "data": {
+                    "totalRows": 10,
+                    "validRows": 8,
+                    "failedRows": 2,
+                    "remainingErrorsCount": 0,
+                    "errors": [
+                      {
+                        "row": 3,
+                        "field": "name",
+                        "value": "المرحلة الأولى",
+                        "message": "اسم المرحلة الدراسية مسجل بالفعل في هذا المركز."
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/subjects/export/excel": {
+      "get": {
+        "operationId": "SubjectsController_exportExcel",
+        "tags": [
+          "Subjects"
+        ],
+        "summary": "تصدير المواد الدراسية إلى Excel",
+        "description": "تصدير قائمة المواد الدراسية مع معرف المرحلة واسمها إلى ملف Excel.",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "gradeId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "تصفية حسب معرف المرحلة الدراسية"
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "createdAt"
+              ]
+            }
+          },
+          {
+            "name": "sortOrder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ملف Excel للمواد الدراسية",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "attachment; filename=\"subjects-export-2026-10-19.xlsx\""
+              }
+            },
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/subjects/export/pdf": {
+      "get": {
+        "operationId": "SubjectsController_exportPdf",
+        "tags": [
+          "Subjects"
+        ],
+        "summary": "تصدير المواد الدراسية إلى PDF",
+        "description": "تصدير تقرير PDF باللغة العربية لقائمة المواد الدراسية بالمركز.",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "gradeId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "createdAt"
+              ]
+            }
+          },
+          {
+            "name": "sortOrder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "تقرير PDF للمواد الدراسية",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "attachment; filename=\"subjects-export-2026-10-19.pdf\""
+              }
+            },
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/subjects/export/template": {
+      "get": {
+        "operationId": "SubjectsController_exportTemplate",
+        "tags": [
+          "Subjects"
+        ],
+        "summary": "تحميل نموذج استيراد المواد الدراسية (Template)",
+        "description": "تحميل قالب Excel لاستيراد المواد الدراسية متضمناً جدول معرفات المراحل الدراسية للنسخ المباشر.",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "قالب استيراد المواد الدراسية",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "attachment; filename=\"subjects-import-template.xlsx\""
+              }
+            },
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/subjects/import/excel": {
+      "post": {
+        "operationId": "SubjectsController_importExcel",
+        "tags": [
+          "Subjects"
+        ],
+        "summary": "استيراد مواد دراسية من ملف Excel",
+        "description": "استيراد جماعي للمواد الدراسية بالاعتماد الصارم على معرف المرحلة الدراسية (gradeId).",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dryRun",
+            "in": "query",
+            "required": false,
+            "description": "وضع الفحص المسبق والمعاينة دون حفظ فعلي في قاعدة البيانات (true / false)",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "ملف Excel بصيغة .xlsx أو .xls (الحد الأقصى للحجم: 5 ميجابايت)"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "تم استيراد المواد الدراسية بنجاح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم استيراد المواد الدراسية بنجاح.",
+                  "data": {
+                    "totalRows": 2,
+                    "validRows": 2,
+                    "failedRows": 0,
+                    "errors": [],
+                    "data": [
+                      {
+                        "name": "الكيمياء",
+                        "gradeId": "clygrade001",
+                        "description": "شعبة علمي"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "الملف فارغ أو غير صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "ملف الإكسيل لا يحتوي على أي صفوف بيانات.",
+                  "error": "Bad Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "خطأ في التحقق من صحة الصفوف أو معرف المرحلة الدراسية",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 422,
+                  "message": "تعذر استيراد الملف لوجود أخطاء في البيانات المرفقة.",
+                  "error": "Unprocessable Entity",
+                  "data": {
+                    "totalRows": 5,
+                    "validRows": 4,
+                    "failedRows": 1,
+                    "remainingErrorsCount": 0,
+                    "errors": [
+                      {
+                        "row": 3,
+                        "field": "gradeId",
+                        "value": "clyinvalid001",
+                        "message": "معرف المرحلة الدراسية المدخل غير صالح أو لا ينتمي لهذا المركز أو غير نشط."
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/teachers/export/excel": {
+      "get": {
+        "operationId": "TeachersController_exportExcel",
+        "tags": [
+          "Teachers"
+        ],
+        "summary": "تصدير المعلمين إلى Excel",
+        "description": "تصدير قائمة معلمي المركز مع أرقام الهواتف والمواد والتخصصات إلى ملف Excel.",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "subjectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "تصفية حسب معرف المادة الدراسية"
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "createdAt"
+              ]
+            }
+          },
+          {
+            "name": "sortOrder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ملف Excel للمعلمين",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "attachment; filename=\"teachers-export-2026-10-19.xlsx\""
+              }
+            },
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/teachers/export/pdf": {
+      "get": {
+        "operationId": "TeachersController_exportPdf",
+        "tags": [
+          "Teachers"
+        ],
+        "summary": "تصدير المعلمين إلى PDF",
+        "description": "تصدير تقرير عربي منسق بقائمة معلمي المركز وبيانات التواصل.",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "subjectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "createdAt"
+              ]
+            }
+          },
+          {
+            "name": "sortOrder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "تقرير PDF للمعلمين",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "attachment; filename=\"teachers-export-2026-10-19.pdf\""
+              }
+            },
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/teachers/export/template": {
+      "get": {
+        "operationId": "TeachersController_exportTemplate",
+        "tags": [
+          "Teachers"
+        ],
+        "summary": "تحميل نموذج استيراد المعلمين (Template)",
+        "description": "تحميل قالب Excel لاستيراد المعلمين متضمناً جدول معرفات المواد المتاحة للربط المباشر.",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "قالب استيراد المعلمين",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "attachment; filename=\"teachers-import-template.xlsx\""
+              }
+            },
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/teachers/import/excel": {
+      "post": {
+        "operationId": "TeachersController_importExcel",
+        "tags": [
+          "Teachers"
+        ],
+        "summary": "استيراد معلمين من ملف Excel",
+        "description": "استيراد جماعي لحسابات وبيانات المعلمين وربط المواد الدراسية عبر معرفاتها (subjectIds).",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dryRun",
+            "in": "query",
+            "required": false,
+            "description": "وضع الفحص المسبق والمعاينة دون حفظ فعلي في قاعدة البيانات (true / false)",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "ملف Excel بصيغة .xlsx أو .xls (الحد الأقصى للحجم: 5 ميجابايت)"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "تم استيراد المعلمين بنجاح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم استيراد المعلمين بنجاح.",
+                  "data": {
+                    "totalRows": 2,
+                    "validRows": 2,
+                    "failedRows": 0,
+                    "errors": [],
+                    "data": [
+                      {
+                        "fullName": "أ. طارق عبد الرحمن",
+                        "email": "tareq@example.com",
+                        "phone": "01011122233"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "الملف فارغ أو تجاوز سعة المعلمين للباقة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "تم بلوغ الحد الأقصى للمعلمين المسموح به في باقة اشتراك المركز.",
+                  "error": "Bad Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "أخطاء في التحقق من صحة بيانات المعلمين أو تكرار البريد/الهاتف",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 422,
+                  "message": "تعذر استيراد الملف لوجود أخطاء في البيانات المرفقة.",
+                  "error": "Unprocessable Entity",
+                  "data": {
+                    "totalRows": 5,
+                    "validRows": 4,
+                    "failedRows": 1,
+                    "remainingErrorsCount": 0,
+                    "errors": [
+                      {
+                        "row": 2,
+                        "field": "email",
+                        "value": "tareq@example.com",
+                        "message": "البريد الإلكتروني مسجل بالفعل لمستخدم آخر."
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/students/export/excel": {
+      "get": {
+        "operationId": "StudentsController_exportExcel",
+        "tags": [
+          "Students"
+        ],
+        "summary": "تصدير الطلاب إلى Excel",
+        "description": "تصدير سجلات الطلاب وأكوادهم وهواتف أولياء الأمور والمراحل الدراسية إلى ملف Excel.",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "gradeId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "groupId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "code",
+                "createdAt"
+              ]
+            }
+          },
+          {
+            "name": "sortOrder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ملف Excel للطلاب",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "attachment; filename=\"students-export-2026-10-19.xlsx\""
+              }
+            },
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/students/export/pdf": {
+      "get": {
+        "operationId": "StudentsController_exportPdf",
+        "tags": [
+          "Students"
+        ],
+        "summary": "تصدير الطلاب إلى PDF",
+        "description": "تصدير كشف الطلاب بتقرير عربي رسمي يحتوي على الأكواد والمراحل وأرقام التواصل.",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "gradeId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "groupId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "code",
+                "createdAt"
+              ]
+            }
+          },
+          {
+            "name": "sortOrder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "تقرير PDF للطلاب",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "attachment; filename=\"students-export-2026-10-19.pdf\""
+              }
+            },
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/students/export/template": {
+      "get": {
+        "operationId": "StudentsController_exportTemplate",
+        "tags": [
+          "Students"
+        ],
+        "summary": "تحميل نموذج استيراد الطلاب (Template)",
+        "description": "تحميل قالب Excel لاستيراد الطلاب متضمناً جدول معرفات المراحل الدراسية للربط.",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "قالب استيراد الطلاب",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "attachment; filename=\"students-import-template.xlsx\""
+              }
+            },
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/students/import/excel": {
+      "post": {
+        "operationId": "StudentsController_importExcel",
+        "tags": [
+          "Students"
+        ],
+        "summary": "استيراد طلاب من ملف Excel",
+        "description": "استيراد جماعي للطلاب وإنشاء حسابات الدخول تلقائياً والربط بمعرف المرحلة (gradeId).",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dryRun",
+            "in": "query",
+            "required": false,
+            "description": "وضع الفحص المسبق والمعاينة دون حفظ فعلي في قاعدة البيانات (true / false)",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "ملف Excel بصيغة .xlsx أو .xls (الحد الأقصى للحجم: 5 ميجابايت)"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "تم استيراد الطلاب بنجاح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم استيراد الطلاب بنجاح.",
+                  "data": {
+                    "totalRows": 1,
+                    "validRows": 1,
+                    "failedRows": 0,
+                    "errors": [],
+                    "data": [
+                      {
+                        "fullName": "محمد عادل فوزي",
+                        "code": "STU-2601",
+                        "gradeId": "clygrade001"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "الملف فارغ أو تجاوز سعة الطلاب المسموح بها في باقة الاشتراك",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "تم بلوغ الحد الأقصى للطلاب المسموح به في باقة اشتراك المركز.",
+                  "error": "Bad Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "أخطاء في التحقق من البيانات أو تكرار الكود/البريد/الهاتف",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 422,
+                  "message": "تعذر استيراد الملف لوجود أخطاء في البيانات المرفقة.",
+                  "error": "Unprocessable Entity",
+                  "data": {
+                    "totalRows": 3,
+                    "validRows": 2,
+                    "failedRows": 1,
+                    "remainingErrorsCount": 0,
+                    "errors": [
+                      {
+                        "row": 2,
+                        "field": "code",
+                        "value": "STU-1001",
+                        "message": "كود الطالب مسجل بالفعل في هذا المركز."
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/students/by-code/{code}": {
+      "get": {
+        "operationId": "StudentsController_findByCode",
+        "tags": [
+          "Students"
+        ],
+        "summary": "استعلام عن طالب بواسطة الكود",
+        "description": "استعلام فوري عن الطالب بواسطة كوده الفريد (مع أو بدون بادئة STU-) لعرض ملفه ومجموعاته.",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "كود الطالب (مثل STU-2601 أو 2601)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "تم العثور على بيانات الطالب",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم جلب بيانات الطالب بنجاح.",
+                  "data": {
+                    "id": "clystudent001",
+                    "code": "STU-2601",
+                    "parentPhone": "01122334455",
+                    "user": {
+                      "id": "clyuser002",
+                      "fullName": "محمد أحمد علي",
+                      "email": "student@example.com",
+                      "phone": "01099887766",
+                      "isActive": true
+                    },
+                    "enrollments": [
+                      {
+                        "grade": {
+                          "id": "clygrade001",
+                          "name": "الصف الأول الثانوي"
+                        }
+                      }
+                    ],
+                    "groups": [
+                      {
+                        "group": {
+                          "id": "clygroup001",
+                          "name": "مجموعة العباقرة - كيمياء"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "كود الطالب غير مدخل",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "كود الطالب مطلوب.",
+                  "error": "Bad Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "لم يتم العثور على طالب بهذا الكود",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 404,
+                  "message": "لم يتم العثور على طالب بهذا الكود في هذا المركز.",
+                  "error": "Not Found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/groups/export/excel": {
+      "get": {
+        "operationId": "GroupsController_exportExcel",
+        "tags": [
+          "Groups"
+        ],
+        "summary": "تصدير المجموعات الدراسية إلى Excel",
+        "description": "تصدير قائمة المجموعات مع أسماء المراحل والمواد والمعلمين وعدد الطلاب إلى ملف Excel.",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "gradeId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "subjectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "teacherId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "createdAt"
+              ]
+            }
+          },
+          {
+            "name": "sortOrder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ملف Excel للمجموعات",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "attachment; filename=\"groups-export-2026-10-19.xlsx\""
+              }
+            },
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/groups/export/pdf": {
+      "get": {
+        "operationId": "GroupsController_exportPdf",
+        "tags": [
+          "Groups"
+        ],
+        "summary": "تصدير المجموعات الدراسية إلى PDF",
+        "description": "تصدير تقرير عربي رسمي بجدول المجموعات الدراسية ومواعيد الجلسات الأسبوعية.",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "gradeId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "subjectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "teacherId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "createdAt"
+              ]
+            }
+          },
+          {
+            "name": "sortOrder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "تقرير PDF للمجموعات",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "attachment; filename=\"groups-export-2026-10-19.pdf\""
+              }
+            },
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/groups/export/template": {
+      "get": {
+        "operationId": "GroupsController_exportTemplate",
+        "tags": [
+          "Groups"
+        ],
+        "summary": "تحميل نموذج استيراد المجموعات الدراسية (Template)",
+        "description": "تحميل قالب Excel لاستيراد المجموعات متضمناً جداول المعرفات المرجعية للمراحل والمواد والمعلمين.",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "قالب استيراد المجموعات الدراسية",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "attachment; filename=\"groups-import-template.xlsx\""
+              }
+            },
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/groups/import/excel": {
+      "post": {
+        "operationId": "GroupsController_importExcel",
+        "tags": [
+          "Groups"
+        ],
+        "summary": "استيراد مجموعات دراسية من ملف Excel",
+        "description": "استيراد جماعي للمجموعات الدراسية مع التحقق الصارم من معرفات المرحلة والمادة والمعلم وجدول الحصص.",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dryRun",
+            "in": "query",
+            "required": false,
+            "description": "وضع الفحص المسبق والمعاينة دون حفظ فعلي في قاعدة البيانات (true / false)",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "ملف Excel بصيغة .xlsx أو .xls (الحد الأقصى للحجم: 5 ميجابايت)"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "تم استيراد المجموعات بنجاح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم استيراد المجموعات الدراسية بنجاح.",
+                  "data": {
+                    "totalRows": 1,
+                    "validRows": 1,
+                    "failedRows": 0,
+                    "errors": [],
+                    "data": [
+                      {
+                        "name": "مجموعة الأوائل - كيمياء",
+                        "gradeId": "clygrade001",
+                        "subjectId": "clysubject001",
+                        "teacherId": "clyteacher001",
+                        "capacity": 25,
+                        "monthlyFee": 250
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "الملف فارغ أو غير صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "ملف الإكسيل لا يحتوي على أي صفوف بيانات.",
+                  "error": "Bad Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "أخطاء في التحقق من المعرفات المرتبطة أو المواعيد",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 422,
+                  "message": "تعذر استيراد الملف لوجود أخطاء في البيانات المرفقة.",
+                  "error": "Unprocessable Entity",
+                  "data": {
+                    "totalRows": 2,
+                    "validRows": 1,
+                    "failedRows": 1,
+                    "remainingErrorsCount": 0,
+                    "errors": [
+                      {
+                        "row": 2,
+                        "field": "teacherId",
+                        "value": "clyinvalid",
+                        "message": "معرف المعلم المدخل غير صالح أو لا ينتمي لهذا المركز."
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/groups/{groupId}/payments/export/excel": {
+      "get": {
+        "operationId": "PaymentsController_exportGroupPayments",
+        "tags": [
+          "Payments"
+        ],
+        "summary": "تصدير كشف مصفوفة مدفوعات المجموعة إلى Excel",
+        "description": "تصدير كشف حساب ومصفوفة تفصيلية لمدفوعات جميع طلاب المجموعة للأشهر المحددة إلى ملف Excel.",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "معرف المجموعة الدراسية"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "كشف مصفوفة مدفوعات المجموعة بصيغة Excel",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "attachment; filename=\"group-payments-export.xlsx\""
+              }
+            },
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/students/{studentId}/payments/export/excel": {
+      "get": {
+        "operationId": "PaymentsController_exportStudentPayments",
+        "tags": [
+          "Payments"
+        ],
+        "summary": "تصدير كشف مدفوعات الطالب إلى Excel",
+        "description": "تصدير كشف حساب مالي تفصيلي لجميع اشتراكات ومدفوعات طالب محدد عبر كافة المجموعات.",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "studentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "معرف الطالب"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "كشف مدفوعات الطالب بصيغة Excel",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "attachment; filename=\"student-payments-export.xlsx\""
+              }
+            },
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح - يلزم تسجيل الدخول بـ Bearer Token صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مسموح - صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },

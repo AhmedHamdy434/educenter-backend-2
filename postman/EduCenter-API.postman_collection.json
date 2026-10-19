@@ -1,0 +1,5458 @@
+{
+  "info": {
+    "_postman_id": "51246346-educenter-saas-api-v2",
+    "name": "EduCenter SaaS API",
+    "description": "Production-grade Postman collection for EduCenter Multi-Tenant Educational SaaS Platform. Fully mirrors all 98 backend endpoints with dynamic token injection, sequential CRUD workflows, and contract validation tests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "01. Authentication",
+      "description": "Platform and center tenant authentication, credential verification, profile inspection, and password recovery.",
+      "item": [
+        {
+          "name": "Super Admin Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  "",
+                  "// Extract dynamic variables",
+                  "try {",
+                  "    var jsonData = pm.response.json();",
+                  "\n    if (jsonData.data && jsonData.data.accessToken) {\n        pm.environment.set(\"accessToken\", jsonData.data.accessToken);\n        pm.environment.set(\"userRole\", \"SUPER_ADMIN\");\n        console.log(\"Super Admin Token captured successfully!\");\n    }\n      ",
+                  "} catch (e) {",
+                  "    console.error(\"Variable extraction failed\", e);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/super-admin/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "super-admin",
+                "login"
+              ]
+            },
+            "description": "Logs in the platform super administrator (centerId: null, role: SUPER_ADMIN). Rate limit: 5 requests/min.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"{{superAdminEmail}}\",\n  \"password\": \"{{superAdminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Center User Login (Owner / Teacher / Student)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  "",
+                  "// Extract dynamic variables",
+                  "try {",
+                  "    var jsonData = pm.response.json();",
+                  "\n    if (jsonData.data && jsonData.data.accessToken) {\n        pm.environment.set(\"accessToken\", jsonData.data.accessToken);\n        if (jsonData.data.user) {\n            pm.environment.set(\"userRole\", jsonData.data.user.role);\n            if (jsonData.data.user.centerId) {\n                pm.environment.set(\"centerId\", jsonData.data.user.centerId);\n            }\n        }\n        console.log(\"Center user access token captured successfully!\");\n    }\n      ",
+                  "} catch (e) {",
+                  "    console.error(\"Variable extraction failed\", e);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Logs in center accounts (OWNER, TEACHER, STUDENT) by email or phone. Automatically sets accessToken and centerId.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identifier\": \"{{centerIdentifier}}\",\n  \"password\": \"{{centerPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Super Admin Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/super-admin/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "super-admin",
+                "me"
+              ]
+            },
+            "description": "Returns currently authenticated Super Admin profile."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Current User Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Returns authenticated profile for any center user (OWNER, TEACHER, STUDENT)."
+          },
+          "response": []
+        },
+        {
+          "name": "Change Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/change-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "change-password"
+              ]
+            },
+            "description": "Allows authenticated user to update their account password.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"oldPassword\": \"Owner@123456\",\n  \"newPassword\": \"Owner@Updated2026\",\n  \"confirmPassword\": \"Owner@Updated2026\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password (Request OTP)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/forgot-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "forgot-password"
+              ]
+            },
+            "description": "Dispatches a 6-digit OTP code to the user's verified email address. Rate limit: 3 requests/min.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"owner@alrowad.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password (Verify OTP)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "reset-password"
+              ]
+            },
+            "description": "Resets user password upon providing a valid, non-expired 6-digit OTP code.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"owner@alrowad.com\",\n  \"otp\": \"123456\",\n  \"newPassword\": \"NewOwner@Password2026\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02. Centers Management (Super Admin)",
+      "description": "Platform-level center provisioning, plan assignments, subscription renewals, and status controls.",
+      "item": [
+        {
+          "name": "Provision New Center (Atomic Onboarding)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  "",
+                  "// Extract dynamic variables",
+                  "try {",
+                  "    var jsonData = pm.response.json();",
+                  "\n    if (jsonData.data && jsonData.data.id) {\n        pm.environment.set(\"centerId\", jsonData.data.id);\n    }\n      ",
+                  "} catch (e) {",
+                  "    console.error(\"Variable extraction failed\", e);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/centers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "centers"
+              ]
+            },
+            "description": "Atomic transaction creating Center, OWNER user account, and initial active CenterSubscription.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "سنتر الرواد للغات",
+                  "type": "text"
+                },
+                {
+                  "key": "slug",
+                  "value": "alrowad-academy",
+                  "type": "text"
+                },
+                {
+                  "key": "email",
+                  "value": "contact@alrowad.com",
+                  "type": "text"
+                },
+                {
+                  "key": "phone",
+                  "value": "01099887766",
+                  "type": "text"
+                },
+                {
+                  "key": "address",
+                  "value": "القاهرة، مصر الجديدة",
+                  "type": "text"
+                },
+                {
+                  "key": "ownerFullName",
+                  "value": "د. هاني الأحمدي",
+                  "type": "text"
+                },
+                {
+                  "key": "ownerEmail",
+                  "value": "owner@alrowad.com",
+                  "type": "text"
+                },
+                {
+                  "key": "ownerPassword",
+                  "value": "Owner@123456",
+                  "type": "text"
+                },
+                {
+                  "key": "ownerPhone",
+                  "value": "01099887766",
+                  "type": "text"
+                },
+                {
+                  "key": "subscriptionPlanId",
+                  "value": "{{planId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "customPrice",
+                  "value": "299",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Centers",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/centers?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "centers"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Lists all registered centers with their owner and active subscription details."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Center Details By ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/centers/{{centerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "centers",
+                "{{centerId}}"
+              ]
+            },
+            "description": "Returns deep details and subscription history for a specific center."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Center Info",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/centers/{{centerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "centers",
+                "{{centerId}}"
+              ]
+            },
+            "description": "Updates general center info and branding logo.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "سنتر الرواد للغات والعلوم",
+                  "type": "text"
+                },
+                {
+                  "key": "phone",
+                  "value": "01099887766",
+                  "type": "text"
+                },
+                {
+                  "key": "address",
+                  "value": "القاهرة، مدينة نصر",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Toggle Center Activation Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/centers/{{centerId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "centers",
+                "{{centerId}}",
+                "status"
+              ]
+            },
+            "description": "Activates or deactivates a center tenant across the platform.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Assign / Change Center Subscription Plan",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/centers/{{centerId}}/subscribe",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "centers",
+                "{{centerId}}",
+                "subscribe"
+              ]
+            },
+            "description": "Assigns a new subscription tier to the center.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subscriptionPlanId\": \"{{planId}}\",\n  \"customPrice\": 499\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Renew Center Subscription",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/centers/{{centerId}}/renew",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "centers",
+                "{{centerId}}",
+                "renew"
+              ]
+            },
+            "description": "Extends endDate of the current active CenterSubscription by the specified number of months.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"monthsCount\": 3,\n  \"customPrice\": 299\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Center Info",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/centers/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "centers",
+                "me"
+              ]
+            },
+            "description": "Allows center users (OWNER, TEACHER, STUDENT) to inspect their tenant center profile."
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Active Subscription Overview",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/centers/my-subscription",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "centers",
+                "my-subscription"
+              ]
+            },
+            "description": "Provides center OWNER with real-time subscription status, quotas, usage counts, and expiration dates."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03. Subscription Plans (Super Admin & Public)",
+      "description": "Platform tier definitions, quota limits, pricing models, and public landing catalog.",
+      "item": [
+        {
+          "name": "Get Subscription Plans (Public)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  "",
+                  "// Extract dynamic variables",
+                  "try {",
+                  "    var jsonData = pm.response.json();",
+                  "\n    if (jsonData.data && jsonData.data.length > 0 && !pm.environment.get(\"planId\")) {\n        pm.environment.set(\"planId\", jsonData.data[0].id);\n    }\n      ",
+                  "} catch (e) {",
+                  "    console.error(\"Variable extraction failed\", e);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/subscription-plans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subscription-plans"
+              ]
+            },
+            "description": "Public landing page endpoint to view active commercial plans.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Plan By ID (Public)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/subscription-plans/{{planId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subscription-plans",
+                "{{planId}}"
+              ]
+            },
+            "description": "Fetches details of a specific subscription tier.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Subscription Plan (Super Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  "",
+                  "// Extract dynamic variables",
+                  "try {",
+                  "    var jsonData = pm.response.json();",
+                  "\n    if (jsonData.data && jsonData.data.id) {\n        pm.environment.set(\"planId\", jsonData.data.id);\n    }\n      ",
+                  "} catch (e) {",
+                  "    console.error(\"Variable extraction failed\", e);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/subscription-plans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subscription-plans"
+              ]
+            },
+            "description": "Creates a new commercial subscription plan. Restricted to SUPER_ADMIN.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"الباقة المتقدمة 2026\",\n  \"description\": \"مناسبة للسناتر الكبيرة مع صلاحيات إنشاء الامتحانات والتقارير المتقدمة.\",\n  \"price\": 499,\n  \"type\": \"MONTHLY\",\n  \"studentLimit\": 500,\n  \"teacherLimit\": 30,\n  \"canCreateExams\": true,\n  \"isPopular\": true,\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Subscription Plan",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/subscription-plans/{{planId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subscription-plans",
+                "{{planId}}"
+              ]
+            },
+            "description": "Updates plan pricing and limits. Restricted to SUPER_ADMIN.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 549,\n  \"studentLimit\": 600\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Toggle Plan Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/subscription-plans/{{planId}}/toggle-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subscription-plans",
+                "{{planId}}",
+                "toggle-status"
+              ]
+            },
+            "description": "Toggles plan active/inactive status."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04. Subscription Payments (Super Admin)",
+      "description": "Global platform financial records, cash-flow metrics, and manual payment registrations.",
+      "item": [
+        {
+          "name": "Get Global Subscription Financial Summary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/subscription-payments/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subscription-payments",
+                "summary"
+              ]
+            },
+            "description": "Returns total revenue, active centers count, and monthly breakdown."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Subscription Payments (Global)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/subscription-payments?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subscription-payments"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Paginated list of all subscription payments across all centers."
+          },
+          "response": []
+        },
+        {
+          "name": "Record Center Subscription Payment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/centers/{{centerId}}/subscription-payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "centers",
+                "{{centerId}}",
+                "subscription-payments"
+              ]
+            },
+            "description": "Records manual payment collected from a center.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paid\": 299,\n  \"periodStart\": \"2026-10-01\",\n  \"periodEnd\": \"2026-10-31\",\n  \"paymentMethod\": \"Bank Transfer\",\n  \"notes\": \"سداد اشتراك شهر أكتوبر\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Center Subscription Payments History",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/centers/{{centerId}}/subscription-payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "centers",
+                "{{centerId}}",
+                "subscription-payments"
+              ]
+            },
+            "description": "History of payments for a single center tenant."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "05. Users (Staff & Center Accounts)",
+      "description": "Center user management, role inspection, and account state controls.",
+      "item": [
+        {
+          "name": "Get Center Users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  "",
+                  "// Extract dynamic variables",
+                  "try {",
+                  "    var jsonData = pm.response.json();",
+                  "\n    if (jsonData.data && jsonData.data.length > 0) {\n        pm.environment.set(\"userId\", jsonData.data[0].id);\n    }\n      ",
+                  "} catch (e) {",
+                  "    console.error(\"Variable extraction failed\", e);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Lists all staff and users belonging to the authenticated user's center."
+          },
+          "response": []
+        },
+        {
+          "name": "Get User By ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}"
+              ]
+            },
+            "description": "Detailed information for a specific user."
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Account",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}"
+              ]
+            },
+            "description": "Updates user account fields. Note: role is immutable.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"أحمد محمود سالم (محدث)\",\n  \"phone\": \"01012345678\",\n  \"isActive\": true,\n  \"mustChangePassword\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "06. Academic Structure - Grades",
+      "description": "Educational grade stages, ordering, imports, exports, and safe deletion.",
+      "item": [
+        {
+          "name": "Create Grade",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  "",
+                  "// Extract dynamic variables",
+                  "try {",
+                  "    var jsonData = pm.response.json();",
+                  "\n    if (jsonData.data && jsonData.data.id) {\n        pm.environment.set(\"gradeId\", jsonData.data.id);\n    }\n      ",
+                  "} catch (e) {",
+                  "    console.error(\"Variable extraction failed\", e);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/grades",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "grades"
+              ]
+            },
+            "description": "Creates a new educational grade for the center.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"الصف الثالث الثانوي\",\n  \"order\": 3,\n  \"description\": \"مرحلة الثانوية العامة\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Grades List",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  "",
+                  "// Extract dynamic variables",
+                  "try {",
+                  "    var jsonData = pm.response.json();",
+                  "\n    if (jsonData.data && jsonData.data.length > 0 && !pm.environment.get(\"gradeId\")) {\n        pm.environment.set(\"gradeId\", jsonData.data[0].id);\n    }\n      ",
+                  "} catch (e) {",
+                  "    console.error(\"Variable extraction failed\", e);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/grades?page=1&limit=10&sortBy=order&sortOrder=asc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "grades"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "order"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "asc"
+                }
+              ]
+            },
+            "description": "Returns paginated list of grades with relational count badges."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Grades to Excel",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response returns binary/file content\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.exist;",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/grades/export/excel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "grades",
+                "export",
+                "excel"
+              ]
+            },
+            "description": "Exports filtered grades to an Excel spreadsheet with entity IDs."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Grades to PDF",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response returns binary/file content\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.exist;",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/grades/export/pdf",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "grades",
+                "export",
+                "pdf"
+              ]
+            },
+            "description": "Generates formatted RTL Arabic PDF report for grades."
+          },
+          "response": []
+        },
+        {
+          "name": "Download Grades Import Template",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response returns binary/file content\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.exist;",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/grades/export/template",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "grades",
+                "export",
+                "template"
+              ]
+            },
+            "description": "Downloads Excel template with reference tables for bulk import."
+          },
+          "response": []
+        },
+        {
+          "name": "Import Grades from Excel (Dry Run)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/grades/import/excel?dryRun=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "grades",
+                "import",
+                "excel"
+              ],
+              "query": [
+                {
+                  "key": "dryRun",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Validates Excel file and returns parsed preview without database modifications.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": null,
+                  "description": "Excel spreadsheet (.xlsx / .xls)"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Import Grades from Excel (Execute)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/grades/import/excel?dryRun=false",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "grades",
+                "import",
+                "excel"
+              ],
+              "query": [
+                {
+                  "key": "dryRun",
+                  "value": "false"
+                }
+              ]
+            },
+            "description": "Imports valid grades from Excel in an atomic transaction.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": null,
+                  "description": "Excel spreadsheet (.xlsx / .xls)"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Grade By ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/grades/{{gradeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "grades",
+                "{{gradeId}}"
+              ]
+            },
+            "description": "Fetches details of a specific grade."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Grade",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/grades/{{gradeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "grades",
+                "{{gradeId}}"
+              ]
+            },
+            "description": "Updates grade name, order, or description.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"الصف الثالث الثانوي (علمي وأدبي)\",\n  \"order\": 3,\n  \"description\": \"محدث لعام 2026\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Toggle Grade Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/grades/{{gradeId}}/toggle-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "grades",
+                "{{gradeId}}",
+                "toggle-status"
+              ]
+            },
+            "description": "Toggles active status of the grade."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Grade (Safe Deletion)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/grades/{{gradeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "grades",
+                "{{gradeId}}"
+              ]
+            },
+            "description": "Deletes grade only if no subjects, groups, or students are associated with it."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "07. Academic Structure - Subjects",
+      "description": "Curriculum subjects scoped to grades, options dropdowns, templates, and exports.",
+      "item": [
+        {
+          "name": "Get Subjects Dropdown Options",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/subjects/options?gradeId={{gradeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subjects",
+                "options"
+              ],
+              "query": [
+                {
+                  "key": "gradeId",
+                  "value": "{{gradeId}}"
+                }
+              ]
+            },
+            "description": "Lightweight endpoint for fast frontend select dropdowns filtered by grade."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Subject",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  "",
+                  "// Extract dynamic variables",
+                  "try {",
+                  "    var jsonData = pm.response.json();",
+                  "\n    if (jsonData.data && jsonData.data.id) {\n        pm.environment.set(\"subjectId\", jsonData.data.id);\n    }\n      ",
+                  "} catch (e) {",
+                  "    console.error(\"Variable extraction failed\", e);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/subjects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subjects"
+              ]
+            },
+            "description": "Creates a curriculum subject linked to a grade.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"الكيمياء العضوية\",\n  \"gradeId\": \"{{gradeId}}\",\n  \"description\": \"المنهج الوزاري الحديث\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Subjects List",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  "",
+                  "// Extract dynamic variables",
+                  "try {",
+                  "    var jsonData = pm.response.json();",
+                  "\n    if (jsonData.data && jsonData.data.length > 0 && !pm.environment.get(\"subjectId\")) {\n        pm.environment.set(\"subjectId\", jsonData.data[0].id);\n    }\n      ",
+                  "} catch (e) {",
+                  "    console.error(\"Variable extraction failed\", e);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/subjects?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subjects"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Lists subjects with grade relationship and group counts."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Subjects to Excel",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response returns binary/file content\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.exist;",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/subjects/export/excel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subjects",
+                "export",
+                "excel"
+              ]
+            },
+            "description": "Exports subjects to Excel."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Subjects to PDF",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response returns binary/file content\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.exist;",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/subjects/export/pdf",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subjects",
+                "export",
+                "pdf"
+              ]
+            },
+            "description": "Exports subjects to Arabic PDF."
+          },
+          "response": []
+        },
+        {
+          "name": "Download Subjects Import Template",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response returns binary/file content\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.exist;",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/subjects/export/template",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subjects",
+                "export",
+                "template"
+              ]
+            },
+            "description": "Downloads Excel template with Grade ID reference column for fast copying."
+          },
+          "response": []
+        },
+        {
+          "name": "Import Subjects from Excel (Dry Run)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/subjects/import/excel?dryRun=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subjects",
+                "import",
+                "excel"
+              ],
+              "query": [
+                {
+                  "key": "dryRun",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Validates subject rows against active grade IDs.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": null,
+                  "description": "Excel spreadsheet (.xlsx / .xls)"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Import Subjects from Excel (Execute)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/subjects/import/excel?dryRun=false",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subjects",
+                "import",
+                "excel"
+              ],
+              "query": [
+                {
+                  "key": "dryRun",
+                  "value": "false"
+                }
+              ]
+            },
+            "description": "Executes batch creation of subjects.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": null,
+                  "description": "Excel spreadsheet (.xlsx / .xls)"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Subject By ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/subjects/{{subjectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subjects",
+                "{{subjectId}}"
+              ]
+            },
+            "description": "Details of a single subject."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Subject",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/subjects/{{subjectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subjects",
+                "{{subjectId}}"
+              ]
+            },
+            "description": "Updates subject name or description.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"الكيمياء المتقدمة\",\n  \"description\": \"شعبة علمي علوم ورياضة\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Toggle Subject Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/subjects/{{subjectId}}/toggle-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subjects",
+                "{{subjectId}}",
+                "toggle-status"
+              ]
+            },
+            "description": "Toggles subject active status."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Subject (Safe Deletion)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/subjects/{{subjectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subjects",
+                "{{subjectId}}"
+              ]
+            },
+            "description": "Blocks deletion if subject is linked to groups or assigned to teachers."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "08. Teachers Management",
+      "description": "Center teacher provisioning, subject assignments, quota validation, and imports.",
+      "item": [
+        {
+          "name": "Create Teacher",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  "",
+                  "// Extract dynamic variables",
+                  "try {",
+                  "    var jsonData = pm.response.json();",
+                  "\n    if (jsonData.data && jsonData.data.id) {\n        pm.environment.set(\"teacherId\", jsonData.data.id);\n    }\n      ",
+                  "} catch (e) {",
+                  "    console.error(\"Variable extraction failed\", e);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/teachers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "teachers"
+              ]
+            },
+            "description": "Enforces plan teacherLimit, creates User account, Teacher profile, and links subjects.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"أ. محمود شاكر\",\n  \"email\": \"teacher.shaker@alrowad.com\",\n  \"phone\": \"01099887711\",\n  \"password\": \"Teacher@123456\",\n  \"bio\": \"معلم أول كيمياء للثانوية العامة خبرة 15 عاماً\",\n  \"subjectIds\": [\n    \"{{subjectId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Teachers List",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  "",
+                  "// Extract dynamic variables",
+                  "try {",
+                  "    var jsonData = pm.response.json();",
+                  "\n    if (jsonData.data && jsonData.data.length > 0 && !pm.environment.get(\"teacherId\")) {\n        pm.environment.set(\"teacherId\", jsonData.data[0].id);\n    }\n      ",
+                  "} catch (e) {",
+                  "    console.error(\"Variable extraction failed\", e);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teachers?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "teachers"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Lists teachers with contact information and assigned subjects."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Teachers to Excel",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response returns binary/file content\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.exist;",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teachers/export/excel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "teachers",
+                "export",
+                "excel"
+              ]
+            },
+            "description": "Exports teachers dataset to Excel."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Teachers to PDF",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response returns binary/file content\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.exist;",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teachers/export/pdf",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "teachers",
+                "export",
+                "pdf"
+              ]
+            },
+            "description": "Exports teachers list to PDF."
+          },
+          "response": []
+        },
+        {
+          "name": "Download Teachers Import Template",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response returns binary/file content\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.exist;",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teachers/export/template",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "teachers",
+                "export",
+                "template"
+              ]
+            },
+            "description": "Template with Subject IDs reference sheet."
+          },
+          "response": []
+        },
+        {
+          "name": "Import Teachers from Excel (Dry Run)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teachers/import/excel?dryRun=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "teachers",
+                "import",
+                "excel"
+              ],
+              "query": [
+                {
+                  "key": "dryRun",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Pre-validates teacher accounts and subject linking.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": null,
+                  "description": "Excel spreadsheet (.xlsx / .xls)"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Import Teachers from Excel (Execute)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teachers/import/excel?dryRun=false",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "teachers",
+                "import",
+                "excel"
+              ],
+              "query": [
+                {
+                  "key": "dryRun",
+                  "value": "false"
+                }
+              ]
+            },
+            "description": "Executes bulk onboarding of teachers.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": null,
+                  "description": "Excel spreadsheet (.xlsx / .xls)"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Teacher By ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teachers/{{teacherId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "teachers",
+                "{{teacherId}}"
+              ]
+            },
+            "description": "Deep details for teacher including assigned groups."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Teacher",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/teachers/{{teacherId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "teachers",
+                "{{teacherId}}"
+              ]
+            },
+            "description": "Updates teacher bio and profile info.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"أ. محمود شاكر العوضي\",\n  \"bio\": \"معلم خبير ومؤلف سلسلة الأوائل في الكيمياء\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Toggle Teacher Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teachers/{{teacherId}}/toggle-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "teachers",
+                "{{teacherId}}",
+                "toggle-status"
+              ]
+            },
+            "description": "Deactivates teacher login and status."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Teacher (Safe Deletion)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teachers/{{teacherId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "teachers",
+                "{{teacherId}}"
+              ]
+            },
+            "description": "Blocks deletion if teacher is assigned to active groups."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "09. Students Management",
+      "description": "Student profiles, unique center codes, grade enrollments, parent phone records, and imports.",
+      "item": [
+        {
+          "name": "Create Student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  "",
+                  "// Extract dynamic variables",
+                  "try {",
+                  "    var jsonData = pm.response.json();",
+                  "\n    if (jsonData.data && jsonData.data.id) {\n        pm.environment.set(\"studentId\", jsonData.data.id);\n        if (jsonData.data.code) {\n            pm.environment.set(\"studentCode\", jsonData.data.code);\n        }\n    }\n      ",
+                  "} catch (e) {",
+                  "    console.error(\"Variable extraction failed\", e);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/students",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "students"
+              ]
+            },
+            "description": "Enforces plan studentLimit, creates User and Student profile with Grade enrollment.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"يوسف أحمد كمال\",\n  \"email\": \"youssef.kamal@example.com\",\n  \"phone\": \"01055443322\",\n  \"parentPhone\": \"01233445566\",\n  \"password\": \"Student@123456\",\n  \"code\": \"STU-2601\",\n  \"gradeId\": \"{{gradeId}}\",\n  \"notes\": \"متفوق ومشارك بالأنشطة\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Students List",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  "",
+                  "// Extract dynamic variables",
+                  "try {",
+                  "    var jsonData = pm.response.json();",
+                  "\n    if (jsonData.data && jsonData.data.length > 0 && !pm.environment.get(\"studentId\")) {\n        pm.environment.set(\"studentId\", jsonData.data[0].id);\n        if (jsonData.data[0].code) {\n            pm.environment.set(\"studentCode\", jsonData.data[0].code);\n        }\n    }\n      ",
+                  "} catch (e) {",
+                  "    console.error(\"Variable extraction failed\", e);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/students?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "students"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Paginated list of students with enrollments and groups."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Students to Excel",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response returns binary/file content\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.exist;",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/students/export/excel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "students",
+                "export",
+                "excel"
+              ]
+            },
+            "description": "Exports students roster to Excel."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Students to PDF",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response returns binary/file content\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.exist;",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/students/export/pdf",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "students",
+                "export",
+                "pdf"
+              ]
+            },
+            "description": "Arabic PDF report for students roster."
+          },
+          "response": []
+        },
+        {
+          "name": "Download Students Import Template",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response returns binary/file content\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.exist;",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/students/export/template",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "students",
+                "export",
+                "template"
+              ]
+            },
+            "description": "Excel import template with Grade IDs."
+          },
+          "response": []
+        },
+        {
+          "name": "Import Students from Excel (Dry Run)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/students/import/excel?dryRun=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "students",
+                "import",
+                "excel"
+              ],
+              "query": [
+                {
+                  "key": "dryRun",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Validates student rows and unique code/phone constraints.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": null,
+                  "description": "Excel spreadsheet (.xlsx / .xls)"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Import Students from Excel (Execute)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/students/import/excel?dryRun=false",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "students",
+                "import",
+                "excel"
+              ],
+              "query": [
+                {
+                  "key": "dryRun",
+                  "value": "false"
+                }
+              ]
+            },
+            "description": "Executes bulk student registration in transaction.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": null,
+                  "description": "Excel spreadsheet (.xlsx / .xls)"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Student By Code",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/students/by-code/{{studentCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "students",
+                "by-code",
+                "{{studentCode}}"
+              ]
+            },
+            "description": "Fast code lookup supporting with or without STU- prefix."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Student By ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/students/{{studentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "students",
+                "{{studentId}}"
+              ]
+            },
+            "description": "Full student profile and enrolled groups."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/students/{{studentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "students",
+                "{{studentId}}"
+              ]
+            },
+            "description": "Updates student profile details.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parentPhone\": \"01233445577\",\n  \"notes\": \"تم تحديث هاتف ولي الأمر\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Toggle Student Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/students/{{studentId}}/toggle-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "students",
+                "{{studentId}}",
+                "toggle-status"
+              ]
+            },
+            "description": "Toggles student active status."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Student (Safe Deletion)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/students/{{studentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "students",
+                "{{studentId}}"
+              ]
+            },
+            "description": "Blocks deletion if student has group enrollments or attendance records."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "10. Groups & Classes",
+      "description": "Classroom teaching groups, weekly schedules, student roster enrollments, and tuition fees.",
+      "item": [
+        {
+          "name": "Create Group",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  "",
+                  "// Extract dynamic variables",
+                  "try {",
+                  "    var jsonData = pm.response.json();",
+                  "\n    if (jsonData.data && jsonData.data.id) {\n        pm.environment.set(\"groupId\", jsonData.data.id);\n    }\n      ",
+                  "} catch (e) {",
+                  "    console.error(\"Variable extraction failed\", e);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups"
+              ]
+            },
+            "description": "Creates group and saves weekly schedule days and hours.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"مجموعة الأوائل - كيمياء 3ث\",\n  \"gradeId\": \"{{gradeId}}\",\n  \"subjectId\": \"{{subjectId}}\",\n  \"teacherId\": \"{{teacherId}}\",\n  \"capacity\": 30,\n  \"monthlyFee\": 300,\n  \"startDate\": \"2026-10-01\",\n  \"monthsCount\": 8,\n  \"schedule\": [\n    {\n      \"day\": \"SUNDAY\",\n      \"hour\": 16,\n      \"minute\": 30\n    },\n    {\n      \"day\": \"WEDNESDAY\",\n      \"hour\": 16,\n      \"minute\": 30\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Groups List",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  "",
+                  "// Extract dynamic variables",
+                  "try {",
+                  "    var jsonData = pm.response.json();",
+                  "\n    if (jsonData.data && jsonData.data.length > 0 && !pm.environment.get(\"groupId\")) {\n        pm.environment.set(\"groupId\", jsonData.data[0].id);\n    }\n      ",
+                  "} catch (e) {",
+                  "    console.error(\"Variable extraction failed\", e);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/groups?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Lists groups with schedules, student counts, and capacity."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Groups to Excel",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response returns binary/file content\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.exist;",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/groups/export/excel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "export",
+                "excel"
+              ]
+            },
+            "description": "Exports groups to Excel."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Groups to PDF",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response returns binary/file content\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.exist;",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/groups/export/pdf",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "export",
+                "pdf"
+              ]
+            },
+            "description": "Exports groups to PDF."
+          },
+          "response": []
+        },
+        {
+          "name": "Download Groups Import Template",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response returns binary/file content\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.exist;",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/groups/export/template",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "export",
+                "template"
+              ]
+            },
+            "description": "Excel template with Grade, Subject, Teacher ID reference tables."
+          },
+          "response": []
+        },
+        {
+          "name": "Import Groups from Excel (Dry Run)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/groups/import/excel?dryRun=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "import",
+                "excel"
+              ],
+              "query": [
+                {
+                  "key": "dryRun",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Validates group rows and relation IDs.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": null,
+                  "description": "Excel spreadsheet (.xlsx / .xls)"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Import Groups from Excel (Execute)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/groups/import/excel?dryRun=false",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "import",
+                "excel"
+              ],
+              "query": [
+                {
+                  "key": "dryRun",
+                  "value": "false"
+                }
+              ]
+            },
+            "description": "Batch creates groups and schedules.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": null,
+                  "description": "Excel spreadsheet (.xlsx / .xls)"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Group Details By ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/groups/{{groupId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "{{groupId}}"
+              ]
+            },
+            "description": "Full group details with enrolled student roster."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Group",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/groups/{{groupId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "{{groupId}}"
+              ]
+            },
+            "description": "Updates group capacity, fee, or schedule.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"capacity\": 35,\n  \"monthlyFee\": 320\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Toggle Group Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/groups/{{groupId}}/toggle-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "{{groupId}}",
+                "toggle-status"
+              ]
+            },
+            "description": "Toggles active status of group."
+          },
+          "response": []
+        },
+        {
+          "name": "Enroll Student in Group",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  "",
+                  "// Extract dynamic variables",
+                  "try {",
+                  "    var jsonData = pm.response.json();",
+                  "\n    if (jsonData.data && jsonData.data.id) {\n        pm.environment.set(\"groupStudentId\", jsonData.data.id);\n    }\n      ",
+                  "} catch (e) {",
+                  "    console.error(\"Variable extraction failed\", e);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/groups/{{groupId}}/students",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "{{groupId}}",
+                "students"
+              ]
+            },
+            "description": "Adds student to the group roster.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"studentId\": \"{{studentId}}\",\n  \"subscriptionStartDate\": \"2026-10-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Student from Group",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/groups/{{groupId}}/students",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "{{groupId}}",
+                "students"
+              ]
+            },
+            "description": "Removes student from the group.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"studentId\": \"{{studentId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Group (Safe Deletion)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/groups/{{groupId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "{{groupId}}"
+              ]
+            },
+            "description": "Blocks deletion if students are enrolled in the group."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "11. Attendance Tracking",
+      "description": "Session opening, roster presence marking, session histories, and summary reports.",
+      "item": [
+        {
+          "name": "Start or Open Attendance Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  "",
+                  "// Extract dynamic variables",
+                  "try {",
+                  "    var jsonData = pm.response.json();",
+                  "\n    if (jsonData.data && jsonData.data.id) {\n        pm.environment.set(\"sessionId\", jsonData.data.id);\n    }\n      ",
+                  "} catch (e) {",
+                  "    console.error(\"Variable extraction failed\", e);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/groups/{{groupId}}/attendance/session",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "{{groupId}}",
+                "attendance",
+                "session"
+              ]
+            },
+            "description": "Initializes attendance session for today or returns existing session."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Session Details & Student Roster",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/groups/{{groupId}}/attendance/session/{{sessionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "{{groupId}}",
+                "attendance",
+                "session",
+                "{{sessionId}}"
+              ]
+            },
+            "description": "Returns student attendance states for this specific session."
+          },
+          "response": []
+        },
+        {
+          "name": "Save Attendance Records (Batch)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/groups/{{groupId}}/attendance/session/{{sessionId}}/save",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "{{groupId}}",
+                "attendance",
+                "session",
+                "{{sessionId}}",
+                "save"
+              ]
+            },
+            "description": "Saves statuses (PRESENT, ABSENT, LATE, EXCUSED) and dispatches WhatsApp alerts on absence.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"records\": [\n    {\n      \"studentId\": \"{{studentId}}\",\n      \"status\": \"PRESENT\",\n      \"absenceReason\": null\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Group Attendance Sessions List",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/groups/{{groupId}}/attendance/sessions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "{{groupId}}",
+                "attendance",
+                "sessions"
+              ]
+            },
+            "description": "Chronological log of all recorded attendance sessions for the group."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Group Attendance Summary Report",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/groups/{{groupId}}/attendance/report",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "{{groupId}}",
+                "attendance",
+                "report"
+              ]
+            },
+            "description": "Aggregated attendance percentages across all students in the group."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Student Attendance Report",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/students/{{studentId}}/attendance/report",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "students",
+                "{{studentId}}",
+                "attendance",
+                "report"
+              ]
+            },
+            "description": "Individual student attendance rate and absence dates."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "12. Student Tuition & Monthly Payments",
+      "description": "Monthly fee tracking, group payment matrices, receipt recording, and financial exports.",
+      "item": [
+        {
+          "name": "Get Group Payments Matrix",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/groups/{{groupId}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "{{groupId}}",
+                "payments"
+              ]
+            },
+            "description": "Matrix of student payment status across all academic months for the group."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Group Payments Matrix to Excel",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response returns binary/file content\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.exist;",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/groups/{{groupId}}/payments/export/excel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "{{groupId}}",
+                "payments",
+                "export",
+                "excel"
+              ]
+            },
+            "description": "Exports group fee payment matrix to formatted Excel sheet."
+          },
+          "response": []
+        },
+        {
+          "name": "Record Student Monthly Payment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/group-students/{{groupStudentId}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "group-students",
+                "{{groupStudentId}}",
+                "payments"
+              ]
+            },
+            "description": "Records fee payment for a group student enrollment.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subscriptionDate\": \"2026-10-01\",\n  \"amount\": 300,\n  \"notes\": \"تم السداد نقداً في المركز\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Student Payments History",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/students/{{studentId}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "students",
+                "{{studentId}}",
+                "payments"
+              ]
+            },
+            "description": "All payments recorded for a student across all their groups."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Student Payments to Excel",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response returns binary/file content\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.exist;",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/students/{{studentId}}/payments/export/excel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "students",
+                "{{studentId}}",
+                "payments",
+                "export",
+                "excel"
+              ]
+            },
+            "description": "Exports individual student statement of account to Excel."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "13. Home & Dashboard Stats",
+      "description": "Real-time key performance indicators and dashboard metrics for the center.",
+      "item": [
+        {
+          "name": "Get Center Home Dashboard Statistics",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/home-stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "home-stats"
+              ]
+            },
+            "description": "Returns active counts for students, teachers, groups, today sessions, and payments."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "14. Notifications",
+      "description": "In-app and WhatsApp event notification logs.",
+      "item": [
+        {
+          "name": "Get Center Notifications",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/notifications?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Logs of dispatched alerts (absence warnings, payment receipts, onboarding credentials)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "15. Security Audit Logs",
+      "description": "Immutable administrative and financial action trails.",
+      "item": [
+        {
+          "name": "Get Center Audit Trail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/audit-logs?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit-logs"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Audits create, update, delete, status changes, and payment collections with IP address."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "16. Parent Portal (Public & Secure)",
+      "description": "Magic token generation and public responsive progress reports for parents.",
+      "item": [
+        {
+          "name": "Generate 30-Day Magic Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  "",
+                  "// Extract dynamic variables",
+                  "try {",
+                  "    var jsonData = pm.response.json();",
+                  "\n    if (jsonData.data && jsonData.data.token) {\n        pm.environment.set(\"magicToken\", jsonData.data.token);\n    }\n      ",
+                  "} catch (e) {",
+                  "    console.error(\"Variable extraction failed\", e);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/p/generate/{{studentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "p",
+                "generate",
+                "{{studentId}}"
+              ]
+            },
+            "description": "Generates expiring 30-day magic link token. Restricted to OWNER and TEACHER."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Student Progress Report By Token (Public)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 2xx\", function () {",
+                  "    pm.response.to.be.success;",
+                  "});",
+                  "",
+                  "pm.test(\"Response has JSON format and success flag\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an(\"object\");",
+                  "    if (jsonData.statusCode) {",
+                  "        pm.expect(jsonData.statusCode).to.be.below(400);",
+                  "    }",
+                  "    if (jsonData.success !== undefined) {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "    }",
+                  "});",
+                  ""
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/p/{{magicToken}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "p",
+                "{{magicToken}}"
+              ]
+            },
+            "description": "Public endpoint allowing parents to inspect student attendance and payment history without logging in.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
