@@ -13,10 +13,16 @@ import { PrismaService } from '../../database/prisma/prisma.service';
 import { AppRole } from '../../common/enums/app-role.enum';
 import {
   groupDetailsSelect,
+  groupEnrolledStudentSelect,
   groupListSelect,
   GroupDetails,
+  GroupEnrolledStudent,
   GroupListItem,
 } from './constants/group.select';
+import {
+  studentListSelect,
+  StudentListItem,
+} from '../students/constants/student.select';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { GroupQueryDto } from './dto/get-groups.dto';
@@ -322,6 +328,180 @@ export class GroupsService {
       where: { id },
       data: { isActive: !current.isActive },
       select: groupListSelect,
+    });
+  }
+
+  /**
+   * دالة مساعدة خاصة للتحقق من وجود المجموعة وصلاحية المستخدم للوصول إليها.
+   */
+  private async getGroupWithAccessCheck(
+    centerId: string,
+    id: string,
+    currentUserRole: AppRole,
+    currentUserId: string,
+  ) {
+    const group = await this.prisma.group.findFirst({
+      where: { id, centerId },
+      select: {
+        id: true,
+        name: true,
+        gradeId: true,
+        teacherId: true,
+        capacity: true,
+        isActive: true,
+      },
+    });
+
+    if (!group) {
+      throw new NotFoundException('المجموعة الدراسية المطلوبة غير موجودة.');
+    }
+
+    if (currentUserRole === AppRole.TEACHER) {
+      const teacher = await this.prisma.teacher.findUnique({
+        where: { userId: currentUserId },
+        select: { id: true },
+      });
+
+      if (!teacher || group.teacherId !== teacher.id) {
+        throw new ForbiddenException(
+          'ليس لديك صلاحية للوصول إلى هذه المجموعة الدراسية.',
+        );
+      }
+    } else if (currentUserRole === AppRole.STUDENT) {
+      throw new ForbiddenException(
+        'ليس لديك صلاحية للوصول إلى طلاب هذه المجموعة الدراسية.',
+      );
+    }
+
+    return group;
+  }
+
+  /**
+   * جلب الطلاب المسجلين في المجموعة الدراسية.
+   */
+  async findStudents(
+    centerId: string,
+    id: string,
+    currentUserRole: AppRole,
+    currentUserId: string,
+    search?: string,
+  ): Promise<GroupEnrolledStudent[]> {
+    await this.getGroupWithAccessCheck(
+      centerId,
+      id,
+      currentUserRole,
+      currentUserId,
+    );
+
+    return this.prisma.groupStudent.findMany({
+      where: {
+        groupId: id,
+        centerId,
+        ...(search
+          ? {
+              student: {
+                OR: [
+                  { code: { contains: search, mode: 'insensitive' } },
+                  { parentPhone: { contains: search } },
+                  {
+                    user: {
+                      OR: [
+                        {
+                          fullName: {
+                            contains: search,
+                            mode: 'insensitive',
+                          },
+                        },
+                        { phone: { contains: search } },
+                        {
+                          email: {
+                            contains: search,
+                            mode: 'insensitive',
+                          },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            }
+          : {}),
+      },
+      select: groupEnrolledStudentSelect,
+      orderBy: {
+        joinedAt: 'desc',
+      },
+    });
+  }
+
+  /**
+   * جلب الطلاب المؤهلين للتسجيل في المجموعة:
+   * - ينتمون لنفس المركز
+   * - مسجلون ونشطون في نفس المرحلة الدراسية للمجموعة
+   * - حساباتهم نشطة
+   * - غير مسجلين في هذه المجموعة حالياً
+   */
+  async findStudentsNotEnrolled(
+    centerId: string,
+    id: string,
+    currentUserRole: AppRole,
+    currentUserId: string,
+    search?: string,
+  ): Promise<StudentListItem[]> {
+    const group = await this.getGroupWithAccessCheck(
+      centerId,
+      id,
+      currentUserRole,
+      currentUserId,
+    );
+
+    if (!group.isActive) {
+      throw new BadRequestException(
+        'لا يمكن إضافة طلاب إلى مجموعة دراسية معطلة.',
+      );
+    }
+
+    const where: Prisma.StudentWhereInput = {
+      centerId,
+      user: {
+        isActive: true,
+      },
+      enrollments: {
+        some: {
+          gradeId: group.gradeId,
+          isActive: true,
+        },
+      },
+      groups: {
+        none: {
+          groupId: id,
+        },
+      },
+    };
+
+    if (search) {
+      where.OR = [
+        { code: { contains: search, mode: 'insensitive' } },
+        { parentPhone: { contains: search } },
+        {
+          user: {
+            fullName: { contains: search, mode: 'insensitive' },
+          },
+        },
+        {
+          user: {
+            phone: { contains: search },
+          },
+        },
+      ];
+    }
+
+    return this.prisma.student.findMany({
+      where,
+      select: studentListSelect,
+      orderBy: {
+        user: { fullName: 'asc' },
+      },
     });
   }
 

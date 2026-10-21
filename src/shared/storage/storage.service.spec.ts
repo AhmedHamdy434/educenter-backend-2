@@ -288,4 +288,72 @@ describe('StorageService with Strategy Pattern (LocalStorageProvider)', () => {
       expect(result).toBe(false);
     });
   });
+
+  describe('StorageService with CloudinaryStorageProvider strategy delegation', () => {
+    let cloudinaryService: StorageService;
+    const mockCloudinaryProvider = {
+      upload: jest.fn(),
+      delete: jest.fn(),
+      isLocalFile: jest.fn().mockReturnValue(false),
+      getBaseUploadDir: jest.fn().mockReturnValue(''),
+    };
+
+    beforeEach(async () => {
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          StorageService,
+          {
+            provide: STORAGE_PROVIDER,
+            useValue: mockCloudinaryProvider,
+          },
+        ],
+      }).compile();
+
+      cloudinaryService = module.get<StorageService>(StorageService);
+    });
+
+    it('should delegate uploadImage to Cloudinary provider', async () => {
+      const mockFile = { buffer: Buffer.from('test') } as Express.Multer.File;
+      const expectedResult = {
+        url: 'https://res.cloudinary.com/test/image/upload/sample.jpg',
+        secure_url: 'https://res.cloudinary.com/test/image/upload/sample.jpg',
+        filename: 'sample.jpg',
+        path: 'sample',
+        size: 4,
+        mimetype: 'image/jpeg',
+      };
+      mockCloudinaryProvider.upload.mockResolvedValue(expectedResult);
+
+      const res = await cloudinaryService.uploadImage(
+        mockFile,
+        UploadFolder.CENTERS,
+      );
+
+      expect(res).toEqual(expectedResult);
+      expect(mockCloudinaryProvider.upload).toHaveBeenCalledWith(
+        mockFile,
+        UploadFolder.CENTERS,
+      );
+    });
+
+    it('should delegate deleteFile to Cloudinary provider', async () => {
+      mockCloudinaryProvider.delete.mockResolvedValue(true);
+
+      const res = await cloudinaryService.deleteFile(
+        'https://res.cloudinary.com/test/image/upload/sample.jpg',
+      );
+
+      expect(res).toBe(true);
+      expect(mockCloudinaryProvider.delete).toHaveBeenCalledWith(
+        'https://res.cloudinary.com/test/image/upload/sample.jpg',
+      );
+    });
+
+    it('should delegate isLocalFile to Cloudinary provider', () => {
+      expect(
+        cloudinaryService.isLocalFile('https://res.cloudinary.com/...'),
+      ).toBe(false);
+      expect(mockCloudinaryProvider.isLocalFile).toHaveBeenCalled();
+    });
+  });
 });

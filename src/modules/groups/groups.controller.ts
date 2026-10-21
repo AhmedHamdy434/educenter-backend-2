@@ -38,7 +38,12 @@ import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { GroupQueryDto } from './dto/get-groups.dto';
 import { GroupStudentsDto } from './dto/group-students.dto';
-import { GroupDetails, GroupListItem } from './constants/group.select';
+import {
+  GroupDetails,
+  GroupEnrolledStudent,
+  GroupListItem,
+} from './constants/group.select';
+import { StudentListItem } from '../students/constants/student.select';
 
 @Controller('groups')
 @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
@@ -164,6 +169,42 @@ export class GroupsController {
     @Param('id') id: string,
   ): Promise<GroupDetails> {
     return this.groupsService.findOne(centerId, id, user.role, user.id);
+  }
+
+  @Get(':id/available-students')
+  @ResponseMessage('تم جلب الطلاب المتاحين للتسجيل في المجموعة بنجاح.')
+  @Roles(AppRole.OWNER, AppRole.TEACHER)
+  findStudentsNotEnrolled(
+    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
+    @Param('id') id: string,
+    @Query('search') search?: string,
+  ): Promise<StudentListItem[]> {
+    return this.groupsService.findStudentsNotEnrolled(
+      centerId,
+      id,
+      user.role,
+      user.id,
+      search,
+    );
+  }
+
+  @Get(':id/students')
+  @ResponseMessage('تم جلب طلاب المجموعة الدراسية بنجاح.')
+  @Roles(AppRole.OWNER, AppRole.TEACHER)
+  findStudents(
+    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
+    @Param('id') id: string,
+    @Query('search') search?: string,
+  ): Promise<GroupEnrolledStudent[]> {
+    return this.groupsService.findStudents(
+      centerId,
+      id,
+      user.role,
+      user.id,
+      search,
+    );
   }
 
   @Patch(':id')

@@ -745,7 +745,7 @@
 
 ---
 
-## Module 10: Groups & Classes (`/groups`) — 12 Endpoints
+## Module 10: Groups & Classes (`/groups`) — 14 Endpoints
 
 ### 10.1 Create Group
 - **Endpoint:** `POST /api/groups`
@@ -773,15 +773,91 @@
 ### 10.5 Download Groups Template (`GET /api/groups/export/template`)
 ### 10.6 Import Groups from Excel (`POST /api/groups/import/excel?dryRun=false`)
 ### 10.7 Get Group By ID (`GET /api/groups/:id`)
-### 10.8 Update Group (`PATCH /api/groups/:id`)
-### 10.9 Toggle Group Status (`PATCH /api/groups/:id/toggle-status`)
-### 10.10 Enroll Student in Group
+### 10.8 Get Group Enrolled Students
+- **Endpoint:** `GET /api/groups/:id/students`
+- **Purpose:** Retrieves all students currently enrolled in the group with enrollment dates and contact info.
+- **Auth / Role:** Bearer JWT | `OWNER`, `TEACHER`.
+- **Query Parameters:** `search` (optional search by name, phone, code).
+- **Success Response (`200 OK`):**
+  ```json
+  {
+    "success": true,
+    "message": "تم جلب طلاب المجموعة الدراسية بنجاح.",
+    "data": [
+      {
+        "id": "clygs001",
+        "groupId": "clygroup001",
+        "studentId": "clystudent001",
+        "joinedAt": "2026-10-01T10:00:00.000Z",
+        "subscriptionStartDate": "2026-10-01T00:00:00.000Z",
+        "student": {
+          "id": "clystudent001",
+          "code": "STU-1001",
+          "parentPhone": "01011111111",
+          "user": {
+            "id": "clyu001",
+            "fullName": "أحمد محمود سالم",
+            "email": "ahmed@example.com",
+            "phone": "01011111111",
+            "avatar": null,
+            "isActive": true
+          }
+        }
+      }
+    ]
+  }
+  ```
+
+### 10.9 Get Eligible Students Not Enrolled in Group
+- **Endpoint:** `GET /api/groups/:id/students/not-enrolled` *(Aliases: `/api/groups/:id/available-students`, `/api/groups/:id/studentsnotenrolled`)*
+- **Purpose:** Retrieves candidates eligible to be enrolled (active center students in the same grade who are not yet enrolled in this group).
+- **Auth / Role:** Bearer JWT | `OWNER`, `TEACHER`.
+- **Query Parameters:** `search` (optional search by name, phone, code).
+- **Success Response (`200 OK`):**
+  ```json
+  {
+    "success": true,
+    "message": "تم جلب الطلاب المتاحين للتسجيل في المجموعة بنجاح.",
+    "data": [
+      {
+        "id": "clystudent002",
+        "code": "STU-1002",
+        "parentPhone": "01022222222",
+        "createdAt": "2026-10-01T10:00:00.000Z",
+        "centerId": "clycenter001",
+        "user": {
+          "id": "clyu002",
+          "fullName": "سارة محمد إبراهيم",
+          "email": "sara@example.com",
+          "phone": "01022222222",
+          "avatar": null,
+          "isActive": true
+        },
+        "enrollments": [
+          {
+            "id": "clyen001",
+            "isActive": true,
+            "gradeId": "clygrade001",
+            "grade": {
+              "id": "clygrade001",
+              "name": "الصف الثالث الثانوي"
+            }
+          }
+        ]
+      }
+    ]
+  }
+  ```
+
+### 10.10 Update Group (`PATCH /api/groups/:id`)
+### 10.11 Toggle Group Status (`PATCH /api/groups/:id/toggle-status`)
+### 10.12 Enroll Student in Group
 - **Endpoint:** `POST /api/groups/:id/students`
-- **Request Body:** `{ "studentId": "...", "subscriptionStartDate": "2026-10-01" }`
-### 10.11 Remove Student from Group
+- **Request Body:** `{ "studentIds": ["clystudent001"], "subscriptionStartDate": "2026-10-01" }`
+### 10.13 Remove Student from Group
 - **Endpoint:** `DELETE /api/groups/:id/students`
-- **Request Body:** `{ "studentId": "..." }`
-### 10.12 Delete Group (`DELETE /api/groups/:id`)
+- **Request Body:** `{ "studentIds": ["clystudent001"] }`
+### 10.14 Delete Group (`DELETE /api/groups/:id`)
 - Safe deletion blocked if students are enrolled (`400 Bad Request`: `"لا يمكن حذف المجموعة لوجود طلاب مسجلين بها."`).
 
 ---

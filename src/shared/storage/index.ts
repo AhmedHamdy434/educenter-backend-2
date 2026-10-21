@@ -4,5 +4,6 @@ export * from './enums/upload-folder.enum';
 export * from './interfaces/stored-file.interface';
 export * from './interfaces/storage-provider.interface';
 export * from './providers/local-storage.provider';
+export * from './providers/cloudinary-storage.provider';
 export * from './pipes/image-validation.pipe';
 export * from './utils/image-magic-bytes.util';

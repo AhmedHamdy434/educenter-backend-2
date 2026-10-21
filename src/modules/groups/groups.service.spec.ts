@@ -29,6 +29,13 @@ describe('GroupsService - Export, Import & Sort', () => {
     };
     teacher: {
       findMany: jest.Mock;
+      findUnique: jest.Mock;
+    };
+    groupStudent: {
+      findMany: jest.Mock;
+    };
+    student: {
+      findMany: jest.Mock;
     };
   };
   let excelService: {
@@ -58,6 +65,13 @@ describe('GroupsService - Export, Import & Sort', () => {
         findMany: jest.fn(),
       },
       teacher: {
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+      },
+      groupStudent: {
+        findMany: jest.fn(),
+      },
+      student: {
         findMany: jest.fn(),
       },
     };
@@ -436,9 +450,9 @@ describe('GroupsService - Export, Import & Sort', () => {
     it('should throw NotFoundException if group not found', async () => {
       prisma.group.findFirst.mockResolvedValue(null);
 
-      await expect(service.remove(centerId, 'group-non-existent')).rejects.toThrow(
-        'المجموعة الدراسية المطلوبة غير موجودة.',
-      );
+      await expect(
+        service.remove(centerId, 'group-non-existent'),
+      ).rejects.toThrow('المجموعة الدراسية المطلوبة غير موجودة.');
     });
 
     it('should throw BadRequestException if group has enrolled students', async () => {
@@ -464,6 +478,157 @@ describe('GroupsService - Export, Import & Sort', () => {
       expect(prisma.group.delete).toHaveBeenCalledWith({
         where: { id: 'group-1' },
       });
+    });
+  });
+
+  describe('findStudents', () => {
+    it('should return enrolled students of the group', async () => {
+      prisma.group.findFirst.mockResolvedValue({
+        id: 'group-1',
+        name: 'Group 1',
+        gradeId: 'grade-1',
+        teacherId: 'teacher-1',
+        isActive: true,
+      });
+
+      const mockStudents = [
+        {
+          id: 'gs-1',
+          groupId: 'group-1',
+          studentId: 'stu-1',
+          joinedAt: new Date(),
+          subscriptionStartDate: new Date(),
+          student: {
+            id: 'stu-1',
+            code: 'STU-1',
+            parentPhone: '01011111111',
+            user: {
+              id: 'u-1',
+              fullName: 'Ahmed Ali',
+              email: 'ahmed@test.com',
+              phone: '01011111111',
+              avatar: null,
+              isActive: true,
+            },
+          },
+        },
+      ];
+
+      prisma.groupStudent.findMany.mockResolvedValue(mockStudents);
+
+      const result = await service.findStudents(
+        centerId,
+        'group-1',
+        AppRole.OWNER,
+        'user-1',
+      );
+
+      expect(result).toEqual(mockStudents);
+      expect(prisma.groupStudent.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            groupId: 'group-1',
+            centerId,
+          }),
+        }),
+      );
+    });
+
+    it('should throw ForbiddenException if teacher does not own the group', async () => {
+      prisma.group.findFirst.mockResolvedValue({
+        id: 'group-1',
+        teacherId: 'teacher-other',
+      });
+      prisma.teacher.findUnique.mockResolvedValue({ id: 'teacher-mine' });
+
+      await expect(
+        service.findStudents(
+          centerId,
+          'group-1',
+          AppRole.TEACHER,
+          'user-teacher',
+        ),
+      ).rejects.toThrow('ليس لديك صلاحية للوصول إلى هذه المجموعة الدراسية.');
+    });
+  });
+
+  describe('findStudentsNotEnrolled', () => {
+    it('should return students eligible to be added to group', async () => {
+      prisma.group.findFirst.mockResolvedValue({
+        id: 'group-1',
+        gradeId: 'grade-1',
+        teacherId: 'teacher-1',
+        isActive: true,
+      });
+
+      const mockCandidates = [
+        {
+          id: 'stu-2',
+          code: 'STU-2',
+          parentPhone: '01022222222',
+          user: {
+            id: 'u-2',
+            fullName: 'Sara Mohamed',
+            email: 'sara@test.com',
+            phone: '01022222222',
+            avatar: null,
+            isActive: true,
+          },
+          enrollments: [
+            {
+              id: 'en-2',
+              gradeId: 'grade-1',
+              isActive: true,
+              grade: { id: 'grade-1', name: 'Grade 1' },
+            },
+          ],
+        },
+      ];
+
+      prisma.student.findMany.mockResolvedValue(mockCandidates);
+
+      const result = await service.findStudentsNotEnrolled(
+        centerId,
+        'group-1',
+        AppRole.OWNER,
+        'user-1',
+      );
+
+      expect(result).toEqual(mockCandidates);
+      expect(prisma.student.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            centerId,
+            user: expect.objectContaining({ isActive: true }),
+            enrollments: expect.objectContaining({
+              some: expect.objectContaining({
+                gradeId: 'grade-1',
+                isActive: true,
+              }),
+            }),
+            groups: expect.objectContaining({
+              none: { groupId: 'group-1' },
+            }),
+          }),
+        }),
+      );
+    });
+
+    it('should throw BadRequestException if group is inactive', async () => {
+      prisma.group.findFirst.mockResolvedValue({
+        id: 'group-1',
+        gradeId: 'grade-1',
+        isActive: false,
+      });
+
+      await expect(
+        service.findStudentsNotEnrolled(
+          centerId,
+          'group-1',
+          AppRole.OWNER,
+          'user-1',
+        ),
+      ).rejects.toThrow('لا يمكن إضافة طلاب إلى مجموعة دراسية معطلة.');
     });
   });
 });

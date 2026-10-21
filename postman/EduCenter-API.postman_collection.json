@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "51246346-educenter-saas-api-v2",
+    "_postman_id": "afe1d18f-07e8-4d0c-986e-7ac94d6660e4",
     "name": "EduCenter SaaS API",
     "description": "Production-grade Postman collection for EduCenter Multi-Tenant Educational SaaS Platform. Fully mirrors all 98 backend endpoints with dynamic token injection, sequential CRUD workflows, and contract validation tests.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"

@@ -99,3 +99,24 @@ export type GroupListItem = Prisma.GroupGetPayload<{
 export type GroupDetails = Prisma.GroupGetPayload<{
   select: typeof groupDetailsSelect;
 }>;
+
+export const groupEnrolledStudentSelect = {
+  id: true,
+  studentId: true,
+  student: {
+    select: {
+      id: true,
+      code: true,
+      user: {
+        select: {
+          fullName: true,
+          phone: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.GroupStudentSelect;
+
+export type GroupEnrolledStudent = Prisma.GroupStudentGetPayload<{
+  select: typeof groupEnrolledStudentSelect;
+}>;

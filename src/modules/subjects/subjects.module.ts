@@ -12,4 +12,3 @@ import { PdfModule } from '../../shared/pdf/pdf.module';
   exports: [SubjectsService],
 })
 export class SubjectsModule {}
-
