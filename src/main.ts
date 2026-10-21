@@ -32,6 +32,8 @@ async function bootstrap() {
     'http://localhost:3000',
     'http://localhost:5173',
     'http://localhost:5174',
+    'https://educenter-dashboard-super-admin-2.vercel.app',
+    'https://educenter-website-2-eight.vercel.app',
     'https://educenter-website.vercel.app',
     'https://educenter.vercel.app',
     ...frontendUrls,
