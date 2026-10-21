@@ -1,6 +1,7 @@
 export * from './storage.module';
 export * from './storage.service';
 export * from './enums/upload-folder.enum';
+export * from './enums/storage-driver.enum';
 export * from './interfaces/stored-file.interface';
 export * from './interfaces/storage-provider.interface';
 export * from './providers/local-storage.provider';
