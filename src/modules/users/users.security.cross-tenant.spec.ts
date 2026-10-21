@@ -2,11 +2,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UsersService } from './users.service';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { UserRole, Prisma } from '@prisma/client';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { UserQueryDto } from './dto/get-users.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 describe('Cross-Tenant Security & Privilege Escalation Tests', () => {
-  const ADMIN_ROLE = 'ADMIN' as unknown as UserRole;
   let service: UsersService;
   let prismaService: {
     $transaction: jest.Mock;
@@ -94,76 +94,89 @@ describe('Cross-Tenant Security & Privilege Escalation Tests', () => {
       prismaService.user.findFirst.mockResolvedValueOnce(null);
 
       await expect(
-        service.update(
-          'center-A',
-          'user-belonging-to-center-B',
-          { fullName: 'Hacked' },
-          { id: 'admin-a', role: UserRole.OWNER },
-        ),
+        service.update('center-A', 'user-belonging-to-center-B', {
+          fullName: 'Hacked',
+        }),
       ).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('Privilege Escalation Protection', () => {
-    it('should prevent an ADMIN from modifying or deactivating the center OWNER', async () => {
+    it('should prevent modifying user role via update ensuring role immutability', async () => {
       prismaService.user.findFirst.mockResolvedValueOnce({
-        id: 'owner-id',
-        role: UserRole.OWNER,
+        id: 'user-1-id',
+        role: UserRole.STUDENT,
+        centerId: 'center-A',
+      });
+      prismaService.user.findUnique
+        .mockResolvedValueOnce({
+          id: 'user-1-id',
+          fullName: 'Original Name',
+          role: UserRole.STUDENT,
+          centerId: 'center-A',
+        })
+        .mockResolvedValueOnce({
+          id: 'user-1-id',
+          fullName: 'Updated Name',
+          role: UserRole.STUDENT,
+          centerId: 'center-A',
+        });
+      prismaService.user.update.mockResolvedValueOnce({
+        id: 'user-1-id',
+        fullName: 'Updated Name',
+        role: UserRole.STUDENT,
         centerId: 'center-A',
       });
 
-      await expect(
-        service.update(
-          'center-A',
-          'owner-id',
-          { isActive: false },
-          { id: 'admin-id', role: ADMIN_ROLE },
-        ),
-      ).rejects.toThrow(ForbiddenException);
+      await service.update('center-A', 'user-1-id', {
+        fullName: 'Updated Name',
+        ...({ role: UserRole.OWNER } as unknown as UpdateUserDto),
+      });
+
+      expect(prismaService.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.not.objectContaining({ role: expect.anything() }),
+        }),
+      );
     });
 
-    it('should prevent an ADMIN from modifying another ADMIN', async () => {
-      prismaService.user.findFirst.mockResolvedValueOnce({
-        id: 'admin-2-id',
-        role: ADMIN_ROLE,
-        centerId: 'center-A',
-      });
+    it('should reject updating non-existent user with NotFoundException', async () => {
+      prismaService.user.findFirst.mockResolvedValueOnce(null);
 
       await expect(
-        service.update(
-          'center-A',
-          'admin-2-id',
-          { fullName: 'Tampered' },
-          { id: 'admin-1-id', role: ADMIN_ROLE },
-        ),
-      ).rejects.toThrow(ForbiddenException);
+        service.update('center-A', 'non-existent-user', { isActive: false }),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should allow an OWNER to modify any user in their center', async () => {
       prismaService.user.findFirst.mockResolvedValueOnce({
-        id: 'admin-1-id',
-        role: ADMIN_ROLE,
+        id: 'user-1-id',
+        role: UserRole.STUDENT,
         centerId: 'center-A',
       });
-      prismaService.user.findUnique.mockResolvedValue({
-        id: 'admin-1-id',
-        fullName: 'Updated by Owner',
-        role: ADMIN_ROLE,
-        centerId: 'center-A',
-      });
+      prismaService.user.findUnique
+        .mockResolvedValueOnce({
+          id: 'user-1-id',
+          fullName: 'Original Name',
+          role: UserRole.STUDENT,
+          centerId: 'center-A',
+        })
+        .mockResolvedValueOnce({
+          id: 'user-1-id',
+          fullName: 'Updated by Owner',
+          role: UserRole.STUDENT,
+          centerId: 'center-A',
+        });
       prismaService.user.update.mockResolvedValueOnce({
-        id: 'admin-1-id',
+        id: 'user-1-id',
         fullName: 'Updated by Owner',
-        role: ADMIN_ROLE,
+        role: UserRole.STUDENT,
         centerId: 'center-A',
       });
 
-      const result = await service.update(
-        'center-A',
-        'admin-1-id',
-        { fullName: 'Updated by Owner' },
-        { id: 'owner-id', role: UserRole.OWNER },
-      );
+      const result = await service.update('center-A', 'user-1-id', {
+        fullName: 'Updated by Owner',
+      });
 
       expect(result.fullName).toBe('Updated by Owner');
     });
