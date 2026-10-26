@@ -12,6 +12,7 @@ import { SubscriptionValidationService } from '../subscription-plans/subscriptio
 import { ExcelService } from '../../shared/excel/excel.service';
 import { PdfService } from '../../shared/pdf/pdf.service';
 import { StudentQueryDto } from './dto/get-students.dto';
+import { AppRole } from '../../common/enums/app-role.enum';
 
 describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
   let service: StudentsService;
@@ -35,6 +36,12 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
     };
     studentEnrollment: {
       createMany: jest.Mock;
+    };
+    teacher: {
+      findUnique: jest.Mock;
+    };
+    groupStudent: {
+      count: jest.Mock;
     };
     $transaction: jest.Mock;
   };
@@ -78,6 +85,12 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
       },
       studentEnrollment: {
         createMany: jest.fn(),
+      },
+      teacher: {
+        findUnique: jest.fn(),
+      },
+      groupStudent: {
+        count: jest.fn(),
       },
       $transaction: jest.fn(),
     };
@@ -632,6 +645,91 @@ describe('StudentsService - Excel & PDF, Import & Export, Sorting', () => {
 
       expect(code).toMatch(/^STU-\d{6}$/);
       expect(prisma.student.findUnique).toHaveBeenCalled();
+    });
+  });
+
+  describe('isStudentEnrolledWithTeacher', () => {
+    it('should return true if student is in one of teacher groups', async () => {
+      prisma.teacher.findUnique.mockResolvedValue({ id: 'teacher-1' });
+      prisma.groupStudent.count.mockResolvedValue(1);
+
+      const result = await service.isStudentEnrolledWithTeacher(
+        centerId,
+        'student-1',
+        'user-teacher-1',
+      );
+
+      expect(result).toBe(true);
+      expect(prisma.groupStudent.count).toHaveBeenCalledWith({
+        where: {
+          studentId: 'student-1',
+          centerId,
+          group: {
+            teacherId: 'teacher-1',
+            centerId,
+          },
+        },
+      });
+    });
+
+    it('should return false if teacher does not exist', async () => {
+      prisma.teacher.findUnique.mockResolvedValue(null);
+
+      const result = await service.isStudentEnrolledWithTeacher(
+        centerId,
+        'student-1',
+        'invalid-user-teacher',
+      );
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false if student is not in teacher groups', async () => {
+      prisma.teacher.findUnique.mockResolvedValue({ id: 'teacher-1' });
+      prisma.groupStudent.count.mockResolvedValue(0);
+
+      const result = await service.isStudentEnrolledWithTeacher(
+        centerId,
+        'student-1',
+        'user-teacher-1',
+      );
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('findAll with teacher isolation', () => {
+    it('should filter students by teacher groups when role is TEACHER', async () => {
+      prisma.teacher.findUnique.mockResolvedValue({ id: 'teacher-1' });
+      prisma.student.count.mockResolvedValue(1);
+      prisma.student.findMany.mockResolvedValue([
+        { id: 'student-1', code: 'STU-100001' },
+      ]);
+
+      const query = new StudentQueryDto();
+      const result = await service.findAll(
+        centerId,
+        query,
+        AppRole.TEACHER,
+        'user-teacher-1',
+      );
+
+      expect(result.data).toHaveLength(1);
+      expect(prisma.student.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            centerId,
+            groups: {
+              some: {
+                group: {
+                  teacherId: 'teacher-1',
+                  centerId,
+                },
+              },
+            },
+          }),
+        }),
+      );
     });
   });
 });

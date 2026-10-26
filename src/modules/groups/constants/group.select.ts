@@ -88,6 +88,7 @@ export const groupDetailsSelect = {
   _count: {
     select: {
       students: true,
+      attendanceSessions: true,
     },
   },
 } satisfies Prisma.GroupSelect;

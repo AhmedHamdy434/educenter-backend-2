@@ -27,6 +27,7 @@ import {
   StudentDetails,
   StudentListItem,
 } from './constants/student.select';
+import { AppRole } from '../../common/enums/app-role.enum';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { StudentQueryDto } from './dto/get-students.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
@@ -174,6 +175,8 @@ export class StudentsService {
   async findAll(
     centerId: string,
     query: StudentQueryDto,
+    currentUserRole?: AppRole,
+    currentUserId?: string,
   ): Promise<{ data: StudentListItem[]; meta: any }> {
     const { skip, take, active, gradeId } = query;
 
@@ -186,6 +189,7 @@ export class StudentsService {
     }
 
     const where: Prisma.StudentWhereInput = {
+      centerId,
       user: userWhere,
     };
 
@@ -205,6 +209,26 @@ export class StudentsService {
         some: {
           gradeId,
           isActive: true,
+        },
+      };
+    }
+
+    if (currentUserRole === AppRole.TEACHER && currentUserId) {
+      const teacher = await this.prisma.teacher.findUnique({
+        where: { userId: currentUserId },
+        select: { id: true },
+      });
+
+      if (!teacher) {
+        throw new NotFoundException('حساب المعلم الحالي غير موجود.');
+      }
+
+      where.groups = {
+        some: {
+          group: {
+            teacherId: teacher.id,
+            centerId,
+          },
         },
       };
     }
@@ -243,6 +267,37 @@ export class StudentsService {
     }
 
     return student;
+  }
+
+  /**
+   * التحقق مما إذا كان الطالب مسجلاً في أي مجموعة من مجموعات المعلم الحالي داخل المركز.
+   */
+  async isStudentEnrolledWithTeacher(
+    centerId: string,
+    studentId: string,
+    teacherUserId: string,
+  ): Promise<boolean> {
+    const teacher = await this.prisma.teacher.findUnique({
+      where: { userId: teacherUserId },
+      select: { id: true },
+    });
+
+    if (!teacher) {
+      return false;
+    }
+
+    const count = await this.prisma.groupStudent.count({
+      where: {
+        studentId,
+        centerId,
+        group: {
+          teacherId: teacher.id,
+          centerId,
+        },
+      },
+    });
+
+    return count > 0;
   }
 
   /**
@@ -458,7 +513,12 @@ export class StudentsService {
   /**
    * جلب وتجهيز بيانات الطلاب للمركز بصيغة مصفوفة مهيأة للتصدير (Excel / PDF).
    */
-  private async getExportDataset(centerId: string, query: StudentQueryDto) {
+  private async getExportDataset(
+    centerId: string,
+    query: StudentQueryDto,
+    currentUserRole?: AppRole,
+    currentUserId?: string,
+  ) {
     const { active, gradeId } = query;
 
     const userWhere: Prisma.UserWhereInput = {
@@ -470,6 +530,7 @@ export class StudentsService {
     }
 
     const where: Prisma.StudentWhereInput = {
+      centerId,
       user: userWhere,
     };
 
@@ -489,6 +550,26 @@ export class StudentsService {
         some: {
           gradeId,
           isActive: true,
+        },
+      };
+    }
+
+    if (currentUserRole === AppRole.TEACHER && currentUserId) {
+      const teacher = await this.prisma.teacher.findUnique({
+        where: { userId: currentUserId },
+        select: { id: true },
+      });
+
+      if (!teacher) {
+        throw new NotFoundException('حساب المعلم الحالي غير موجود.');
+      }
+
+      where.groups = {
+        some: {
+          group: {
+            teacherId: teacher.id,
+            centerId,
+          },
         },
       };
     }
@@ -529,8 +610,15 @@ export class StudentsService {
     centerId: string,
     query: StudentQueryDto,
     res?: Response,
+    currentUserRole?: AppRole,
+    currentUserId?: string,
   ): Promise<Buffer | void> {
-    const { rows, dateStr } = await this.getExportDataset(centerId, query);
+    const { rows, dateStr } = await this.getExportDataset(
+      centerId,
+      query,
+      currentUserRole,
+      currentUserId,
+    );
 
     const buffer = await this.excelService.buildWorkbookBuffer({
       sheetName: 'الطلاب',
@@ -580,8 +668,15 @@ export class StudentsService {
     centerId: string,
     query: StudentQueryDto,
     res?: Response,
+    currentUserRole?: AppRole,
+    currentUserId?: string,
   ): Promise<Buffer | void> {
-    const { rows, dateStr } = await this.getExportDataset(centerId, query);
+    const { rows, dateStr } = await this.getExportDataset(
+      centerId,
+      query,
+      currentUserRole,
+      currentUserId,
+    );
 
     const buffer = await this.pdfService.buildTablePdfBuffer({
       title: 'تقرير الطلاب',

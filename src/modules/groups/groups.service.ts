@@ -615,6 +615,22 @@ export class GroupsService {
         throw new NotFoundException('المجموعة الدراسية المطلوبة غير موجودة.');
       }
 
+      const paymentsCount = await tx.monthlyPayment.count({
+        where: {
+          centerId,
+          groupStudent: {
+            groupId: id,
+            studentId: { in: data.studentIds },
+          },
+        },
+      });
+
+      if (paymentsCount > 0) {
+        throw new BadRequestException(
+          'لا يمكن إزالة الطالب من المجموعة لوجود سجلات مدفوعات مالية مرتبطة به في هذه المجموعة.',
+        );
+      }
+
       await tx.groupStudent.deleteMany({
         where: {
           groupId: id,
@@ -640,9 +656,12 @@ export class GroupsService {
     if (!group) {
       throw new NotFoundException('المجموعة الدراسية المطلوبة غير موجودة.');
     }
-    if (group._count.students > 0) {
+    if (
+      group._count.students > 0 ||
+      (group._count.attendanceSessions && group._count.attendanceSessions > 0)
+    ) {
       throw new BadRequestException(
-        'لا يمكن حذف المجموعة لوجود طلاب مسجلين بها.',
+        'لا يمكن حذف المجموعة لوجود طلاب أو جلسات حضور مرتبطة بها.',
       );
     }
     await this.prisma.group.delete({

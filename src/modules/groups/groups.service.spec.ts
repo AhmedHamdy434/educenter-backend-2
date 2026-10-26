@@ -37,6 +37,10 @@ describe('GroupsService - Export, Import & Sort', () => {
     student: {
       findMany: jest.Mock;
     };
+    monthlyPayment: {
+      count: jest.Mock;
+    };
+    $transaction: jest.Mock;
   };
   let excelService: {
     buildWorkbookBuffer: jest.Mock;
@@ -74,6 +78,10 @@ describe('GroupsService - Export, Import & Sort', () => {
       student: {
         findMany: jest.fn(),
       },
+      monthlyPayment: {
+        count: jest.fn(),
+      },
+      $transaction: jest.fn(),
     };
 
     excelService = {
@@ -466,6 +474,17 @@ describe('GroupsService - Export, Import & Sort', () => {
       );
     });
 
+    it('should throw BadRequestException if group has attendance sessions', async () => {
+      prisma.group.findFirst.mockResolvedValue({
+        id: 'group-1',
+        _count: { students: 0, attendanceSessions: 3 },
+      });
+
+      await expect(service.remove(centerId, 'group-1')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
     it('should delete group when there are no enrolled students', async () => {
       prisma.group.findFirst.mockResolvedValue({
         id: 'group-1',
@@ -478,6 +497,63 @@ describe('GroupsService - Export, Import & Sort', () => {
       expect(prisma.group.delete).toHaveBeenCalledWith({
         where: { id: 'group-1' },
       });
+    });
+  });
+
+  describe('removeStudents', () => {
+    it('should throw BadRequestException if student has monthly payments in the group', async () => {
+      const mockTx = {
+        group: {
+          findFirst: jest.fn().mockResolvedValue({ id: 'group-1', centerId }),
+        },
+        monthlyPayment: {
+          count: jest.fn().mockResolvedValue(1),
+        },
+        groupStudent: {
+          deleteMany: jest.fn(),
+        },
+      };
+
+      prisma.$transaction.mockImplementation(
+        async (cb: (tx: any) => Promise<any>) => cb(mockTx),
+      );
+
+      await expect(
+        service.removeStudents(centerId, 'group-1', { studentIds: ['stu-1'] }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should remove students if no monthly payments exist', async () => {
+      const mockTx = {
+        group: {
+          findFirst: jest.fn().mockResolvedValue({ id: 'group-1', centerId }),
+          findUnique: jest
+            .fn()
+            .mockResolvedValue({ id: 'group-1', name: 'Group 1' }),
+        },
+        monthlyPayment: {
+          count: jest.fn().mockResolvedValue(0),
+        },
+        groupStudent: {
+          deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+      };
+
+      prisma.$transaction.mockImplementation(
+        async (cb: (tx: any) => Promise<any>) => cb(mockTx),
+      );
+
+      const result = await service.removeStudents(centerId, 'group-1', {
+        studentIds: ['stu-1'],
+      });
+
+      expect(mockTx.groupStudent.deleteMany).toHaveBeenCalledWith({
+        where: {
+          groupId: 'group-1',
+          studentId: { in: ['stu-1'] },
+        },
+      });
+      expect(result).toBeDefined();
     });
   });
 

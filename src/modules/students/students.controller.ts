@@ -71,9 +71,10 @@ export class StudentsController {
   @Roles(AppRole.OWNER, AppRole.TEACHER)
   findAll(
     @CurrentCenterId() centerId: string,
+    @CurrentUser() user: RequestUser,
     @Query() query: StudentQueryDto,
   ): Promise<{ data: StudentListItem[]; meta: any }> {
-    return this.studentsService.findAll(centerId, query);
+    return this.studentsService.findAll(centerId, query, user.role, user.id);
   }
 
   /**
@@ -85,10 +86,17 @@ export class StudentsController {
   @BypassInterceptor()
   async exportExcel(
     @CurrentCenterId() centerId: string,
+    @CurrentUser() user: RequestUser,
     @Query() query: StudentQueryDto,
     @Res() res: Response,
   ): Promise<void> {
-    await this.studentsService.exportToExcel(centerId, query, res);
+    await this.studentsService.exportToExcel(
+      centerId,
+      query,
+      res,
+      user.role,
+      user.id,
+    );
   }
 
   /**
@@ -100,10 +108,17 @@ export class StudentsController {
   @BypassInterceptor()
   async exportPdf(
     @CurrentCenterId() centerId: string,
+    @CurrentUser() user: RequestUser,
     @Query() query: StudentQueryDto,
     @Res() res: Response,
   ): Promise<void> {
-    await this.studentsService.exportToPdf(centerId, query, res);
+    await this.studentsService.exportToPdf(
+      centerId,
+      query,
+      res,
+      user.role,
+      user.id,
+    );
   }
 
   /**
@@ -178,6 +193,21 @@ export class StudentsController {
       throw new ForbiddenException(
         'ليس لديك الصلاحية للوصول لبيانات طالب آخر.',
       );
+    }
+
+    // التحقق من صلاحيات المعلم: يمكنه فقط استعراض طلاب مجموعاته
+    if (user.role === AppRole.TEACHER) {
+      const isEnrolled =
+        await this.studentsService.isStudentEnrolledWithTeacher(
+          centerId,
+          id,
+          user.id,
+        );
+      if (!isEnrolled) {
+        throw new ForbiddenException(
+          'ليس لديك الصلاحية للوصول لبيانات طالب غير مسجل في مجموعاتك.',
+        );
+      }
     }
 
     return student;

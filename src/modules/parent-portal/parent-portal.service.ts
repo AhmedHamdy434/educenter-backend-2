@@ -1,10 +1,12 @@
 import {
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../database/prisma/prisma.service';
+import { AppRole } from '../../common/enums/app-role.enum';
 
 @Injectable()
 export class ParentPortalService {
@@ -16,6 +18,8 @@ export class ParentPortalService {
   async generateMagicToken(
     studentId: string,
     centerId: string,
+    userRole?: AppRole,
+    userId?: string,
   ): Promise<{ token: string; expiresAt: Date }> {
     const student = await this.prisma.student.findFirst({
       where: { id: studentId, centerId },
@@ -23,6 +27,34 @@ export class ParentPortalService {
 
     if (!student) {
       throw new NotFoundException('الطالب غير موجود.');
+    }
+
+    if (userRole === AppRole.TEACHER && userId) {
+      const teacher = await this.prisma.teacher.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+
+      if (!teacher) {
+        throw new NotFoundException('حساب المعلم الحالي غير موجود.');
+      }
+
+      const isTeached = await this.prisma.groupStudent.findFirst({
+        where: {
+          studentId,
+          centerId,
+          group: {
+            teacherId: teacher.id,
+            centerId,
+          },
+        },
+      });
+
+      if (!isTeached) {
+        throw new ForbiddenException(
+          'ليس لديك صلاحية لتوليد رابط سحري لطالب لا ينتمي لمجموعاتك.',
+        );
+      }
     }
 
     const token = randomBytes(24).toString('hex');

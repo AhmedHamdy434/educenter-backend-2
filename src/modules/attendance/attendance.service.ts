@@ -485,10 +485,47 @@ export class AttendanceService {
       }
     }
 
+    let teacherId: string | undefined;
+    if (userRole === AppRole.TEACHER) {
+      const teacher = await this.prisma.teacher.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+      if (!teacher) {
+        throw new NotFoundException('حساب المعلم الحالي غير موجود.');
+      }
+      teacherId = teacher.id;
+
+      const isTeached = await this.prisma.groupStudent.findFirst({
+        where: {
+          studentId: resolvedStudentId,
+          centerId,
+          group: {
+            teacherId: teacher.id,
+            centerId,
+          },
+        },
+      });
+
+      if (!isTeached) {
+        throw new ForbiddenException(
+          'ليس لديك صلاحية لعرض تقرير حضور طالب لا ينتمي لمجموعاتك.',
+        );
+      }
+    }
+
     const records = await this.prisma.studentAttendance.findMany({
       where: {
         centerId,
         studentId: resolvedStudentId,
+        session: teacherId
+          ? {
+              group: {
+                teacherId,
+                centerId,
+              },
+            }
+          : undefined,
       },
       include: {
         session: {

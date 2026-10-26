@@ -1,4 +1,5 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Request, Response, NextFunction } from 'express';
 import {
   requestContextStorage,
@@ -10,7 +11,10 @@ import { AppRole } from '../enums/app-role.enum';
 
 @Injectable()
 export class RequestContextMiddleware implements NestMiddleware {
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+  ) {}
 
   use(req: Request, res: Response, next: NextFunction) {
     const authHeader = req.headers.authorization;
@@ -24,17 +28,21 @@ export class RequestContextMiddleware implements NestMiddleware {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
       try {
-        const decoded = this.jwtService.decode<JwtPayload>(token);
-        if (decoded && typeof decoded === 'object' && 'sub' in decoded) {
+        const secret = this.configService.get<string>('JWT_SECRET');
+        const payload = this.jwtService.verify<JwtPayload>(token, {
+          secret,
+          ignoreExpiration: false,
+        });
+        if (payload && typeof payload === 'object' && 'sub' in payload) {
           context = {
-            userId: decoded.sub,
-            role: decoded.role,
-            centerId: decoded.centerId || null,
-            isSuperAdmin: decoded.role === AppRole.SUPER_ADMIN,
+            userId: payload.sub,
+            role: payload.role,
+            centerId: payload.centerId || null,
+            isSuperAdmin: payload.role === AppRole.SUPER_ADMIN,
           };
         }
       } catch {
-        // Invalid or unparseable token; proceed with empty context
+        // Invalid, expired, untrusted, or unparseable token; proceed with empty context
       }
     }
 

@@ -51,6 +51,8 @@ export class ParentPortalController {
     return this.parentPortalService.generateMagicToken(
       studentId,
       user.centerId,
+      user.role,
+      user.id,
     );
   }
 }
