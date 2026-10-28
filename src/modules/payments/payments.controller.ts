@@ -9,6 +9,7 @@ import {
   HttpStatus,
   HttpCode,
   Res,
+  Query,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import {
@@ -24,6 +25,13 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { RequestUser } from '../auth/interfaces/authenticated-request.interface';
 import { PaymentsService } from './payments.service';
 import { PayMonthDto } from './dto/pay-month.dto';
+import { GetGroupPaymentsQueryDto } from './dto/get-group-payments.dto';
+import {
+  StudentPaymentItem,
+  GroupPaymentStudentItem,
+  GroupPaymentStats,
+} from './constants/payment.select';
+import { PaginationMeta } from '../../common/utils/buildMeta';
 
 @Controller()
 @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
@@ -37,18 +45,6 @@ export class PaymentsController {
       );
     }
     return centerId;
-  }
-
-  @Get('groups/:groupId/payments')
-  @ResponseMessage('تم جلب مدفوعات المجموعة بنجاح.')
-  @Roles(AppRole.OWNER, AppRole.TEACHER)
-  async getGroupPayments(
-    @CurrentUser() user: RequestUser,
-    @Param('groupId') groupId: string,
-  ) {
-    const centerId = this.validateCenterId(user.centerId);
-    const data = await this.paymentsService.getGroupPayments(centerId, groupId);
-    return data;
   }
 
   /**
@@ -79,6 +75,18 @@ export class PaymentsController {
     res.send(buffer);
   }
 
+  @Get('groups/:groupId/payments')
+  @ResponseMessage('تم جلب مدفوعات المجموعة بنجاح.')
+  @Roles(AppRole.OWNER, AppRole.TEACHER)
+  async getGroupPayments(
+    @CurrentUser() user: RequestUser,
+    @Param('groupId') groupId: string,
+    @Query() query: GetGroupPaymentsQueryDto,
+  ): Promise<{ data: GroupPaymentStudentItem[]; meta: PaginationMeta; stats: GroupPaymentStats }> {
+    const centerId = this.validateCenterId(user.centerId);
+    return this.paymentsService.getGroupPayments(centerId, groupId, query);
+  }
+
   @Post('group-students/:groupStudentId/payments')
   @HttpCode(HttpStatus.CREATED)
   @ResponseMessage('تم تسجيل دفع الاشتراك بنجاح.')
@@ -103,13 +111,15 @@ export class PaymentsController {
   async getStudentPayments(
     @CurrentUser() user: RequestUser,
     @Param('studentId') studentId: string,
-  ) {
+    @Query('groupId') groupId?: string,
+  ): Promise<StudentPaymentItem[]> {
     const centerId = this.validateCenterId(user.centerId);
     const data = await this.paymentsService.getStudentPayments(
       centerId,
       studentId,
       user.role,
       user.id,
+      groupId,
     );
     return data;
   }

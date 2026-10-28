@@ -9,6 +9,7 @@ import { PrismaService } from '../../database/prisma/prisma.service';
 import { ExcelService } from '../../shared/excel/excel.service';
 import { PdfService } from '../../shared/pdf/pdf.service';
 import { GroupQueryDto } from './dto/get-groups.dto';
+import { GroupStudentsQueryDto } from './dto/get-group-students.dto';
 import { AppRole } from '../../common/enums/app-role.enum';
 
 describe('GroupsService - Export, Import & Sort', () => {
@@ -33,6 +34,7 @@ describe('GroupsService - Export, Import & Sort', () => {
     };
     groupStudent: {
       findMany: jest.Mock;
+      count: jest.Mock;
     };
     student: {
       findMany: jest.Mock;
@@ -74,6 +76,7 @@ describe('GroupsService - Export, Import & Sort', () => {
       },
       groupStudent: {
         findMany: jest.fn(),
+        count: jest.fn(),
       },
       student: {
         findMany: jest.fn(),
@@ -558,7 +561,30 @@ describe('GroupsService - Export, Import & Sort', () => {
   });
 
   describe('findStudents', () => {
-    it('should return enrolled students of the group', async () => {
+    const mockStudents = [
+      {
+        id: 'gs-1',
+        groupId: 'group-1',
+        studentId: 'stu-1',
+        joinedAt: new Date(),
+        subscriptionStartDate: new Date(),
+        student: {
+          id: 'stu-1',
+          code: 'STU-1',
+          parentPhone: '01011111111',
+          user: {
+            id: 'u-1',
+            fullName: 'Ahmed Ali',
+            email: 'ahmed@test.com',
+            phone: '01011111111',
+            avatar: null,
+            isActive: true,
+          },
+        },
+      },
+    ];
+
+    it('should return paginated enrolled students with default meta and sorting', async () => {
       prisma.group.findFirst.mockResolvedValue({
         id: 'group-1',
         name: 'Group 1',
@@ -567,45 +593,120 @@ describe('GroupsService - Export, Import & Sort', () => {
         isActive: true,
       });
 
-      const mockStudents = [
-        {
-          id: 'gs-1',
-          groupId: 'group-1',
-          studentId: 'stu-1',
-          joinedAt: new Date(),
-          subscriptionStartDate: new Date(),
-          student: {
-            id: 'stu-1',
-            code: 'STU-1',
-            parentPhone: '01011111111',
-            user: {
-              id: 'u-1',
-              fullName: 'Ahmed Ali',
-              email: 'ahmed@test.com',
-              phone: '01011111111',
-              avatar: null,
-              isActive: true,
-            },
-          },
-        },
-      ];
-
+      prisma.groupStudent.count.mockResolvedValue(1);
       prisma.groupStudent.findMany.mockResolvedValue(mockStudents);
 
+      const query = new GroupStudentsQueryDto();
       const result = await service.findStudents(
         centerId,
         'group-1',
         AppRole.OWNER,
         'user-1',
+        query,
       );
 
-      expect(result).toEqual(mockStudents);
+      expect(result).toEqual({
+        data: mockStudents,
+        meta: {
+          total: 1,
+          page: 1,
+          limit: 10,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      });
+
       expect(prisma.groupStudent.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             groupId: 'group-1',
             centerId,
           }),
+          skip: 0,
+          take: 10,
+          orderBy: [{ joinedAt: 'desc' }],
+        }),
+      );
+    });
+
+    it('should support custom pagination and sorting by subscriptionStartDate', async () => {
+      prisma.group.findFirst.mockResolvedValue({
+        id: 'group-1',
+        name: 'Group 1',
+        teacherId: 'teacher-1',
+        isActive: true,
+      });
+
+      prisma.groupStudent.count.mockResolvedValue(25);
+      prisma.groupStudent.findMany.mockResolvedValue(mockStudents);
+
+      const query = Object.assign(new GroupStudentsQueryDto(), {
+        page: 2,
+        limit: 10,
+        sortBy: 'subscriptionStartDate',
+        sortOrder: 'asc' as const,
+      });
+
+      const result = await service.findStudents(
+        centerId,
+        'group-1',
+        AppRole.OWNER,
+        'user-1',
+        query,
+      );
+
+      expect(result.meta).toEqual({
+        total: 25,
+        page: 2,
+        limit: 10,
+        totalPages: 3,
+        hasNextPage: true,
+        hasPreviousPage: true,
+      });
+
+      expect(prisma.groupStudent.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          skip: 10,
+          take: 10,
+          orderBy: { subscriptionStartDate: 'asc' },
+        }),
+      );
+    });
+
+    it('should support search filter with default sorting', async () => {
+      prisma.group.findFirst.mockResolvedValue({
+        id: 'group-1',
+        name: 'Group 1',
+        teacherId: 'teacher-1',
+        isActive: true,
+      });
+
+      prisma.groupStudent.count.mockResolvedValue(1);
+      prisma.groupStudent.findMany.mockResolvedValue(mockStudents);
+
+      const query = Object.assign(new GroupStudentsQueryDto(), {
+        search: 'STU-1',
+      });
+
+      await service.findStudents(
+        centerId,
+        'group-1',
+        AppRole.OWNER,
+        'user-1',
+        query,
+      );
+
+      expect(prisma.groupStudent.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            student: expect.objectContaining({
+              OR: expect.arrayContaining([
+                { code: { contains: 'STU-1', mode: 'insensitive' } },
+              ]),
+            }),
+          }),
+          orderBy: [{ joinedAt: 'desc' }],
         }),
       );
     });
@@ -623,6 +724,7 @@ describe('GroupsService - Export, Import & Sort', () => {
           'group-1',
           AppRole.TEACHER,
           'user-teacher',
+          new GroupStudentsQueryDto(),
         ),
       ).rejects.toThrow('ليس لديك صلاحية للوصول إلى هذه المجموعة الدراسية.');
     });

@@ -8133,6 +8133,176 @@
       }
     },
     "/api/groups/{id}/students": {
+      "get": {
+        "operationId": "GroupsController_findStudents",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "معرف المجموعة الدراسية",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "رقم الصفحة",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "عدد العناصر في الصفحة الواحدة (بحد أقصى 100)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "البحث باسم الطالب، البريد الإلكتروني، رقم الهاتف، رقم ولي الأمر أو كود الطالب",
+            "schema": {
+              "type": "string",
+              "example": "أحمد"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "description": "حقل الترتيب: joinedAt, subscriptionStartDate",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "joinedAt",
+                "subscriptionStartDate"
+              ],
+              "default": "joinedAt",
+              "example": "joinedAt"
+            }
+          },
+          {
+            "name": "sortOrder",
+            "required": false,
+            "in": "query",
+            "description": "اتجاه الترتيب (asc أو desc)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "تم جلب طلاب المجموعة الدراسية بنجاح.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم جلب طلاب المجموعة الدراسية بنجاح.",
+                  "data": [
+                    {
+                      "id": "cm1studentgroup001",
+                      "studentId": "cm1student001",
+                      "joinedAt": "2026-09-01T10:00:00.000Z",
+                      "subscriptionStartDate": "2026-09-01T10:00:00.000Z",
+                      "student": {
+                        "id": "cm1student001",
+                        "code": "STU-1001",
+                        "parentPhone": "01012345678",
+                        "user": {
+                          "id": "cm1user001",
+                          "fullName": "أحمد علي محمد",
+                          "phone": "01011112233",
+                          "email": "ahmed.ali@example.com",
+                          "avatar": null
+                        }
+                      }
+                    }
+                  ],
+                  "meta": {
+                    "total": 1,
+                    "page": 1,
+                    "limit": 10,
+                    "totalPages": 1,
+                    "hasNextPage": false,
+                    "hasPreviousPage": false
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "غير مصرح (Unauthenticated)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "غير مصرح لك بالوصول.",
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "صلاحيات غير كافية أو اشتراك المركز منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "ليس لديك صلاحية للوصول إلى هذه المجموعة الدراسية.",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "المجموعة الدراسية غير موجودة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 404,
+                  "message": "المجموعة الدراسية المطلوبة غير موجودة.",
+                  "error": "Not Found"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Groups"
+        ],
+        "summary": "جلب طلاب المجموعة الدراسية مع التصفح والترتيب",
+        "description": "جلب قائمة الطلاب المقيدين في المجموعة الدراسية مع دعم التصفح (Pagination) والبحث والترتيب (Sorting). متاح لمالك المركز (OWNER) والمعلم صاحب المجموعة (TEACHER)."
+      },
       "post": {
         "operationId": "GroupsController_addStudents",
         "parameters": [

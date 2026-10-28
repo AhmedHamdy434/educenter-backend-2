@@ -10,6 +10,18 @@ import { AppRole } from '../../common/enums/app-role.enum';
 import { PayMonthDto } from './dto/pay-month.dto';
 
 import { ExcelService } from '../../shared/excel/excel.service';
+import {
+  groupPaymentExcelSelect,
+  groupPaymentsSelect,
+  payMonthGroupStudentSelect,
+  studentPaymentSelect,
+  StudentPaymentItem,
+  GroupPaymentStudentItem,
+  GroupPaymentStats,
+} from './constants/payment.select';
+import { GetGroupPaymentsQueryDto } from './dto/get-group-payments.dto';
+import { buildMeta, PaginationMeta } from '../../common/utils/buildMeta';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class PaymentsService {
@@ -72,31 +84,24 @@ export class PaymentsService {
   }
 
   /**
-   * جلب تفاصيل مدفوعات طلاب مجموعة معينة.
+   * جلب تفاصيل مدفوعات طلاب مجموعة معينة مع pagination والبحث وبحث الشهور.
    */
-  async getGroupPayments(centerId: string, groupId: string) {
+  async getGroupPayments(
+    centerId: string,
+    groupId: string,
+    query?: GetGroupPaymentsQueryDto,
+  ): Promise<{
+    data: GroupPaymentStudentItem[];
+    meta: PaginationMeta;
+    stats: GroupPaymentStats;
+  }> {
     const group = await this.prisma.group.findFirst({
       where: { id: groupId, centerId },
-      include: {
-        students: {
-          include: {
-            payments: {
-              orderBy: { subscriptionDate: 'asc' },
-            },
-            student: {
-              include: {
-                user: {
-                  select: {
-                    fullName: true,
-                    email: true,
-                    phone: true,
-                    avatar: true,
-                  },
-                },
-              },
-            },
-          },
-        },
+      select: {
+        id: true,
+        startDate: true,
+        monthsCount: true,
+        monthlyFee: true,
       },
     });
 
@@ -105,14 +110,189 @@ export class PaymentsService {
     }
 
     const groupMonths = this.getGroupMonths(group.startDate, group.monthsCount);
+    const groupMonthsFormatted = groupMonths.map((m) => this.formatDate(m));
     const monthlyFee = Number(group.monthlyFee);
 
-    const studentsData = group.students.map((gs) => {
+    // بناء فلتر البحث
+    const where: Prisma.GroupStudentWhereInput = {
+      groupId,
+      centerId,
+    };
+
+    if (query?.search) {
+      const search = query.search.trim();
+      where.student = {
+        OR: [
+          { code: { contains: search, mode: 'insensitive' } },
+          { parentPhone: { contains: search } },
+          {
+            user: {
+              OR: [
+                { fullName: { contains: search, mode: 'insensitive' } },
+                { phone: { contains: search } },
+                { email: { contains: search, mode: 'insensitive' } },
+              ],
+            },
+          },
+        ],
+      };
+    }
+
+    // فلترة الشهر في حال تم تمرير query.month
+    if (query?.month) {
+      const targetMonth = this.normalizeToFirstOfMonth(query.month);
+      const nextMonth = new Date(targetMonth);
+      nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
+
+      where.payments = {
+        some: {
+          subscriptionDate: {
+            gte: targetMonth,
+            lt: nextMonth,
+          },
+        },
+      };
+    }
+
+    const total = await this.prisma.groupStudent.count({ where });
+
+    // ─── حساب الإحصائيات على كل طلاب المجموعة (بدون pagination) ───
+    const allStudentsForStats = await this.prisma.groupStudent.findMany({
+      where: { groupId, centerId },
+      select: {
+        subscriptionStartDate: true,
+        payments: {
+          select: {
+            subscriptionDate: true,
+            amount: true,
+          },
+        },
+      },
+    });
+
+    // الشهر المستهدف للإحصائيات: إن لم يُحدَّد نستخدم الشهر الحالي
+    const targetMonthForStats = query?.month
+      ? this.formatDate(this.normalizeToFirstOfMonth(query.month))
+      : null;
+
+    let statsPaid = 0;
+    let statsUnpaid = 0;
+    let statsExpected = 0;
+    let statsCollected = 0;
+
+    for (const gs of allStudentsForStats) {
+      const studentStart = this.normalizeToFirstOfMonth(
+        gs.subscriptionStartDate,
+      );
+      const reqMonths = groupMonths
+        .filter((m) => m.getTime() >= studentStart.getTime())
+        .map((m) => this.formatDate(m));
+
+      if (targetMonthForStats) {
+        // إحصائيات للشهر المُفلتر فقط
+        const isRequired = reqMonths.includes(targetMonthForStats);
+        if (isRequired) {
+          statsExpected += monthlyFee;
+          const payment = gs.payments.find(
+            (p) => this.formatDate(p.subscriptionDate) === targetMonthForStats,
+          );
+          if (payment) {
+            statsPaid++;
+            statsCollected += Number(payment.amount);
+          } else {
+            statsUnpaid++;
+          }
+        }
+      } else {
+        // إحصائيات إجمالية لكل الأشهر
+        const paidSet = new Set(
+          gs.payments.map((p) => this.formatDate(p.subscriptionDate)),
+        );
+        for (const rm of reqMonths) {
+          statsExpected += monthlyFee;
+          if (paidSet.has(rm)) {
+            statsPaid++;
+            const p = gs.payments.find(
+              (pay) => this.formatDate(pay.subscriptionDate) === rm,
+            );
+            if (p) statsCollected += Number(p.amount);
+          } else {
+            statsUnpaid++;
+          }
+        }
+      }
+    }
+
+    const stats: GroupPaymentStats = {
+      total: allStudentsForStats.length,
+      paid: statsPaid,
+      unpaid: statsUnpaid,
+      expected: statsExpected,
+      collected: statsCollected,
+      groupMonths: groupMonthsFormatted,
+    };
+    // ─────────────────────────────────────────────────────────────────
+
+    // ترتيب الطلاب
+    let orderBy:
+      | Prisma.GroupStudentOrderByWithRelationInput
+      | Prisma.GroupStudentOrderByWithRelationInput[] = [{ joinedAt: 'desc' }];
+
+    if (query?.sortBy === 'name') {
+      orderBy = {
+        student: {
+          user: {
+            fullName: query.sortOrder || 'asc',
+          },
+        },
+      };
+    } else if (query?.sortBy === 'subscriptionStartDate') {
+      orderBy = { subscriptionStartDate: query.sortOrder || 'desc' };
+    } else if (query?.sortBy === 'joinedAt') {
+      orderBy = { joinedAt: query.sortOrder || 'desc' };
+    }
+
+    const students = await this.prisma.groupStudent.findMany({
+      where,
+      skip: query?.skip,
+      take: query?.take,
+      orderBy,
+      select: {
+        id: true,
+        studentId: true,
+        subscriptionStartDate: true,
+        payments: {
+          select: {
+            id: true,
+            subscriptionDate: true,
+            amount: true,
+            paidAt: true,
+            notes: true,
+          },
+          orderBy: { subscriptionDate: 'asc' },
+        },
+        student: {
+          select: {
+            id: true,
+            code: true,
+            user: {
+              select: {
+                fullName: true,
+                email: true,
+                phone: true,
+                avatar: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const studentsData: GroupPaymentStudentItem[] = students.map((gs) => {
       const studentStart = this.normalizeToFirstOfMonth(
         gs.subscriptionStartDate,
       );
 
-      // الشهور المطلوبة هي شهور المجموعة التي تبدأ من تاريخ اشتراك الطالب فما فوق
       const requiredMonths = groupMonths
         .filter((m) => m.getTime() >= studentStart.getTime())
         .map((m) => this.formatDate(m));
@@ -133,6 +313,7 @@ export class PaymentsService {
         studentId: gs.studentId,
         studentInfo: {
           fullName: gs.student.user.fullName,
+          code: gs.student.code,
           email: gs.student.user.email,
           phone: gs.student.user.phone,
           avatar: gs.student.user.avatar,
@@ -145,7 +326,11 @@ export class PaymentsService {
       };
     });
 
-    return studentsData;
+    const page = query?.page ?? 1;
+    const limit = query?.limit ?? 10;
+    const meta = buildMeta(total, page, limit);
+
+    return { data: studentsData, meta, stats };
   }
 
   /**
@@ -154,9 +339,7 @@ export class PaymentsService {
   async payMonth(centerId: string, groupStudentId: string, dto: PayMonthDto) {
     const groupStudent = await this.prisma.groupStudent.findUnique({
       where: { id: groupStudentId },
-      include: {
-        group: true,
-      },
+      select: payMonthGroupStudentSelect,
     });
 
     if (!groupStudent || groupStudent.group.centerId !== centerId) {
@@ -238,7 +421,8 @@ export class PaymentsService {
     studentId: string,
     userRole: AppRole,
     userId: string,
-  ) {
+    groupId?: string,
+  ): Promise<StudentPaymentItem[]> {
     let resolvedStudentId = studentId;
 
     if (studentId === 'me') {
@@ -293,20 +477,33 @@ export class PaymentsService {
       }
     }
 
-    const payments = await this.prisma.monthlyPayment.findMany({
+    return this.prisma.monthlyPayment.findMany({
       where: {
         centerId,
         groupStudent: {
           studentId: resolvedStudentId,
+          ...(groupId ? { groupId } : {}),
         },
       },
-      include: {
+      select: {
+        id: true,
+        groupStudentId: true,
+        subscriptionDate: true,
+        amount: true,
+        paidAt: true,
+        notes: true,
+        createdAt: true,
         groupStudent: {
-          include: {
+          select: {
+            id: true,
+            groupId: true,
             group: {
               select: {
                 id: true,
                 name: true,
+                monthlyFee: true,
+                startDate: true,
+                monthsCount: true,
               },
             },
           },
@@ -316,18 +513,6 @@ export class PaymentsService {
         subscriptionDate: 'desc',
       },
     });
-
-    return payments.map((p) => ({
-      id: p.id,
-      subscriptionDate: this.formatDate(p.subscriptionDate),
-      amount: Number(p.amount),
-      paidAt: p.paidAt,
-      notes: p.notes,
-      group: {
-        id: p.groupStudent.group.id,
-        name: p.groupStudent.group.name,
-      },
-    }));
   }
 
   /**
@@ -339,19 +524,21 @@ export class PaymentsService {
   ): Promise<Buffer> {
     const group = await this.prisma.group.findFirst({
       where: { id: groupId, centerId },
-      select: {
-        id: true,
-        name: true,
-        startDate: true,
-        monthsCount: true,
-      },
+      select: groupPaymentExcelSelect,
     });
 
     if (!group) {
       throw new NotFoundException('المجموعة الدراسية المطلوبة غير موجودة.');
     }
 
-    const studentsData = await this.getGroupPayments(centerId, groupId);
+    const { data: studentsData } = await this.getGroupPayments(
+      centerId,
+      groupId,
+      {
+        page: 1,
+        limit: 10000,
+      } as GetGroupPaymentsQueryDto,
+    );
     const groupMonths = this.getGroupMonths(group.startDate, group.monthsCount);
     const monthHeaders = groupMonths.map((m) => this.formatDate(m));
 
@@ -441,8 +628,8 @@ export class PaymentsService {
     ];
 
     const rows = payments.map((p) => ({
-      groupName: p.group.name,
-      subscriptionDate: p.subscriptionDate,
+      groupName: p.groupStudent.group.name,
+      subscriptionDate: this.formatDate(p.subscriptionDate),
       amount: `${p.amount} ج.م`,
       paidAt: p.paidAt ? new Date(p.paidAt).toISOString().split('T')[0] : '—',
       notes: p.notes || '—',

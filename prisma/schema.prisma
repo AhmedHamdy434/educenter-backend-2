@@ -389,6 +389,7 @@ enum AttendanceStatus {
   ABSENT
   LATE
   EXCUSED
+  ATTENDED_ANOTHER_GROUP
 }
 
 model AttendanceSession {

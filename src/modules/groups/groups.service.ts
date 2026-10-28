@@ -8,7 +8,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { buildMeta } from '../../common/utils/buildMeta';
+import { buildMeta, PaginationMeta } from '../../common/utils/buildMeta';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { AppRole } from '../../common/enums/app-role.enum';
 import {
@@ -18,6 +18,7 @@ import {
   GroupDetails,
   GroupEnrolledStudent,
   GroupListItem,
+  groupDetails,
 } from './constants/group.select';
 import {
   studentListSelect,
@@ -26,6 +27,7 @@ import {
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { GroupQueryDto } from './dto/get-groups.dto';
+import { GroupStudentsQueryDto } from './dto/get-group-students.dto';
 import { GroupStudentsDto } from './dto/group-students.dto';
 
 import type { Response } from 'express';
@@ -187,10 +189,10 @@ export class GroupsService {
     id: string,
     currentUserRole: AppRole,
     currentUserId: string,
-  ): Promise<GroupDetails> {
+  ) {
     const group = await this.prisma.group.findFirst({
       where: { id, centerId },
-      select: groupDetailsSelect,
+      select: groupDetails,
     });
 
     if (!group) {
@@ -208,13 +210,19 @@ export class GroupsService {
         );
       }
     } else if (currentUserRole === AppRole.STUDENT) {
-      const student = await this.prisma.student.findUnique({
-        where: { userId: currentUserId },
+      const isEnrolled = await this.prisma.groupStudent.findFirst({
+        where: {
+          groupId: id,
+          student: {
+            userId: currentUserId,
+          },
+        },
+        select: {
+          id: true,
+        },
       });
-      if (
-        !student ||
-        !group.students.some((s) => s.student.id === student.id)
-      ) {
+
+      if (!isEnrolled) {
         throw new ForbiddenException(
           'ليس لديك صلاحية للوصول إلى هذه المجموعة.',
         );
@@ -377,15 +385,15 @@ export class GroupsService {
   }
 
   /**
-   * جلب الطلاب المسجلين في المجموعة الدراسية.
+   * جلب الطلاب المسجلين في المجموعة الدراسية مع دعم التصفح والترتيب والبحث.
    */
   async findStudents(
     centerId: string,
     id: string,
     currentUserRole: AppRole,
     currentUserId: string,
-    search?: string,
-  ): Promise<GroupEnrolledStudent[]> {
+    query: GroupStudentsQueryDto,
+  ): Promise<{ data: GroupEnrolledStudent[]; meta: PaginationMeta }> {
     await this.getGroupWithAccessCheck(
       centerId,
       id,
@@ -393,45 +401,59 @@ export class GroupsService {
       currentUserId,
     );
 
-    return this.prisma.groupStudent.findMany({
-      where: {
-        groupId: id,
-        centerId,
-        ...(search
-          ? {
-              student: {
-                OR: [
-                  { code: { contains: search, mode: 'insensitive' } },
-                  { parentPhone: { contains: search } },
-                  {
-                    user: {
-                      OR: [
-                        {
-                          fullName: {
-                            contains: search,
-                            mode: 'insensitive',
-                          },
+    const { skip, take } = query;
+    const where: Prisma.GroupStudentWhereInput = {
+      groupId: id,
+      centerId,
+      ...(query.search
+        ? {
+            student: {
+              OR: [
+                { code: { contains: query.search, mode: 'insensitive' } },
+                { parentPhone: { contains: query.search } },
+                {
+                  user: {
+                    OR: [
+                      {
+                        fullName: {
+                          contains: query.search,
+                          mode: 'insensitive',
                         },
-                        { phone: { contains: search } },
-                        {
-                          email: {
-                            contains: search,
-                            mode: 'insensitive',
-                          },
+                      },
+                      { phone: { contains: query.search } },
+                      {
+                        email: {
+                          contains: query.search,
+                          mode: 'insensitive',
                         },
-                      ],
-                    },
+                      },
+                    ],
                   },
-                ],
-              },
-            }
-          : {}),
-      },
-      select: groupEnrolledStudentSelect,
-      orderBy: {
-        joinedAt: 'desc',
-      },
-    });
+                },
+              ],
+            },
+          }
+        : {}),
+    };
+
+    const orderBy = query.getOrderBy<
+      | Prisma.GroupStudentOrderByWithRelationInput
+      | Prisma.GroupStudentOrderByWithRelationInput[]
+    >(['joinedAt', 'subscriptionStartDate', 'name'], [{ joinedAt: 'desc' }]);
+
+    const [total, data] = await Promise.all([
+      this.prisma.groupStudent.count({ where }),
+      this.prisma.groupStudent.findMany({
+        where,
+        skip,
+        take,
+        select: groupEnrolledStudentSelect,
+        orderBy,
+      }),
+    ]);
+
+    const meta = buildMeta(total, query.page, query.limit);
+    return { data, meta };
   }
 
   /**

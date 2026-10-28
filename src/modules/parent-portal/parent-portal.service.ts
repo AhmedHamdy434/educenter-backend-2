@@ -160,15 +160,23 @@ export class ParentPortalService {
       student.attendance?.filter((a) => a.status === 'LATE').length ?? 0;
     const excusedCount =
       student.attendance?.filter((a) => a.status === 'EXCUSED').length ?? 0;
+    const attendedAnotherGroupCount =
+      student.attendance?.filter((a) => a.status === 'ATTENDED_ANOTHER_GROUP')
+        .length ?? 0;
 
     const attendanceRate =
       totalSessions > 0
-        ? Math.round((presentCount / totalSessions) * 100)
+        ? Math.round(
+            ((presentCount + attendedAnotherGroupCount) / totalSessions) * 100,
+          )
         : 100;
 
     // سجل الغياب والتأخير والاستئذان
     const recentAbsences = (student.attendance || [])
-      .filter((att) => att.status !== 'PRESENT')
+      .filter(
+        (att) =>
+          att.status !== 'PRESENT' && att.status !== 'ATTENDED_ANOTHER_GROUP',
+      )
       .map((att) => ({
         id: att.id,
         date: att.session.date.toISOString(),
@@ -183,6 +191,7 @@ export class ParentPortalService {
       absentCount,
       lateCount,
       excusedCount,
+      attendedAnotherGroupCount,
       attendanceRate,
       recentAbsences,
     };

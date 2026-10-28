@@ -1,13 +1,18 @@
 import { Prisma } from '@prisma/client';
 
-export const groupListSelect = {
+export const groupDetails = {
   id: true,
   name: true,
-  capacity: true,
+  isActive: true,
+  teacherId: true,
   monthlyFee: true,
   startDate: true,
   monthsCount: true,
-  isActive: true,
+} satisfies Prisma.GroupSelect;
+
+export const groupListSelect = {
+  ...groupDetails,
+  capacity: true,
   centerId: true,
   gradeId: true,
   grade: {
@@ -23,7 +28,6 @@ export const groupListSelect = {
       name: true,
     },
   },
-  teacherId: true,
   teacher: {
     select: {
       id: true,
@@ -93,6 +97,10 @@ export const groupDetailsSelect = {
   },
 } satisfies Prisma.GroupSelect;
 
+export type GroupBasic = Prisma.GroupGetPayload<{
+  select: typeof groupDetails;
+}>;
+
 export type GroupListItem = Prisma.GroupGetPayload<{
   select: typeof groupListSelect;
 }>;
@@ -104,14 +112,20 @@ export type GroupDetails = Prisma.GroupGetPayload<{
 export const groupEnrolledStudentSelect = {
   id: true,
   studentId: true,
+  joinedAt: true,
+  subscriptionStartDate: true,
   student: {
     select: {
       id: true,
       code: true,
+      parentPhone: true,
       user: {
         select: {
+          id: true,
           fullName: true,
           phone: true,
+          email: true,
+          avatar: true,
         },
       },
     },

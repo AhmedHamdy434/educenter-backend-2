@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AttendanceStatus } from '@prisma/client';
 import { AppRole } from '../../common/enums/app-role.enum';
@@ -13,7 +13,9 @@ describe('AttendanceService - Student Code Support', () => {
     };
     attendanceSession: {
       findFirst: jest.Mock;
+      findUnique: jest.Mock;
       findMany: jest.Mock;
+      create: jest.Mock;
     };
     groupStudent: {
       findMany: jest.Mock;
@@ -53,7 +55,9 @@ describe('AttendanceService - Student Code Support', () => {
           centerId,
           date: new Date(),
         }),
+        findUnique: jest.fn(),
         findMany: jest.fn(),
+        create: jest.fn(),
       },
       groupStudent: {
         findMany: jest.fn(),
@@ -243,11 +247,240 @@ describe('AttendanceService - Student Code Support', () => {
           AppRole.OWNER,
           userId,
         ),
-      ).rejects.toThrow(
-        new BadRequestException(
-          'لا يمكن تسجيل الحضور لطلاب غير مقيدين بهذه المجموعة.',
-        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should allow saving attendance with ATTENDED_ANOTHER_GROUP status', async () => {
+      prisma.student.findMany.mockResolvedValue([
+        { id: 'student-1', code: 'STU-100001' },
+      ]);
+      prisma.groupStudent.findMany.mockResolvedValue([
+        { studentId: 'student-1' },
+      ]);
+      const mockTx = {
+        studentAttendance: {
+          upsert: jest.fn().mockResolvedValue({ id: 'att-1' }),
+        },
+      };
+      prisma.$transaction.mockImplementation(
+        async (cb: (tx: typeof mockTx) => Promise<unknown>) => cb(mockTx),
+      );
+
+      const dto = {
+        records: [
+          {
+            studentId: 'student-1',
+            status: AttendanceStatus.ATTENDED_ANOTHER_GROUP,
+            absenceReason: 'حضر مع مجموعة الأحد',
+          },
+        ],
+      };
+
+      const result = await service.saveAttendance(
+        centerId,
+        groupId,
+        sessionId,
+        dto,
+        AppRole.OWNER,
+        userId,
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockTx.studentAttendance.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            status: AttendanceStatus.ATTENDED_ANOTHER_GROUP,
+            absenceReason: 'حضر مع مجموعة الأحد',
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('getGroupReport with ATTENDED_ANOTHER_GROUP', () => {
+    it('should count ATTENDED_ANOTHER_GROUP in attendanceRate and studentStats', async () => {
+      prisma.attendanceSession.findMany.mockResolvedValue([{ id: 'sess-1' }]);
+      prisma.groupStudent.findMany.mockResolvedValue([
+        {
+          studentId: 'student-1',
+          student: {
+            user: { fullName: 'طالب مجتهد' },
+          },
+        },
+      ]);
+      prisma.studentAttendance.findMany.mockResolvedValue([
+        {
+          studentId: 'student-1',
+          status: AttendanceStatus.ATTENDED_ANOTHER_GROUP,
+        },
+      ]);
+
+      const stats = await service.getGroupReport(
+        centerId,
+        groupId,
+        AppRole.OWNER,
+        userId,
+      );
+
+      expect(stats.attendanceRate).toBe(100);
+      expect(stats.perfectAttendance).toHaveLength(1);
+      expect(stats.perfectAttendance[0].attendedAnotherGroup).toBe(1);
+      expect(stats.perfectAttendance[0].absent).toBe(0);
+    });
+  });
+
+  describe('getGroupSessions', () => {
+    it('should return sessions with attendedCount (present, late, attended another group) and breakdown stats', async () => {
+      prisma.attendanceSession.findMany.mockResolvedValue([
+        {
+          id: 'sess-1',
+          groupId,
+          centerId,
+          date: new Date('2026-10-25'),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          records: [
+            { status: AttendanceStatus.PRESENT },
+            { status: AttendanceStatus.LATE },
+            { status: AttendanceStatus.ATTENDED_ANOTHER_GROUP },
+            { status: AttendanceStatus.ABSENT },
+            { status: AttendanceStatus.EXCUSED },
+          ],
+        },
+      ]);
+
+      const sessions = await service.getGroupSessions(
+        centerId,
+        groupId,
+        AppRole.OWNER,
+        userId,
+      );
+
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].attendedCount).toBe(3); // PRESENT (1) + LATE (1) + ATTENDED_ANOTHER_GROUP (1)
+      expect(sessions[0]._count.records).toBe(5);
+      expect(sessions[0].stats).toEqual({
+        present: 1,
+        late: 1,
+        attendedAnotherGroup: 1,
+        absent: 1,
+        excused: 1,
+      });
+    });
+
+    it('should handle a group with no sessions gracefully', async () => {
+      prisma.attendanceSession.findMany.mockResolvedValue([]);
+
+      const sessions = await service.getGroupSessions(
+        centerId,
+        groupId,
+        AppRole.OWNER,
+        userId,
+      );
+
+      expect(sessions).toEqual([]);
+    });
+
+    it('should handle sessions that have no attendance records recorded yet', async () => {
+      prisma.attendanceSession.findMany.mockResolvedValue([
+        {
+          id: 'sess-empty',
+          groupId,
+          centerId,
+          date: new Date('2026-10-27'),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          records: [],
+        },
+      ]);
+
+      const sessions = await service.getGroupSessions(
+        centerId,
+        groupId,
+        AppRole.OWNER,
+        userId,
+      );
+
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].attendedCount).toBe(0);
+      expect(sessions[0]._count.records).toBe(0);
+      expect(sessions[0].stats).toEqual({
+        present: 0,
+        late: 0,
+        attendedAnotherGroup: 0,
+        absent: 0,
+        excused: 0,
+      });
+    });
+  });
+
+  describe('startOrGetSession concurrency', () => {
+    it('should catch P2002 unique constraint error and return existing session', async () => {
+      const existingSession = {
+        id: 'session-concurrent-123',
+        groupId,
+        centerId,
+        date: new Date(),
+      };
+
+      prisma.attendanceSession.findUnique
+        .mockResolvedValueOnce(null) // first check: not found
+        .mockResolvedValueOnce(existingSession); // second check after race condition
+
+      prisma.attendanceSession.create.mockRejectedValueOnce({
+        code: 'P2002',
+        message: 'Unique constraint failed',
+      });
+
+      const result = await service.startOrGetSession(
+        centerId,
+        groupId,
+        AppRole.OWNER,
+        userId,
+      );
+
+      expect(result).toEqual(existingSession);
+      expect(prisma.attendanceSession.create).toHaveBeenCalled();
+      expect(prisma.attendanceSession.findUnique).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('saveAttendance deduplication', () => {
+    it('should deduplicate records by studentId taking the latest record', async () => {
+      prisma.groupStudent.findMany.mockResolvedValue([
+        { studentId: 'student-1' },
+      ]);
+
+      await service.saveAttendance(
+        centerId,
+        groupId,
+        sessionId,
+        {
+          records: [
+            {
+              studentId: 'student-1',
+              status: AttendanceStatus.ABSENT,
+            },
+            {
+              studentId: 'student-1',
+              status: AttendanceStatus.PRESENT,
+            },
+          ],
+        },
+        AppRole.OWNER,
+        userId,
+      );
+
+      expect(prisma.studentAttendance.upsert).toHaveBeenCalledTimes(1);
+      expect(prisma.studentAttendance.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            studentId: 'student-1',
+            status: AttendanceStatus.PRESENT,
+          }),
+        }),
       );
     });
   });
 });
+

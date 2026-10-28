@@ -33,10 +33,12 @@ import { CurrentCenterId } from '../../common/decorators/current-center-id.decor
 import type { RequestUser } from '../auth/interfaces/authenticated-request.interface';
 import { ExcelValidationPipe } from '../../shared/excel/pipes/excel-validation.pipe';
 import { ExcelImportSummary } from '../../shared/excel/interfaces/excel.interface';
+import { PaginationMeta } from '../../common/utils/buildMeta';
 import { GroupsService } from './groups.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { GroupQueryDto } from './dto/get-groups.dto';
+import { GroupStudentsQueryDto } from './dto/get-group-students.dto';
 import { GroupStudentsDto } from './dto/group-students.dto';
 import {
   GroupDetails,
@@ -167,7 +169,7 @@ export class GroupsController {
     @CurrentUser() user: RequestUser,
     @CurrentCenterId() centerId: string,
     @Param('id') id: string,
-  ): Promise<GroupDetails> {
+  ) {
     return this.groupsService.findOne(centerId, id, user.role, user.id);
   }
 
@@ -196,14 +198,14 @@ export class GroupsController {
     @CurrentUser() user: RequestUser,
     @CurrentCenterId() centerId: string,
     @Param('id') id: string,
-    @Query('search') search?: string,
-  ): Promise<GroupEnrolledStudent[]> {
+    @Query() query: GroupStudentsQueryDto,
+  ): Promise<{ data: GroupEnrolledStudent[]; meta: PaginationMeta }> {
     return this.groupsService.findStudents(
       centerId,
       id,
       user.role,
       user.id,
-      search,
+      query,
     );
   }
 

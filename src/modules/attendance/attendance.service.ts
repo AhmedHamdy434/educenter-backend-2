@@ -323,14 +323,60 @@ export class AttendanceService {
   ) {
     await this.validateGroupAccess(centerId, groupId, userRole, userId);
 
-    return this.prisma.attendanceSession.findMany({
+    const sessions = await this.prisma.attendanceSession.findMany({
       where: { groupId, centerId },
       include: {
-        _count: {
-          select: { records: true },
+        records: {
+          select: {
+            status: true,
+          },
         },
       },
       orderBy: { date: 'desc' },
+    });
+
+    return sessions.map((session) => {
+      const { records, ...sessionData } = session;
+
+      const stats = {
+        present: 0,
+        late: 0,
+        attendedAnotherGroup: 0,
+        absent: 0,
+        excused: 0,
+      };
+
+      for (const record of records) {
+        switch (record.status) {
+          case AttendanceStatus.PRESENT:
+            stats.present++;
+            break;
+          case AttendanceStatus.LATE:
+            stats.late++;
+            break;
+          case AttendanceStatus.ATTENDED_ANOTHER_GROUP:
+            stats.attendedAnotherGroup++;
+            break;
+          case AttendanceStatus.ABSENT:
+            stats.absent++;
+            break;
+          case AttendanceStatus.EXCUSED:
+            stats.excused++;
+            break;
+        }
+      }
+
+      const attendedCount =
+        stats.present + stats.late + stats.attendedAnotherGroup;
+
+      return {
+        ...sessionData,
+        _count: {
+          records: records.length,
+        },
+        attendedCount,
+        stats,
+      };
     });
   }
 
@@ -386,7 +432,8 @@ export class AttendanceService {
     const presentOrLateCount = allRecords.filter(
       (r) =>
         r.status === AttendanceStatus.PRESENT ||
-        r.status === AttendanceStatus.LATE,
+        r.status === AttendanceStatus.LATE ||
+        r.status === AttendanceStatus.ATTENDED_ANOTHER_GROUP,
     ).length;
 
     const attendanceRate =
@@ -411,6 +458,9 @@ export class AttendanceService {
       const excused = studentRecords.filter(
         (r) => r.status === AttendanceStatus.EXCUSED,
       ).length;
+      const attendedAnotherGroup = studentRecords.filter(
+        (r) => r.status === AttendanceStatus.ATTENDED_ANOTHER_GROUP,
+      ).length;
 
       return {
         studentId: item.studentId,
@@ -419,6 +469,7 @@ export class AttendanceService {
         absent,
         late,
         excused,
+        attendedAnotherGroup,
         totalRecorded: studentRecords.length,
       };
     });
@@ -558,8 +609,11 @@ export class AttendanceService {
     const excused = records.filter(
       (r) => r.status === AttendanceStatus.EXCUSED,
     ).length;
+    const attendedAnotherGroup = records.filter(
+      (r) => r.status === AttendanceStatus.ATTENDED_ANOTHER_GROUP,
+    ).length;
 
-    const attendedCount = present + late;
+    const attendedCount = present + late + attendedAnotherGroup;
     const attendancePercentage =
       totalSessions > 0
         ? Math.round((attendedCount / totalSessions) * 100)
@@ -575,6 +629,7 @@ export class AttendanceService {
       absent,
       late,
       excused,
+      attendedAnotherGroup,
       attendancePercentage,
       history: records.map((r) => ({
         sessionId: r.sessionId,

@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "AttendanceStatus" ADD VALUE 'ATTENDED_ANOTHER_GROUP';

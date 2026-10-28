@@ -11,6 +11,10 @@ describe('PaymentsService - Excel Export', () => {
     group: {
       findFirst: jest.Mock;
     };
+    groupStudent: {
+      count: jest.Mock;
+      findMany: jest.Mock;
+    };
     student: {
       findUnique: jest.Mock;
     };
@@ -28,6 +32,10 @@ describe('PaymentsService - Excel Export', () => {
     prisma = {
       group: {
         findFirst: jest.fn(),
+      },
+      groupStudent: {
+        count: jest.fn(),
+        findMany: jest.fn(),
       },
       student: {
         findUnique: jest.fn(),
@@ -80,31 +88,34 @@ describe('PaymentsService - Excel Export', () => {
           startDate,
           monthsCount: 2,
           monthlyFee: 200,
-          students: [
+        });
+
+      prisma.groupStudent.count.mockResolvedValue(1);
+      prisma.groupStudent.findMany.mockResolvedValue([
+        {
+          id: 'gs-1',
+          studentId: 'student-1',
+          subscriptionStartDate: startDate,
+          student: {
+            code: 'STU-101',
+            user: {
+              fullName: 'محمود السيد',
+              email: 'mahmoud@test.com',
+              phone: '01011112222',
+              avatar: null,
+            },
+          },
+          payments: [
             {
-              id: 'gs-1',
-              studentId: 'student-1',
-              subscriptionStartDate: startDate,
-              student: {
-                user: {
-                  fullName: 'محمود السيد',
-                  email: 'mahmoud@test.com',
-                  phone: '01011112222',
-                  avatar: null,
-                },
-              },
-              payments: [
-                {
-                  id: 'p-1',
-                  subscriptionDate: new Date('2026-10-01'),
-                  amount: 200,
-                  paidAt: new Date('2026-10-05'),
-                  notes: null,
-                },
-              ],
+              id: 'p-1',
+              subscriptionDate: new Date('2026-10-01'),
+              amount: 200,
+              paidAt: new Date('2026-10-05'),
+              notes: null,
             },
           ],
-        });
+        },
+      ]);
 
       excelService.buildWorkbookBuffer.mockResolvedValue(
         Buffer.from('group-payments-buffer'),
@@ -191,6 +202,89 @@ describe('PaymentsService - Excel Export', () => {
       );
 
       expect(result).toEqual(Buffer.from('student-payments-buffer'));
+    });
+  });
+
+  describe('getGroupPayments with search, month filter and pagination', () => {
+    it('should paginate and filter by search and month', async () => {
+      const groupId = 'group-1';
+      const startDate = new Date('2026-10-01');
+
+      prisma.group.findFirst.mockResolvedValue({
+        id: groupId,
+        name: 'مجموعة النخبة',
+        startDate,
+        monthsCount: 3,
+        monthlyFee: 150,
+      });
+
+      prisma.groupStudent.count.mockResolvedValue(1);
+      prisma.groupStudent.findMany.mockResolvedValue([
+        {
+          id: 'gs-1',
+          studentId: 'student-1',
+          subscriptionStartDate: startDate,
+          student: {
+            code: 'STU-001',
+            user: {
+              fullName: 'أحمد علي',
+              email: 'ahmed@test.com',
+              phone: '01012345678',
+              avatar: null,
+            },
+          },
+          payments: [
+            {
+              id: 'p-1',
+              subscriptionDate: new Date('2026-10-01'),
+              amount: 150,
+              paidAt: new Date('2026-10-03'),
+              notes: 'نقدي',
+            },
+          ],
+        },
+      ]);
+
+      const result = await service.getGroupPayments(centerId, groupId, {
+        page: 1,
+        limit: 10,
+        search: 'أحمد',
+        month: '2026-10',
+        skip: 0,
+        take: 10,
+      } as any);
+
+      expect(prisma.groupStudent.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            groupId,
+            centerId,
+            student: expect.objectContaining({
+              OR: expect.arrayContaining([
+                expect.objectContaining({ code: { contains: 'أحمد', mode: 'insensitive' } }),
+              ]),
+            }),
+            payments: expect.objectContaining({
+              some: expect.objectContaining({
+                subscriptionDate: expect.any(Object),
+              }),
+            }),
+          }),
+        }),
+      );
+
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].studentInfo.fullName).toBe('أحمد علي');
+      expect(result.data[0].paidMonths).toHaveLength(1);
+      expect(result.data[0].unpaidMonths).toEqual(['2026-11-01', '2026-12-01']);
+      expect(result.meta).toEqual({
+        total: 1,
+        page: 1,
+        limit: 10,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      });
     });
   });
 });

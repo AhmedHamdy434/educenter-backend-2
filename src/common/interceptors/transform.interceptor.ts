@@ -47,13 +47,12 @@ export class TransformInterceptor<T> implements NestInterceptor<T, unknown> {
             return dataObj;
           }
 
-          // إذا كانت الاستجابة تحتوي على pagination (data و meta كـ مفاتيح أساسية)
+          // إذا كانت الاستجابة تحتوي على pagination أو بيانات إضافية (data و meta كـ مفاتيح أساسية)
           if ('data' in dataObj && 'meta' in dataObj) {
             return {
               success: true,
               message: message || 'تم جلب البيانات بنجاح.',
-              data: dataObj.data,
-              meta: dataObj.meta,
+              ...dataObj,
             };
           }
         }
