@@ -261,13 +261,13 @@ describe('PaymentsService - Excel Export', () => {
             centerId,
             student: expect.objectContaining({
               OR: expect.arrayContaining([
-                expect.objectContaining({ code: { contains: 'أحمد', mode: 'insensitive' } }),
+                expect.objectContaining({
+                  code: { contains: 'أحمد', mode: 'insensitive' },
+                }),
               ]),
             }),
-            payments: expect.objectContaining({
-              some: expect.objectContaining({
-                subscriptionDate: expect.any(Object),
-              }),
+            subscriptionStartDate: expect.objectContaining({
+              lt: new Date('2026-11-01T00:00:00.000Z'),
             }),
           }),
         }),
@@ -275,8 +275,28 @@ describe('PaymentsService - Excel Export', () => {
 
       expect(result.data).toHaveLength(1);
       expect(result.data[0].studentInfo.fullName).toBe('أحمد علي');
+      expect(result.data[0].currentMonth).toEqual({
+        month: '2026-10-01',
+        isRequired: true,
+        isPaid: true,
+        payment: {
+          id: 'p-1',
+          amount: 150,
+          paidAt: expect.any(Date),
+          notes: 'نقدي',
+        },
+      });
       expect(result.data[0].paidMonths).toHaveLength(1);
       expect(result.data[0].unpaidMonths).toEqual(['2026-11-01', '2026-12-01']);
+      expect(result.stats).toEqual({
+        activeMonth: '2026-10-01',
+        total: 1,
+        paid: 1,
+        unpaid: 0,
+        expected: 150,
+        collected: 150,
+        groupMonths: ['2026-10-01', '2026-11-01', '2026-12-01'],
+      });
       expect(result.meta).toEqual({
         total: 1,
         page: 1,

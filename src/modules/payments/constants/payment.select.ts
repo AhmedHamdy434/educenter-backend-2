@@ -79,6 +79,8 @@ export type GroupPaymentsDetails = Prisma.GroupGetPayload<{
 }>;
 
 export interface GroupPaymentStats {
+  /** الشهر المستهدف الذي احتُسبت عليه الإحصائيات (YYYY-MM-01) */
+  activeMonth: string;
   /** إجمالي الطلاب المسجلين في المجموعة (بدون فلترة صفحة) */
   total: number;
   /** عدد الطلاب المسددين للشهر المُفلتر (أو كل الأشهر إن لم يُحدَّد شهر) */
@@ -93,6 +95,18 @@ export interface GroupPaymentStats {
   groupMonths: string[];
 }
 
+export interface GroupPaymentCurrentMonth {
+  month: string;
+  isRequired: boolean;
+  isPaid: boolean;
+  payment: {
+    id: string;
+    amount: number;
+    paidAt: Date;
+    notes: string | null;
+  } | null;
+}
+
 export interface GroupPaymentStudentItem {
   groupStudentId: string;
   studentId: string;
@@ -105,6 +119,7 @@ export interface GroupPaymentStudentItem {
   };
   subscriptionStartDate: string;
   monthlyFee: number;
+  currentMonth: GroupPaymentCurrentMonth;
   requiredMonths: string[];
   paidMonths: {
     id: string;

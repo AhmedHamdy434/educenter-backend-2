@@ -12,9 +12,7 @@ import { PayMonthDto } from './dto/pay-month.dto';
 import { ExcelService } from '../../shared/excel/excel.service';
 import {
   groupPaymentExcelSelect,
-  groupPaymentsSelect,
   payMonthGroupStudentSelect,
-  studentPaymentSelect,
   StudentPaymentItem,
   GroupPaymentStudentItem,
   GroupPaymentStats,
@@ -138,19 +136,38 @@ export class PaymentsService {
       };
     }
 
-    // فلترة الشهر في حال تم تمرير query.month
+    // تحديد الشهر المستهدف: إما المُمرر في query أو الشهر الحالي (إن كان ضمن شهور المجموعة) أو أول شهر للمجموعة
+    let targetMonthForStats: string;
     if (query?.month) {
-      const targetMonth = this.normalizeToFirstOfMonth(query.month);
-      const nextMonth = new Date(targetMonth);
-      nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
+      targetMonthForStats = this.formatDate(
+        this.normalizeToFirstOfMonth(query.month),
+      );
+    } else {
+      const today = new Date();
+      const currentMonthStr = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}-01`;
+      targetMonthForStats = groupMonthsFormatted.includes(currentMonthStr)
+        ? currentMonthStr
+        : groupMonthsFormatted[0] || currentMonthStr;
+    }
 
-      where.payments = {
-        some: {
-          subscriptionDate: {
-            gte: targetMonth,
-            lt: nextMonth,
-          },
-        },
+    // فلترة الشهر للجدول والـ count:
+    // نعرض الطلاب الذين انضموا قبل أو في نهاية الشهر المستهدف (أي يستحق عليهم هذا الشهر أو قبله)
+    if (targetMonthForStats) {
+      const targetMonthDate = this.normalizeToFirstOfMonth(targetMonthForStats);
+      const nextMonth = new Date(
+        Date.UTC(
+          targetMonthDate.getUTCFullYear(),
+          targetMonthDate.getUTCMonth() + 1,
+          1,
+          0,
+          0,
+          0,
+          0,
+        ),
+      );
+
+      where.subscriptionStartDate = {
+        lt: nextMonth,
       };
     }
 
@@ -170,15 +187,12 @@ export class PaymentsService {
       },
     });
 
-    // الشهر المستهدف للإحصائيات: إن لم يُحدَّد نستخدم الشهر الحالي
-    const targetMonthForStats = query?.month
-      ? this.formatDate(this.normalizeToFirstOfMonth(query.month))
-      : null;
-
     let statsPaid = 0;
     let statsUnpaid = 0;
     let statsExpected = 0;
     let statsCollected = 0;
+
+    let targetRequiredStudentsCount = 0;
 
     for (const gs of allStudentsForStats) {
       const studentStart = this.normalizeToFirstOfMonth(
@@ -192,6 +206,7 @@ export class PaymentsService {
         // إحصائيات للشهر المُفلتر فقط
         const isRequired = reqMonths.includes(targetMonthForStats);
         if (isRequired) {
+          targetRequiredStudentsCount++;
           statsExpected += monthlyFee;
           const payment = gs.payments.find(
             (p) => this.formatDate(p.subscriptionDate) === targetMonthForStats,
@@ -224,7 +239,10 @@ export class PaymentsService {
     }
 
     const stats: GroupPaymentStats = {
-      total: allStudentsForStats.length,
+      activeMonth: targetMonthForStats,
+      total: targetMonthForStats
+        ? targetRequiredStudentsCount
+        : allStudentsForStats.length,
       paid: statsPaid,
       unpaid: statsUnpaid,
       expected: statsExpected,
@@ -308,6 +326,27 @@ export class PaymentsService {
       const paidDatesSet = new Set(paidMonths.map((pm) => pm.subscriptionDate));
       const unpaidMonths = requiredMonths.filter((rm) => !paidDatesSet.has(rm));
 
+      const isCurrentMonthRequired =
+        requiredMonths.includes(targetMonthForStats);
+      const currentMonthPayment =
+        gs.payments.find(
+          (p) => this.formatDate(p.subscriptionDate) === targetMonthForStats,
+        ) || null;
+
+      const currentMonth = {
+        month: targetMonthForStats,
+        isRequired: isCurrentMonthRequired,
+        isPaid: Boolean(currentMonthPayment),
+        payment: currentMonthPayment
+          ? {
+              id: currentMonthPayment.id,
+              amount: Number(currentMonthPayment.amount),
+              paidAt: currentMonthPayment.paidAt,
+              notes: currentMonthPayment.notes,
+            }
+          : null,
+      };
+
       return {
         groupStudentId: gs.id,
         studentId: gs.studentId,
@@ -320,6 +359,7 @@ export class PaymentsService {
         },
         subscriptionStartDate: this.formatDate(gs.subscriptionStartDate),
         monthlyFee,
+        currentMonth,
         requiredMonths,
         paidMonths,
         unpaidMonths,
@@ -630,7 +670,7 @@ export class PaymentsService {
     const rows = payments.map((p) => ({
       groupName: p.groupStudent.group.name,
       subscriptionDate: this.formatDate(p.subscriptionDate),
-      amount: `${p.amount} ج.م`,
+      amount: `${Number(p.amount)} ج.م`,
       paidAt: p.paidAt ? new Date(p.paidAt).toISOString().split('T')[0] : '—',
       notes: p.notes || '—',
     }));

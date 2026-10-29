@@ -4,7 +4,8 @@ import { BaseQueryDto } from '../../../common/dto/BaseQueryDto';
 
 export class GetGroupPaymentsQueryDto extends BaseQueryDto {
   @ApiPropertyOptional({
-    description: 'البحث باسم الطالب أو رقم الهاتف أو البريد الإلكتروني أو كود الطالب',
+    description:
+      'البحث باسم الطالب أو رقم الهاتف أو البريد الإلكتروني أو كود الطالب',
     example: 'أحمد',
   })
   @IsOptional()
@@ -28,8 +29,8 @@ export class GetGroupPaymentsQueryDto extends BaseQueryDto {
   })
   @IsOptional()
   @IsIn(['name', 'joinedAt', 'subscriptionStartDate'], {
-    message: 'حقل الترتيب يجب أن يكون أحد الحقول التالية: name, joinedAt, subscriptionStartDate.',
+    message:
+      'حقل الترتيب يجب أن يكون أحد الحقول التالية: name, joinedAt, subscriptionStartDate.',
   })
   declare readonly sortBy?: string;
 }
-

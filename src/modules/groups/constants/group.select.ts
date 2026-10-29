@@ -47,6 +47,11 @@ export const groupListSelect = {
       minute: true,
     },
   },
+  _count: {
+    select: {
+      students: true,
+    },
+  },
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.GroupSelect;

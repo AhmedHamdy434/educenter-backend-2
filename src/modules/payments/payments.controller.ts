@@ -82,7 +82,11 @@ export class PaymentsController {
     @CurrentUser() user: RequestUser,
     @Param('groupId') groupId: string,
     @Query() query: GetGroupPaymentsQueryDto,
-  ): Promise<{ data: GroupPaymentStudentItem[]; meta: PaginationMeta; stats: GroupPaymentStats }> {
+  ): Promise<{
+    data: GroupPaymentStudentItem[];
+    meta: PaginationMeta;
+    stats: GroupPaymentStats;
+  }> {
     const centerId = this.validateCenterId(user.centerId);
     return this.paymentsService.getGroupPayments(centerId, groupId, query);
   }
