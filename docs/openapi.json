@@ -11463,6 +11463,311 @@
           }
         }
       }
+    },
+    "/api/schedule/calendar": {
+      "get": {
+        "operationId": "ScheduleController_getCalendarSchedule",
+        "summary": "جلب جدول الحصص لشهر كامل مفردة على أيامه (لوضع الـ Calendar)",
+        "tags": [
+          "Schedule"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "month",
+            "in": "query",
+            "required": true,
+            "description": "الشهر المطلوب جلبه بصيغة YYYY-MM (مثال: 2026-10)",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\\\d{4}-(0[1-9]|1[0-2])$",
+              "example": "2026-10"
+            }
+          },
+          {
+            "name": "teacherId",
+            "in": "query",
+            "required": false,
+            "description": "تصفية الحصص حسب المعلم",
+            "schema": {
+              "type": "string",
+              "example": "clyteach001"
+            }
+          },
+          {
+            "name": "gradeId",
+            "in": "query",
+            "required": false,
+            "description": "تصفية الحصص حسب المرحلة الدراسية",
+            "schema": {
+              "type": "string",
+              "example": "clygrade001"
+            }
+          },
+          {
+            "name": "subjectId",
+            "in": "query",
+            "required": false,
+            "description": "تصفية الحصص حسب المادة الدراسية",
+            "schema": {
+              "type": "string",
+              "example": "clysubj001"
+            }
+          },
+          {
+            "name": "groupId",
+            "in": "query",
+            "required": false,
+            "description": "تصفية الحصص حسب المجموعة الدراسية",
+            "schema": {
+              "type": "string",
+              "example": "clygroup001"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "تم جلب جدول الحصص الشهري بنجاح.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم جلب جدول الحصص الشهري بنجاح.",
+                  "data": {
+                    "month": "2026-10",
+                    "range": {
+                      "from": "2026-10-01",
+                      "to": "2026-10-31"
+                    },
+                    "sessions": [
+                      {
+                        "id": "slot-clygroup001-2026-10-04-10-0",
+                        "groupId": "clygroup001",
+                        "groupName": "مجموعة الفيزياء 1",
+                        "subject": {
+                          "id": "clysubj001",
+                          "name": "الفيزياء"
+                        },
+                        "grade": {
+                          "id": "clygrade001",
+                          "name": "الصف الأول الثانوي"
+                        },
+                        "teacher": {
+                          "id": "clyteach001",
+                          "fullName": "أ. أحمد علي",
+                          "avatar": null
+                        },
+                        "date": "2026-10-04",
+                        "dayOfWeek": "SUNDAY",
+                        "hour": 10,
+                        "minute": 0,
+                        "sessionId": null,
+                        "attendanceStatus": "NOT_STARTED",
+                        "studentsCount": 20,
+                        "recordedCount": 0,
+                        "isExtraSession": false,
+                        "isGroupInactive": false
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "خطأ في معلمات الاستعلام أو صيغة الشهر غير صحيحة.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": [
+                    "صيغة الشهر يجب أن تكون YYYY-MM (مثال: 2026-10)."
+                  ],
+                  "error": "Bad Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "المستخدم غير مسجل الدخول أو التوكن منتهي.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized",
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مصرح بالوصول (مقتصر على دور OWNER فقط).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/schedule/upcoming": {
+      "get": {
+        "operationId": "ScheduleController_getUpcomingSchedule",
+        "summary": "جلب الحصص القادمة بدءاً من اليوم حتى نهاية الشهر الحالي (لوضع الـ Accordion)",
+        "tags": [
+          "Schedule"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "teacherId",
+            "in": "query",
+            "required": false,
+            "description": "تصفية الحصص حسب المعلم",
+            "schema": {
+              "type": "string",
+              "example": "clyteach001"
+            }
+          },
+          {
+            "name": "gradeId",
+            "in": "query",
+            "required": false,
+            "description": "تصفية الحصص حسب المرحلة الدراسية",
+            "schema": {
+              "type": "string",
+              "example": "clygrade001"
+            }
+          },
+          {
+            "name": "subjectId",
+            "in": "query",
+            "required": false,
+            "description": "تصفية الحصص حسب المادة الدراسية",
+            "schema": {
+              "type": "string",
+              "example": "clysubj001"
+            }
+          },
+          {
+            "name": "groupId",
+            "in": "query",
+            "required": false,
+            "description": "تصفية الحصص حسب المجموعة الدراسية",
+            "schema": {
+              "type": "string",
+              "example": "clygroup001"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "تم جلب الحصص القادمة بنجاح.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم جلب الحصص القادمة بنجاح.",
+                  "data": {
+                    "range": {
+                      "from": "2026-10-31",
+                      "to": "2026-10-31"
+                    },
+                    "sessions": [
+                      {
+                        "id": "slot-clygroup001-2026-10-31-16-30",
+                        "groupId": "clygroup001",
+                        "groupName": "مجموعة الفيزياء 1",
+                        "subject": {
+                          "id": "clysubj001",
+                          "name": "الفيزياء"
+                        },
+                        "grade": {
+                          "id": "clygrade001",
+                          "name": "الصف الأول الثانوي"
+                        },
+                        "teacher": {
+                          "id": "clyteach001",
+                          "fullName": "أ. أحمد علي",
+                          "avatar": null
+                        },
+                        "date": "2026-10-31",
+                        "dayOfWeek": "SATURDAY",
+                        "hour": 16,
+                        "minute": 30,
+                        "sessionId": "clysession001",
+                        "attendanceStatus": "IN_PROGRESS",
+                        "studentsCount": 20,
+                        "recordedCount": 12,
+                        "isExtraSession": false,
+                        "isGroupInactive": false
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "المستخدم غير مسجل الدخول أو التوكن منتهي.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Unauthorized",
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "غير مصرح بالوصول (مقتصر على دور OWNER فقط).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "Forbidden resource",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "info": {

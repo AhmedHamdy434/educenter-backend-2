@@ -1,6 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { ScheduleModule } from '@nestjs/schedule';
+import { ScheduleModule as CronScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { JwtModule } from '@nestjs/jwt';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
@@ -25,6 +25,7 @@ import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { ParentPortalModule } from './modules/parent-portal/parent-portal.module';
 import { SubscriptionPaymentsModule } from './modules/subscription-payments/subscription-payments.module';
 import { HomeStatsModule } from './modules/home-stats/home-stats.module';
+import { ScheduleModule } from './modules/schedule/schedule.module';
 
 @Module({
   imports: [
@@ -32,7 +33,7 @@ import { HomeStatsModule } from './modules/home-stats/home-stats.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
-    ScheduleModule.forRoot(),
+    CronScheduleModule.forRoot(),
     ThrottlerModule.forRoot([
       {
         ttl: 60000,
@@ -58,6 +59,7 @@ import { HomeStatsModule } from './modules/home-stats/home-stats.module';
     NotificationsModule,
     AuditLogsModule,
     ParentPortalModule,
+    ScheduleModule,
   ],
   controllers: [],
   providers: [

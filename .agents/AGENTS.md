@@ -12,6 +12,10 @@
   - `STUDENT`: Enrolled student (`role: STUDENT`, linked to `Student` table). Read-only access scoped strictly to their own enrolled groups, attendance records, payments, and profile.
   - **Public / Unauthenticated**: Public landing endpoints (`/subscription-plans`, `/subscription-plans/:id`), auth endpoints (`/auth/login`, `/auth/forgot-password`, `/auth/reset-password`), and Parent Portal report (`/p/:token`).
 * **Real-time Active Check:** `JwtStrategy.validate()` actively checks `isActive === true` from the database on every authenticated request. Inactive accounts are immediately rejected with `401 UnauthorizedException`.
+* **Date & Timezone Standardization (Africa/Cairo & UTC):**
+  - All date normalizations for sessions, attendance, and calendars must rely on `src/common/utils/date.util.ts` (`getTodayMidnightUtcInCairo()`, `getCairoDateParts()`, `getCairoMonthRange()`, `parseDateStringToUtcMidnight()`).
+  - Calendar days, attendance dates, and schedule slots are evaluated based on Egypt calendar date (`Africa/Cairo`) and stored normalized to UTC midnight (`00:00:00.000Z`) to prevent timezone drift across midnight.
+  - Never use local server `new Date().getFullYear()` or `new Date().getDate()`.
 * **Privilege Escalation Safeguards:**
   - User `role` is immutable and cannot be updated via `UpdateUserDto`.
 * To inject the current user into a controller handler, use `@CurrentUser() user: RequestUser`.
@@ -137,9 +141,10 @@
     9. `Students` (10 endpoints): `POST /api/students`, `GET /api/students`, `GET /api/students/export/excel`, `GET /api/students/export/pdf`, `GET /api/students/export/template`, `POST /api/students/import/excel`, `GET /api/students/:id`, `PATCH /api/students/:id`, `PATCH /api/students/:id/toggle-status`, `DELETE /api/students/:id`
     10. `Groups` (12 endpoints): `POST /api/groups`, `GET /api/groups`, `GET /api/groups/export/excel`, `GET /api/groups/export/pdf`, `GET /api/groups/export/template`, `POST /api/groups/import/excel`, `GET /api/groups/:id`, `PATCH /api/groups/:id`, `PATCH /api/groups/:id/toggle-status`, `POST /api/groups/:id/students`, `DELETE /api/groups/:id/students`, `DELETE /api/groups/:id`
     11. `Home Stats` (1 endpoint): `GET /api/home-stats`
+    12. `Schedule` (2 endpoints): `GET /api/schedule/calendar`, `GET /api/schedule/upcoming`
   - **Pending Modules (Paused until User Finishes Pending Logic Changes):**
     1. `Attendance` (6 endpoints)
-    2. `Payments` (3 endpoints)
+    2. `Payments` (4 endpoints)
     3. `Notifications` (1 endpoint)
     4. `AuditLogs` (1 endpoint)
     5. `ParentPortal` (2 endpoints)

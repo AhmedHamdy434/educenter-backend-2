@@ -7,6 +7,7 @@ import {
 import { AttendanceStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { AppRole } from '../../common/enums/app-role.enum';
+import { getTodayMidnightUtcInCairo } from '../../common/utils/date.util';
 import { SaveAttendanceDto } from './dto/save-attendance.dto';
 
 @Injectable()
@@ -14,11 +15,10 @@ export class AttendanceService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Normalize date to midnight UTC of the current server time.
+   * Normalize date to midnight UTC of the current Egyptian calendar day (Africa/Cairo).
    */
   private getTodayMidnightUtc(): Date {
-    const now = new Date();
-    return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    return getTodayMidnightUtcInCairo();
   }
 
   /**
@@ -87,13 +87,33 @@ export class AttendanceService {
     });
 
     if (!session) {
-      session = await this.prisma.attendanceSession.create({
-        data: {
-          groupId,
-          centerId,
-          date,
-        },
-      });
+      try {
+        session = await this.prisma.attendanceSession.create({
+          data: {
+            groupId,
+            centerId,
+            date,
+          },
+        });
+      } catch (error: any) {
+        if (error?.code === 'P2002') {
+          const existing = await this.prisma.attendanceSession.findUnique({
+            where: {
+              groupId_date: {
+                groupId,
+                date,
+              },
+            },
+          });
+          if (existing) {
+            session = existing;
+          } else {
+            throw error;
+          }
+        } else {
+          throw error;
+        }
+      }
     }
 
     return session;
@@ -283,9 +303,16 @@ export class AttendanceService {
       );
     }
 
+    // Deduplicate records by studentId taking the latest record
+    const uniqueRecordsMap = new Map<string, (typeof dto.records)[number]>();
+    for (const record of dto.records) {
+      uniqueRecordsMap.set(record.studentId!, record);
+    }
+    const recordsToProcess = Array.from(uniqueRecordsMap.values());
+
     // Upsert attendance records inside a transaction
     await this.prisma.$transaction(async (tx) => {
-      for (const record of dto.records) {
+      for (const record of recordsToProcess) {
         const studentId = record.studentId!;
         await tx.studentAttendance.upsert({
           where: {

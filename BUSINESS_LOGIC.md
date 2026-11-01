@@ -223,10 +223,11 @@ OWNER         ADMIN        TEACHER       STUDENT    PARENT PORTAL           OWNE
 ---
 
 ### 3.8 Attendance Management (`AttendanceModule`)
-* **Date Normalization**: UTC midnight (`00:00:00.000Z`) for session dates.
-* **Session Lifecycle**: `POST /groups/:groupId/attendance/session` opens/gets today's session (`@@unique([groupId, date])`).
+* **Date Normalization & Cairo Timezone**: Date calculations for attendance sessions and daily evaluations must strictly use `src/common/utils/date.util.ts` (`getTodayMidnightUtcInCairo()`). The calendar date in Egypt (`Africa/Cairo`) is evaluated and converted to UTC midnight (`00:00:00.000Z`) to prevent timezone drift across midnight.
+* **Session Lifecycle**: `POST /groups/:groupId/attendance/session` opens or retrieves the attendance session for the current Cairo day (`@@unique([groupId, date])`). Gracefully handles concurrent race conditions (`P2002`).
 * **Bulk Save (`POST /groups/:groupId/attendance/session/:sessionId/save`)**:
-  - Upserts attendance records (`PRESENT`, `ABSENT`, `LATE`, `EXCUSED`) with absence reasons.
+  - Automatically deduplicates records by `studentId` taking the latest entry.
+  - Upserts attendance records (`PRESENT`, `ABSENT`, `LATE`, `EXCUSED`, `ATTENDED_ANOTHER_GROUP`) with absence reasons.
   - **WhatsApp Alert**: Automatically triggers `WhatsAppService` to alert parents when an `ABSENT` status is recorded.
 * **Reports**:
   - `GET /groups/:groupId/attendance/report`: Attendance rate, top absentees, perfect attendance list.
@@ -242,12 +243,32 @@ OWNER         ADMIN        TEACHER       STUDENT    PARENT PORTAL           OWNE
   - Records an audit log entry (`PAYMENT_COLLECTION`).
   - Automatically dispatches an electronic payment receipt to the parent via `WhatsAppService`.
 * **Group Payment Matrix (`GET /groups/:groupId/payments`)**:
+  - Accepts query parameters (`search`, `month`, `page`, `limit`, `sortBy`, `sortOrder`).
+  - Defaults to the current month in UTC if within group duration, or the group's first month.
   - Computes `requiredMonths`, `paidMonths`, and `unpaidMonths` for every student in the group.
-* **Payment History (`GET /students/:studentId/payments`)**: Historical payments per student.
+  - Returns calculated `stats` object: `{ activeMonth, total, paid, unpaid, expected, collected, groupMonths }`.
+  - Adds computed `currentMonth` object per student: `{ month, isRequired, isPaid, payment }`.
+* **Payment History & Excel Exports**:
+  - `GET /students/:studentId/payments`: Historical payments per student.
+  - `GET /students/:studentId/payments/export/excel`: Export individual student payments to formatted Excel spreadsheet.
+  - `GET /groups/:groupId/payments/export/excel`: Export group monthly payment matrix to formatted Excel spreadsheet.
 
 ---
 
-### 3.10 Notifications & WhatsApp Integration (`NotificationsModule`)
+### 3.10 Schedule & Calendar Module (`ScheduleModule`)
+* **Calendar View (`GET /api/schedule/calendar`)**:
+  - Restricted to `OWNER`.
+  - Accepts `month` (`YYYY-MM`), `teacherId`, `gradeId`, `subjectId`, `groupId`.
+  - Resolves all scheduled group lesson slots for each day of the month using Cairo timezone calendar mapping.
+  - Cross-references real `AttendanceSession` records to report live session status (`NOT_STARTED`, `IN_PROGRESS`, `COMPLETED`), student count, and attendance completion.
+* **Upcoming View (`GET /api/schedule/upcoming`)**:
+  - Restricted to `OWNER`.
+  - Generates lessons from today (in Cairo) until the end of the current month.
+  - Sorted chronologically for accordion/timeline dashboards.
+
+---
+
+### 3.11 Notifications & WhatsApp Integration (`NotificationsModule`)
 * **Notification Log (`GET /notifications`)**:
   - Center admins can view dispatched alerts, recipient phone numbers, delivery status, and metadata.
 * **Event-Driven WhatsApp Dispatch (`WhatsAppService`)**:
@@ -258,14 +279,14 @@ OWNER         ADMIN        TEACHER       STUDENT    PARENT PORTAL           OWNE
 
 ---
 
-### 3.11 Audit Logs (`AuditLogsModule`)
+### 3.12 Audit Logs (`AuditLogsModule`)
 * **Audit Trail (`GET /audit-logs`)**:
   - Immutable record of sensitive actions (`CREATE`, `UPDATE`, `DELETE`, `STATUS_CHANGE`, `PAYMENT_COLLECTION`, `LOGIN`).
   - Records `centerId`, `userId`, `action`, `entity`, `entityId`, `details`, and `ipAddress`.
 
 ---
 
-### 3.12 Parent Portal (`ParentPortalModule`)
+### 3.13 Parent Portal (`ParentPortalModule`)
 * **Magic Link Generation (`POST /p/generate/:studentId`)**:
   - Generates a secure, 30-day token in `ParentMagicToken`.
   - Accessible by `OWNER`, `ADMIN`, and assigned `TEACHER`.
@@ -330,7 +351,7 @@ OWNER         ADMIN        TEACHER       STUDENT    PARENT PORTAL           OWNE
 
 ## 6. Complete API Reference Table
 
-The following table documents all **72 endpoints** implemented in the EduCenter backend API:
+The following table documents all **77 endpoints** implemented in the EduCenter backend API:
 
 | Module | Method | Endpoint Path | Allowed Roles | Business Purpose |
 | :--- | :---: | :--- | :--- | :--- |
@@ -400,8 +421,13 @@ The following table documents all **72 endpoints** implemented in the EduCenter 
 | **Attendance** | `GET` | `/api/groups/:groupId/attendance/report` | `OWNER`, `ADMIN`, `TEACHER` | Group attendance report (rate, top 5 absentees, perfect attendance). |
 | **Attendance** | `GET` | `/api/students/:studentId/attendance/report` | `OWNER`, `ADMIN`, `TEACHER`, `STUDENT` | Student attendance report & history *(Student restricted to own report)*. |
 | **Payments** | `GET` | `/api/groups/:groupId/payments` | `OWNER`, `ADMIN` | Group payments matrix (computes required, paid, and unpaid months). |
+| **Payments** | `GET` | `/api/groups/:groupId/payments/export/excel` | `OWNER`, `TEACHER` | Export group monthly payment matrix to Excel. |
 | **Payments** | `POST` | `/api/group-students/:groupStudentId/payments` | `OWNER`, `ADMIN` | Record payment, log audit entry, and dispatch WhatsApp receipt. |
 | **Payments** | `GET` | `/api/students/:studentId/payments` | `OWNER`, `ADMIN`, `TEACHER`, `STUDENT` | Student payment history *(Student sees own; Teacher sees taught students)*. |
+| **Payments** | `GET` | `/api/students/:studentId/payments/export/excel` | `OWNER`, `TEACHER`, `STUDENT` | Export student payment history to Excel. |
+| **Schedule** | `GET` | `/api/schedule/calendar` | `OWNER` | Monthly calendar schedule view mapping lessons and session attendance. |
+| **Schedule** | `GET` | `/api/schedule/upcoming` | `OWNER` | Chronological upcoming lessons from today through end of current month. |
+| **Home Stats** | `GET` | `/api/home-stats` | `SUPER_ADMIN` | Platform metrics and KPI overview for SuperAdmin dashboard. |
 | **Notifications** | `GET` | `/api/notifications` | `OWNER`, `ADMIN` | List dispatched notification history with delivery statuses and metadata. |
 | **Audit Logs** | `GET` | `/api/audit-logs` | `OWNER`, `ADMIN` | List administrative and financial audit logs with action and entity filters. |
 | **Parent Portal** | `POST` | `/api/p/generate/:studentId` | `OWNER`, `ADMIN`, `TEACHER` | Generate a secure 30-day Parent Magic Token for student progress tracking. |
@@ -427,22 +453,24 @@ The following table documents all **72 endpoints** implemented in the EduCenter 
   - **Paginated Collection**: `{ "success": true, "message": "...", "data": [ ... ], "meta": { "total": ..., "page": ..., "limit": ..., "totalPages": ..., "hasNextPage": ..., "hasPreviousPage": ... } }`
   - **Error (NestJS Standard)**: `{ "statusCode": ..., "message": "..." | [...], "error": "..." }`
 
-### 7.2 Current Module Progress & Implementation Status (48 / 69 Operations Complete)
+### 7.2 Current Module Progress & Implementation Status (63 / 77 Operations Complete)
 
 | Module | Endpoints Count | Swagger Status | Status Description |
 | :--- | :---: | :---: | :--- |
-| **Auth** | 6 | ✅ **Completed** | Full realistic examples for login (Center & SuperAdmin), me, change password, OTP reset. |
+| **Auth** | 7 | ✅ **Completed** | Full realistic examples for login (Center & SuperAdmin), me, change password, OTP reset. |
 | **Centers** | 9 | ✅ **Completed** | Full CRUD, onboarding, status toggling, plan subscribe & renew. |
 | **Subscription Plans** | 5 | ✅ **Completed** | Full CRUD, status toggle, public view endpoints. |
 | **Subscription Payments** | 4 | ✅ **Completed** | Revenue summary, global list, and center-specific payment operations. |
 | **Users** | 3 | ✅ **Completed** | Center user management, role immutability, hierarchy protection. |
-| **Grades** | 5 | ✅ **Completed** | Academic grades CRUD, active status toggle, unique name enforcement. |
-| **Subjects** | 6 | ✅ **Completed** | Subjects CRUD, options dropdown, grade associations, limit checks. |
-| **Teachers** | 5 | ✅ **Completed** | Teacher onboarding, accounts, diff-synced subject relations, limit checks. |
-| **Students** | 5 | ✅ **Completed** | Student onboarding, accounts, grade enrollments, seat & plan limit checks. |
-| **Groups** | 8 | ⏸️ **Pending** | Paused: Waiting for user updates to group logic, student assignments, and schedules. |
+| **Grades** | 10 | ✅ **Completed** | Academic grades CRUD, active status toggle, export/import Excel & PDF, template. |
+| **Subjects** | 11 | ✅ **Completed** | Subjects CRUD, options dropdown, grade associations, limit checks, export/import Excel & PDF, template. |
+| **Teachers** | 10 | ✅ **Completed** | Teacher onboarding, accounts, diff-synced subject relations, limit checks, export/import Excel & PDF, template. |
+| **Students** | 10 | ✅ **Completed** | Student onboarding, accounts, grade enrollments, seat & plan limit checks, export/import Excel & PDF, template. |
+| **Groups** | 12 | ✅ **Completed** | Full CRUD, schedule slots, capacity enforcement, student enroll/remove, export/import Excel & PDF, template. |
+| **Home Stats** | 1 | ✅ **Completed** | SuperAdmin dashboard platform statistics. |
+| **Schedule** | 2 | ✅ **Completed** | Calendar schedule and upcoming lessons endpoints with full schema and examples. |
 | **Attendance** | 6 | ⏸️ **Pending** | Paused: Waiting for user updates to attendance session flow and reports. |
-| **Payments** | 3 | ⏸️ **Pending** | Paused: Waiting for user updates to student monthly tuition fee logic. |
+| **Payments** | 5 | ⏸️ **Pending** | Paused: Waiting for user updates to student monthly tuition fee logic. |
 | **Notifications** | 1 | ⏸️ **Pending** | Paused: Waiting for user updates to WhatsApp notifications. |
 | **Audit Logs** | 1 | ⏸️ **Pending** | Paused: Waiting for user updates to audit logging. |
 | **Parent Portal** | 2 | ⏸️ **Pending** | Paused: Waiting for user updates to parent magic links & portal view. |
