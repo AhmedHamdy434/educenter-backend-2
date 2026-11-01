@@ -13,14 +13,14 @@ export class GroupStudentsQueryDto extends BaseQueryDto {
   declare readonly search?: string;
 
   @ApiPropertyOptional({
-    description: 'حقل الترتيب: joinedAt, subscriptionStartDate',
+    description: 'حقل الترتيب: joinedAt, subscriptionStartDate, name',
     enum: ['joinedAt', 'subscriptionStartDate', 'name'],
     example: 'joinedAt',
   })
   @IsOptional()
   @IsIn(['joinedAt', 'subscriptionStartDate', 'name'], {
     message:
-      'حقل الترتيب يجب أن يكون أحد الحقول التالية: joinedAt, subscriptionStartDate.',
+      'حقل الترتيب يجب أن يكون أحد الحقول التالية: joinedAt, subscriptionStartDate, name.',
   })
   declare readonly sortBy?: string;
 }

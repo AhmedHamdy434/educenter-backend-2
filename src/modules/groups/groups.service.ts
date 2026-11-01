@@ -436,10 +436,24 @@ export class GroupsService {
         : {}),
     };
 
-    const orderBy = query.getOrderBy<
+    let orderBy:
       | Prisma.GroupStudentOrderByWithRelationInput
-      | Prisma.GroupStudentOrderByWithRelationInput[]
-    >(['joinedAt', 'subscriptionStartDate', 'name'], [{ joinedAt: 'desc' }]);
+      | Prisma.GroupStudentOrderByWithRelationInput[];
+
+    if (query.sortBy === 'name') {
+      orderBy = {
+        student: {
+          user: {
+            fullName: query.sortOrder || 'asc',
+          },
+        },
+      };
+    } else {
+      orderBy = query.getOrderBy<
+        | Prisma.GroupStudentOrderByWithRelationInput
+        | Prisma.GroupStudentOrderByWithRelationInput[]
+      >(['joinedAt', 'subscriptionStartDate'], [{ joinedAt: 'desc' }]);
+    }
 
     const [total, data] = await Promise.all([
       this.prisma.groupStudent.count({ where }),

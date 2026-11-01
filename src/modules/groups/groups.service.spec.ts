@@ -674,6 +674,68 @@ describe('GroupsService - Export, Import & Sort', () => {
       );
     });
 
+    it('should support sorting by name (asc and desc) using student.user.fullName', async () => {
+      prisma.group.findFirst.mockResolvedValue({
+        id: 'group-1',
+        name: 'Group 1',
+        teacherId: 'teacher-1',
+        isActive: true,
+      });
+
+      prisma.groupStudent.count.mockResolvedValue(1);
+      prisma.groupStudent.findMany.mockResolvedValue(mockStudents);
+
+      const queryAsc = Object.assign(new GroupStudentsQueryDto(), {
+        sortBy: 'name',
+        sortOrder: 'asc' as const,
+      });
+
+      await service.findStudents(
+        centerId,
+        'group-1',
+        AppRole.OWNER,
+        'user-1',
+        queryAsc,
+      );
+
+      expect(prisma.groupStudent.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: {
+            student: {
+              user: {
+                fullName: 'asc',
+              },
+            },
+          },
+        }),
+      );
+
+      const queryDesc = Object.assign(new GroupStudentsQueryDto(), {
+        sortBy: 'name',
+        sortOrder: 'desc' as const,
+      });
+
+      await service.findStudents(
+        centerId,
+        'group-1',
+        AppRole.OWNER,
+        'user-1',
+        queryDesc,
+      );
+
+      expect(prisma.groupStudent.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: {
+            student: {
+              user: {
+                fullName: 'desc',
+              },
+            },
+          },
+        }),
+      );
+    });
+
     it('should support search filter with default sorting', async () => {
       prisma.group.findFirst.mockResolvedValue({
         id: 'group-1',
