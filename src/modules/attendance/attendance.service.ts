@@ -4,11 +4,28 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AttendanceStatus } from '@prisma/client';
+import {
+  AttendanceStatus,
+  DayOfWeek,
+  ExtraSessionStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { AppRole } from '../../common/enums/app-role.enum';
-import { getTodayMidnightUtcInCairo } from '../../common/utils/date.util';
+import {
+  getCairoDateParts,
+  getTodayMidnightUtcInCairo,
+} from '../../common/utils/date.util';
 import { SaveAttendanceDto } from './dto/save-attendance.dto';
+
+const JS_TO_DAY_OF_WEEK: Record<number, DayOfWeek> = {
+  0: DayOfWeek.SUNDAY,
+  1: DayOfWeek.MONDAY,
+  2: DayOfWeek.TUESDAY,
+  3: DayOfWeek.WEDNESDAY,
+  4: DayOfWeek.THURSDAY,
+  5: DayOfWeek.FRIDAY,
+  6: DayOfWeek.SATURDAY,
+};
 
 @Injectable()
 export class AttendanceService {
@@ -32,6 +49,7 @@ export class AttendanceService {
   ) {
     const group = await this.prisma.group.findFirst({
       where: { id: groupId, centerId },
+      include: { schedule: true },
     });
 
     if (!group) {
@@ -75,48 +93,73 @@ export class AttendanceService {
     }
 
     const date = this.getTodayMidnightUtc();
+    const cairoParts = getCairoDateParts(date);
+    const todayDayOfWeek = JS_TO_DAY_OF_WEEK[cairoParts.dayOfWeek];
+    const isScheduledToday = group.schedule?.some(
+      (s) => s.day === todayDayOfWeek,
+    );
 
-    // Check if session already exists for today
-    let session = await this.prisma.attendanceSession.findUnique({
-      where: {
-        groupId_date: {
+    if (isScheduledToday) {
+      let session = await this.prisma.attendanceSession.findFirst({
+        where: {
           groupId,
           date,
+          extraSessionId: null,
         },
-      },
-    });
+      });
 
-    if (!session) {
-      try {
-        session = await this.prisma.attendanceSession.create({
-          data: {
-            groupId,
-            centerId,
-            date,
-          },
-        });
-      } catch (error: any) {
-        if (error?.code === 'P2002') {
-          const existing = await this.prisma.attendanceSession.findUnique({
-            where: {
-              groupId_date: {
-                groupId,
-                date,
-              },
+      if (!session) {
+        try {
+          session = await this.prisma.attendanceSession.create({
+            data: {
+              groupId,
+              centerId,
+              date,
             },
           });
-          if (existing) {
-            session = existing;
+        } catch (error: any) {
+          if (error?.code === 'P2002') {
+            const existing = await this.prisma.attendanceSession.findFirst({
+              where: {
+                groupId,
+                date,
+                extraSessionId: null,
+              },
+            });
+            if (existing) {
+              session = existing;
+            } else {
+              throw error;
+            }
           } else {
             throw error;
           }
-        } else {
-          throw error;
         }
       }
+
+      return session;
     }
 
-    return session;
+    // اليوم ليس ضمن جدول المجموعة: التحقق من وجود حصة إضافية غير ملغاة
+    const extraSession = await this.prisma.extraSession.findFirst({
+      where: {
+        groupId,
+        centerId,
+        date,
+        status: { not: ExtraSessionStatus.CANCELED },
+      },
+      include: {
+        attendanceSession: true,
+      },
+    });
+
+    if (extraSession?.attendanceSession) {
+      return extraSession.attendanceSession;
+    }
+
+    throw new BadRequestException(
+      'لا يمكن بدء جلسة حضور عادية في يوم لا يتضمن موعداً مجدولاً للمجموعة. للحالات الطارئة، يرجى إنشاء "حصة إضافية" أولاً.',
+    );
   }
 
   /**
@@ -418,13 +461,49 @@ export class AttendanceService {
   ) {
     await this.validateGroupAccess(centerId, groupId, userRole, userId);
 
-    const sessions = await this.prisma.attendanceSession.findMany({
-      where: { groupId, centerId },
+    const regularSessions = await this.prisma.attendanceSession.findMany({
+      where: { groupId, centerId, extraSessionId: null },
       select: { id: true },
     });
 
-    const sessionIds = sessions.map((s) => s.id);
+    const sessionIds = regularSessions.map((s) => s.id);
     const totalSessions = sessionIds.length;
+
+    // جلب الحصص الإضافية الفعالة (غير الملغاة) لحساب كائنها المنفصل
+    const extraAttendanceSessions =
+      await this.prisma.attendanceSession.findMany({
+        where: {
+          groupId,
+          centerId,
+          extraSessionId: { not: null },
+          extraSession: {
+            status: { not: ExtraSessionStatus.CANCELED },
+          },
+        },
+        select: { id: true },
+      });
+    const extraSessionIds = extraAttendanceSessions.map((s) => s.id);
+
+    const extraSessions = {
+      total: extraSessionIds.length,
+      attended: 0,
+      absent: 0,
+    };
+
+    if (extraSessionIds.length > 0) {
+      const extraRecords = await this.prisma.studentAttendance.findMany({
+        where: { sessionId: { in: extraSessionIds } },
+      });
+      extraSessions.attended = extraRecords.filter(
+        (r) =>
+          r.status === AttendanceStatus.PRESENT ||
+          r.status === AttendanceStatus.LATE ||
+          r.status === AttendanceStatus.ATTENDED_ANOTHER_GROUP,
+      ).length;
+      extraSessions.absent = extraRecords.filter(
+        (r) => r.status === AttendanceStatus.ABSENT,
+      ).length;
+    }
 
     const enrolledStudents = await this.prisma.groupStudent.findMany({
       where: { groupId },
@@ -448,6 +527,7 @@ export class AttendanceService {
         attendanceRate: 0,
         highestAbsence: [],
         perfectAttendance: [],
+        extraSessions,
       };
     }
 
@@ -519,6 +599,7 @@ export class AttendanceService {
       attendanceRate,
       highestAbsence,
       perfectAttendance,
+      extraSessions,
     };
   }
 
@@ -613,6 +694,14 @@ export class AttendanceService {
                 name: true,
               },
             },
+            extraSession: {
+              select: {
+                id: true,
+                title: true,
+                type: true,
+                status: true,
+              },
+            },
           },
         },
       },
@@ -623,20 +712,29 @@ export class AttendanceService {
       },
     });
 
-    const totalSessions = records.length;
-    const present = records.filter(
+    const regularRecords = records.filter(
+      (r) => r.session.extraSessionId === null,
+    );
+    const extraRecords = records.filter(
+      (r) =>
+        r.session.extraSessionId !== null &&
+        r.session.extraSession?.status !== ExtraSessionStatus.CANCELED,
+    );
+
+    const totalSessions = regularRecords.length;
+    const present = regularRecords.filter(
       (r) => r.status === AttendanceStatus.PRESENT,
     ).length;
-    const absent = records.filter(
+    const absent = regularRecords.filter(
       (r) => r.status === AttendanceStatus.ABSENT,
     ).length;
-    const late = records.filter(
+    const late = regularRecords.filter(
       (r) => r.status === AttendanceStatus.LATE,
     ).length;
-    const excused = records.filter(
+    const excused = regularRecords.filter(
       (r) => r.status === AttendanceStatus.EXCUSED,
     ).length;
-    const attendedAnotherGroup = records.filter(
+    const attendedAnotherGroup = regularRecords.filter(
       (r) => r.status === AttendanceStatus.ATTENDED_ANOTHER_GROUP,
     ).length;
 
@@ -645,6 +743,22 @@ export class AttendanceService {
       totalSessions > 0
         ? Math.round((attendedCount / totalSessions) * 100)
         : 100;
+
+    const extraAttendedCount = extraRecords.filter(
+      (r) =>
+        r.status === AttendanceStatus.PRESENT ||
+        r.status === AttendanceStatus.LATE ||
+        r.status === AttendanceStatus.ATTENDED_ANOTHER_GROUP,
+    ).length;
+    const extraAbsentCount = extraRecords.filter(
+      (r) => r.status === AttendanceStatus.ABSENT,
+    ).length;
+
+    const extraSessions = {
+      total: extraRecords.length,
+      attended: extraAttendedCount,
+      absent: extraAbsentCount,
+    };
 
     return {
       student: {
@@ -658,12 +772,14 @@ export class AttendanceService {
       excused,
       attendedAnotherGroup,
       attendancePercentage,
+      extraSessions,
       history: records.map((r) => ({
         sessionId: r.sessionId,
         date: r.session.date,
         groupName: r.session.group.name,
         status: r.status,
         absenceReason: r.absenceReason,
+        isExtraSession: !!r.session.extraSessionId,
       })),
     };
   }

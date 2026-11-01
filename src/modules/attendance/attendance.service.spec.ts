@@ -46,6 +46,15 @@ describe('AttendanceService - Student Code Support', () => {
           centerId,
           isActive: true,
           teacherId: 'teacher-1',
+          schedule: [
+            { day: 'SUNDAY' },
+            { day: 'MONDAY' },
+            { day: 'TUESDAY' },
+            { day: 'WEDNESDAY' },
+            { day: 'THURSDAY' },
+            { day: 'FRIDAY' },
+            { day: 'SATURDAY' },
+          ],
         }),
       },
       attendanceSession: {
@@ -423,7 +432,7 @@ describe('AttendanceService - Student Code Support', () => {
         date: new Date(),
       };
 
-      prisma.attendanceSession.findUnique
+      prisma.attendanceSession.findFirst
         .mockResolvedValueOnce(null) // first check: not found
         .mockResolvedValueOnce(existingSession); // second check after race condition
 
@@ -441,7 +450,61 @@ describe('AttendanceService - Student Code Support', () => {
 
       expect(result).toEqual(existingSession);
       expect(prisma.attendanceSession.create).toHaveBeenCalled();
-      expect(prisma.attendanceSession.findUnique).toHaveBeenCalledTimes(2);
+      expect(prisma.attendanceSession.findFirst).toHaveBeenCalledTimes(2);
+    });
+
+    it('should throw BadRequestException if starting session on a day outside schedule without an ExtraSession', async () => {
+      prisma.group.findFirst.mockResolvedValue({
+        id: groupId,
+        centerId,
+        isActive: true,
+        teacherId: 'teacher-1',
+        schedule: [], // No slot for today
+      });
+
+      prisma.extraSession = {
+        findFirst: jest.fn().mockResolvedValue(null),
+      };
+
+      await expect(
+        service.startOrGetSession(centerId, groupId, AppRole.OWNER, userId),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should return extra session attendance session if today is outside schedule but an active ExtraSession exists', async () => {
+      prisma.group.findFirst.mockResolvedValue({
+        id: groupId,
+        centerId,
+        isActive: true,
+        teacherId: 'teacher-1',
+        schedule: [],
+      });
+
+      const extraAttendanceSession = {
+        id: 'sess-extra-123',
+        groupId,
+        centerId,
+        extraSessionId: 'es-123',
+        date: new Date(),
+      };
+
+      prisma.extraSession = {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'es-123',
+          groupId,
+          centerId,
+          attendanceSession: extraAttendanceSession,
+        }),
+      };
+
+      const result = await service.startOrGetSession(
+        centerId,
+        groupId,
+        AppRole.OWNER,
+        userId,
+      );
+
+      expect(result).toEqual(extraAttendanceSession);
     });
   });
 

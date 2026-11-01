@@ -16,6 +16,9 @@ describe('ScheduleService', () => {
     attendanceSession: {
       findMany: jest.Mock;
     };
+    extraSession: {
+      findMany: jest.Mock;
+    };
   };
 
   const centerId = 'center-123';
@@ -27,6 +30,9 @@ describe('ScheduleService', () => {
       },
       attendanceSession: {
         findMany: jest.fn(),
+      },
+      extraSession: {
+        findMany: jest.fn().mockResolvedValue([]),
       },
     };
 
@@ -242,17 +248,28 @@ describe('ScheduleService', () => {
         _count: { students: 12 },
       };
 
-      // Makeup session created on Wednesday Oct 7
-      const extraSession = {
-        id: 'session-makeup',
-        groupId: 'group-1',
-        centerId,
+      // Real extra session from ExtraSession model
+      const realExtraSession = {
+        id: 'es-1',
+        title: 'حصة إضافية للمراجعة',
+        type: 'REVISION',
+        fee: 50,
+        status: 'SCHEDULED',
+        hour: 16,
+        minute: 30,
         date: new Date('2026-10-07T00:00:00.000Z'),
-        _count: { records: 12 },
+        groupId: 'group-1',
+        group: mockGroup,
+        participants: [{ id: 'p-1' }, { id: 'p-2' }],
+        attendanceSession: {
+          id: 'session-makeup',
+          _count: { records: 2 },
+        },
       };
 
       prisma.group.findMany.mockResolvedValue([mockGroup]);
-      prisma.attendanceSession.findMany.mockResolvedValue([extraSession]);
+      prisma.attendanceSession.findMany.mockResolvedValue([]);
+      prisma.extraSession.findMany.mockResolvedValue([realExtraSession]);
 
       const result = await service.getCalendarSchedule(centerId, {
         month: '2026-10',
@@ -264,6 +281,8 @@ describe('ScheduleService', () => {
       expect(makeupCard?.dayOfWeek).toBe(DayOfWeek.WEDNESDAY);
       expect(makeupCard?.sessionId).toBe('session-makeup');
       expect(makeupCard?.attendanceStatus).toBe('COMPLETED');
+      expect(makeupCard?.fee).toBe(50);
+      expect(makeupCard?.title).toBe('حصة إضافية للمراجعة');
     });
 
     it('should exclude inactive groups without sessions and include inactive groups with existing sessions (faded)', async () => {

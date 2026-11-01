@@ -11768,6 +11768,1419 @@
           }
         }
       }
+    },
+    "/api/groups/{groupId}/extra-sessions": {
+      "post": {
+        "tags": [
+          "Extra Sessions"
+        ],
+        "summary": "إنشاء حصة إضافية جديدة لمجموعة محددة",
+        "description": "إنشاء حصة إضافية مع فحص التعارضات مع المعلم والمجموعة، وإمكانية فرض الإنشاء (force: true)، وفتح جلسة الحضور AttendanceSession تلقائياً في نفس العملية.",
+        "operationId": "GroupExtraSessionsController_create",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "description": "معرف المجموعة الدراسية (CUID)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "date",
+                  "hour",
+                  "minute"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "description": "عنوان الحصة الإضافية"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "MAKEUP",
+                      "REVISION",
+                      "EXAM_PREP",
+                      "OTHER"
+                    ],
+                    "default": "OTHER"
+                  },
+                  "audience": {
+                    "type": "string",
+                    "enum": [
+                      "ALL_GROUP",
+                      "SELECTED"
+                    ],
+                    "default": "ALL_GROUP"
+                  },
+                  "date": {
+                    "type": "string",
+                    "format": "date",
+                    "example": "2026-11-05"
+                  },
+                  "hour": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 23,
+                    "example": 16
+                  },
+                  "minute": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 59,
+                    "example": 30
+                  },
+                  "durationMinutes": {
+                    "type": "integer",
+                    "default": 60,
+                    "example": 90
+                  },
+                  "location": {
+                    "type": "string",
+                    "example": "قاعة 3"
+                  },
+                  "fee": {
+                    "type": "number",
+                    "minimum": 0,
+                    "default": 0,
+                    "example": 50
+                  },
+                  "notes": {
+                    "type": "string"
+                  },
+                  "studentIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "force": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              },
+              "example": {
+                "title": "مراجعة ليلة الامتحان - الباب الأول",
+                "type": "REVISION",
+                "audience": "ALL_GROUP",
+                "date": "2026-11-05",
+                "hour": 16,
+                "minute": 30,
+                "durationMinutes": 90,
+                "location": "قاعة 3 - الدور الأرضي",
+                "fee": 50,
+                "notes": "يرجى إحضار ملزمة التدريبات",
+                "force": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "تم إنشاء الحصة الإضافية بنجاح (data.created: true)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم إنشاء الحصة الإضافية بنجاح.",
+                  "data": {
+                    "created": true,
+                    "warnings": [],
+                    "session": {
+                      "id": "clyext001abc123456789",
+                      "centerId": "clycenter001",
+                      "groupId": "clygroup001",
+                      "title": "مراجعة ليلة الامتحان",
+                      "type": "REVISION",
+                      "audience": "ALL_GROUP",
+                      "status": "SCHEDULED",
+                      "date": "2026-11-05",
+                      "hour": 16,
+                      "minute": 30,
+                      "durationMinutes": 90,
+                      "location": "قاعة 3 - الدور الأرضي",
+                      "fee": "50.00",
+                      "notes": "يرجى إحضار ملزمة التدريبات الخاصة بالامتحان.",
+                      "reminderSentAt": null,
+                      "createdAt": "2026-11-01T10:00:00.000Z",
+                      "updatedAt": "2026-11-01T10:00:00.000Z",
+                      "group": {
+                        "id": "clygroup001",
+                        "name": "مجموعة الفيزياء - 1 ثانوي (أ)",
+                        "subject": {
+                          "id": "clysubj001",
+                          "name": "الفيزياء"
+                        },
+                        "grade": {
+                          "id": "clygrade001",
+                          "name": "الصف الأول الثانوي"
+                        },
+                        "teacher": {
+                          "id": "clyteach001",
+                          "user": {
+                            "fullName": "أ. أحمد علي محمود",
+                            "avatar": null
+                          }
+                        }
+                      },
+                      "attendanceSession": {
+                        "id": "clyattsess001",
+                        "_count": {
+                          "records": 0
+                        }
+                      },
+                      "_count": {
+                        "participants": 25
+                      },
+                      "financialSummary": {
+                        "totalDue": 1250,
+                        "totalCollected": 0,
+                        "remaining": 1250,
+                        "totalWaived": 0,
+                        "studentsCount": 25,
+                        "paidCount": 0,
+                        "waivedCount": 0,
+                        "unpaidCount": 25
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "تم اكتشاف تعارضات في الموعد دون إنشاء الحصة (data.created: false). يمكن للعميل إرسال force: true لتخطي التحذيرات وإتمام الإنشاء.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم اكتشاف تعارضات في الموعد.",
+                  "data": {
+                    "created": false,
+                    "warnings": [
+                      "المعلم لديه حصة مجدولة لمجموعة أخرى في نفس التوقيت تقريباً (16:30)."
+                    ],
+                    "session": null
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "خطأ في التحقق من صحة المدخلات أو المجموعة غير نشطة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": [
+                    "تاريخ الحصة يجب أن يكون بصيغة YYYY-MM-DD.",
+                    "ساعة الحصة لا يمكن أن تزيد عن 23."
+                  ],
+                  "error": "Bad Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "المستخدم غير مسجل الدخول أو رمزه غير صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "غير مصرح لك بالوصول.",
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "المستخدم لا يمتلك صلاحية المالك (OWNER) أو اشتراك السنتر منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "ليس لديك صلاحية لتنفيذ هذا الإجراء.",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Extra Sessions"
+        ],
+        "summary": "استعراض الحصص الإضافية لمجموعة محددة",
+        "description": "جلب قائمة الحصص الإضافية للمجموعة مع دعم التصفية حسب الحالة والنوع والبحث والـ Pagination.",
+        "operationId": "GroupExtraSessionsController_findAllForGroup",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "description": "معرف المجموعة الدراسية",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "SCHEDULED",
+                "COMPLETED",
+                "CANCELED"
+              ]
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "MAKEUP",
+                "REVISION",
+                "EXAM_PREP",
+                "OTHER"
+              ]
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "date",
+                "createdAt",
+                "fee",
+                "title"
+              ],
+              "default": "date"
+            }
+          },
+          {
+            "name": "sortOrder",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "قائمة الحصص الإضافية للمجموعة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم جلب قائمة الحصص الإضافية للمجموعة بنجاح.",
+                  "data": [
+                    {
+                      "id": "clyext001abc123456789",
+                      "centerId": "clycenter001",
+                      "groupId": "clygroup001",
+                      "title": "مراجعة الباب الأول - فيزياء الحركة",
+                      "type": "REVISION",
+                      "audience": "ALL_GROUP",
+                      "status": "SCHEDULED",
+                      "date": "2026-11-05",
+                      "hour": 16,
+                      "minute": 30,
+                      "durationMinutes": 90,
+                      "location": "قاعة 3 - الدور الأرضي",
+                      "fee": "50.00",
+                      "notes": "يرجى إحضار ملزمة التدريبات الخاصة بالامتحان.",
+                      "reminderSentAt": null,
+                      "createdAt": "2026-11-01T10:00:00.000Z",
+                      "updatedAt": "2026-11-01T10:00:00.000Z",
+                      "group": {
+                        "id": "clygroup001",
+                        "name": "مجموعة الفيزياء - 1 ثانوي (أ)",
+                        "subject": {
+                          "id": "clysubj001",
+                          "name": "الفيزياء"
+                        },
+                        "grade": {
+                          "id": "clygrade001",
+                          "name": "الصف الأول الثانوي"
+                        },
+                        "teacher": {
+                          "id": "clyteach001",
+                          "user": {
+                            "fullName": "أ. أحمد علي محمود",
+                            "avatar": null
+                          }
+                        }
+                      },
+                      "attendanceSession": {
+                        "id": "clyattsess001",
+                        "_count": {
+                          "records": 0
+                        }
+                      },
+                      "_count": {
+                        "participants": 25
+                      }
+                    }
+                  ],
+                  "meta": {
+                    "total": 1,
+                    "page": 1,
+                    "limit": 10,
+                    "totalPages": 1,
+                    "hasNextPage": false,
+                    "hasPreviousPage": false
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "المستخدم غير مسجل الدخول أو رمزه غير صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "غير مصرح لك بالوصول.",
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "المستخدم لا يمتلك صلاحية المالك (OWNER) أو اشتراك السنتر منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "ليس لديك صلاحية لتنفيذ هذا الإجراء.",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/extra-sessions/{id}": {
+      "get": {
+        "tags": [
+          "Extra Sessions"
+        ],
+        "summary": "تفاصيل حصة إضافية محددة",
+        "description": "جلب تفاصيل الحصة الإضافية كاملة متضمنة قائمة الطلاب المشاركين وحالة سداد كل طالب وحالة حضوره (attendanceStatus: PRESENT | ABSENT | LATE | EXCUSED | null مع absenceReason) والملخص المالي وجلسة الحضور attendanceSession (تكون موجودة دائمًا في الحصص المجدولة والمكتملة، وتظل مرتبطة حتى لو أُلغيت الحصة).",
+        "operationId": "ExtraSessionsController_findOne",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "معرف الحصة الإضافية (CUID)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "بيانات تفاصيل الحصة الإضافية والملخص المالي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم جلب تفاصيل الحصة الإضافية بنجاح.",
+                  "data": {
+                    "id": "clyext001abc123456789",
+                    "centerId": "clycenter001",
+                    "groupId": "clygroup001",
+                    "title": "مراجعة الباب الأول - فيزياء الحركة",
+                    "type": "REVISION",
+                    "audience": "ALL_GROUP",
+                    "status": "SCHEDULED",
+                    "date": "2026-11-05",
+                    "hour": 16,
+                    "minute": 30,
+                    "durationMinutes": 90,
+                    "location": "قاعة 3 - الدور الأرضي",
+                    "fee": "50.00",
+                    "notes": "يرجى إحضار ملزمة التدريبات الخاصة بالامتحان.",
+                    "reminderSentAt": null,
+                    "createdAt": "2026-11-01T10:00:00.000Z",
+                    "updatedAt": "2026-11-01T10:00:00.000Z",
+                    "group": {
+                      "id": "clygroup001",
+                      "name": "مجموعة الفيزياء - 1 ثانوي (أ)",
+                      "subject": {
+                        "id": "clysubj001",
+                        "name": "الفيزياء"
+                      },
+                      "grade": {
+                        "id": "clygrade001",
+                        "name": "الصف الأول الثانوي"
+                      },
+                      "teacher": {
+                        "id": "clyteach001",
+                        "user": {
+                          "fullName": "أ. أحمد علي محمود",
+                          "avatar": null
+                        }
+                      }
+                    },
+                    "attendanceSession": {
+                      "id": "clyattsess001",
+                      "_count": {
+                        "records": 0
+                      }
+                    },
+                    "_count": {
+                      "participants": 25
+                    },
+                    "financialSummary": {
+                      "totalDue": 1250,
+                      "totalCollected": 250,
+                      "remaining": 1000,
+                      "totalWaived": 0,
+                      "studentsCount": 25,
+                      "paidCount": 5,
+                      "waivedCount": 0,
+                      "unpaidCount": 20
+                    },
+                    "participants": [
+                      {
+                        "id": "clyextstu001",
+                        "extraSessionId": "clyext001abc123456789",
+                        "studentId": "clystu001",
+                        "amountDue": "50.00",
+                        "isWaived": false,
+                        "paid": "50.00",
+                        "paidAt": "2026-11-05T14:30:00.000Z",
+                        "notes": "تم التحصيل نقداً في مكتب الاستقبال",
+                        "attendanceStatus": "PRESENT",
+                        "absenceReason": null,
+                        "student": {
+                          "id": "clystu001",
+                          "code": "STU-1001",
+                          "parentPhone": "01012345678",
+                          "user": {
+                            "fullName": "عمر خالد إبراهيم",
+                            "phone": "01234567890",
+                            "avatar": null
+                          }
+                        }
+                      },
+                      {
+                        "id": "clyextstu002",
+                        "extraSessionId": "clyext001abc123456789",
+                        "studentId": "clystu002",
+                        "amountDue": "50.00",
+                        "isWaived": true,
+                        "paid": "0.00",
+                        "paidAt": null,
+                        "notes": "إعفاء خاص بقرار الإدارة",
+                        "attendanceStatus": null,
+                        "absenceReason": null,
+                        "student": {
+                          "id": "clystu002",
+                          "code": "STU-1002",
+                          "parentPhone": "01099998888",
+                          "user": {
+                            "fullName": "سارة محمود علي",
+                            "phone": "01200001111",
+                            "avatar": null
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "المستخدم غير مسجل الدخول أو رمزه غير صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "غير مصرح لك بالوصول.",
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "المستخدم لا يمتلك صلاحية المالك (OWNER) أو اشتراك السنتر منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "ليس لديك صلاحية لتنفيذ هذا الإجراء.",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "الحصة الإضافية غير موجودة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 404,
+                  "message": "الحصة الإضافية المطلوبة غير موجودة.",
+                  "error": "Not Found"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Extra Sessions"
+        ],
+        "summary": "تعديل بيانات الحصة الإضافية",
+        "description": "تعديل موعد الحصة أو مكانها أو رسومها. في حال تعديل الرسوم، تسري على الطلاب الذين لم يسددوا بعد فقط.",
+        "operationId": "ExtraSessionsController_update",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "معرف الحصة الإضافية",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "date": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "hour": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 23
+                  },
+                  "minute": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 59
+                  },
+                  "durationMinutes": {
+                    "type": "integer"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "fee": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "fee": 60,
+                "location": "قاعة 5 - الدور الأول"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "تم تعديل بيانات الحصة بنجاح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم تعديل بيانات الحصة الإضافية بنجاح.",
+                  "data": {
+                    "id": "clyext001abc123456789",
+                    "centerId": "clycenter001",
+                    "groupId": "clygroup001",
+                    "title": "مراجعة الباب الأول - فيزياء الحركة",
+                    "type": "REVISION",
+                    "audience": "ALL_GROUP",
+                    "status": "SCHEDULED",
+                    "date": "2026-11-05",
+                    "hour": 16,
+                    "minute": 30,
+                    "durationMinutes": 90,
+                    "location": "قاعة 5 - الدور الأول",
+                    "fee": "60.00",
+                    "notes": "يرجى إحضار ملزمة التدريبات الخاصة بالامتحان.",
+                    "reminderSentAt": null,
+                    "createdAt": "2026-11-01T10:00:00.000Z",
+                    "updatedAt": "2026-11-01T10:00:00.000Z",
+                    "group": {
+                      "id": "clygroup001",
+                      "name": "مجموعة الفيزياء - 1 ثانوي (أ)",
+                      "subject": {
+                        "id": "clysubj001",
+                        "name": "الفيزياء"
+                      },
+                      "grade": {
+                        "id": "clygrade001",
+                        "name": "الصف الأول الثانوي"
+                      },
+                      "teacher": {
+                        "id": "clyteach001",
+                        "user": {
+                          "fullName": "أ. أحمد علي محمود",
+                          "avatar": null
+                        }
+                      }
+                    },
+                    "attendanceSession": {
+                      "id": "clyattsess001",
+                      "_count": {
+                        "records": 0
+                      }
+                    },
+                    "_count": {
+                      "participants": 25
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "الحصة ملغاة أو مكتملة أو مدخلات غير صالحة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "لا يمكن تعديل حصة إضافية ملغاة.",
+                  "error": "Bad Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "المستخدم غير مسجل الدخول أو رمزه غير صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "غير مصرح لك بالوصول.",
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "المستخدم لا يمتلك صلاحية المالك (OWNER) أو اشتراك السنتر منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "ليس لديك صلاحية لتنفيذ هذا الإجراء.",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "الحصة الإضافية غير موجودة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 404,
+                  "message": "الحصة الإضافية المطلوبة غير موجودة.",
+                  "error": "Not Found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/extra-sessions/{id}/cancel": {
+      "patch": {
+        "tags": [
+          "Extra Sessions"
+        ],
+        "summary": "إلغاء الحصة الإضافية",
+        "description": "إلغاء الحصة وتغيير حالتها إلى CANCELED مع إرسال إشعار واتساب لأولياء الأمور. يلزم تقديم ملاحظة تأكيد معالجة المبالغ المستردة في حال وجود مدفوعات.",
+        "operationId": "ExtraSessionsController_cancel",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "معرف الحصة الإضافية",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "confirmRefundNotes": {
+                    "type": "string",
+                    "description": "ملاحظة معالجة المبالغ المستردة (إلزامية في حال وجود مدفوعات مسجلة)"
+                  }
+                }
+              },
+              "example": {
+                "confirmRefundNotes": "تم رد المبالغ نقداً لأولياء الأمور بمكتب السكرتارية."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "تم إلغاء الحصة الإضافية بنجاح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم إلغاء الحصة الإضافية بنجاح وإشعار أولياء الأمور."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "وجود مدفوعات بدون ملاحظة استرداد أو الحصة ملغاة مسبقاً",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "هذه الحصة تتضمن مبالغ مدفوعة من بعض الطلاب. يلزم كتابة ملاحظة تأكيد معالجة المبالغ المستردة لإتمام الإلغاء.",
+                  "error": "Bad Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "المستخدم غير مسجل الدخول أو رمزه غير صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "غير مصرح لك بالوصول.",
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "المستخدم لا يمتلك صلاحية المالك (OWNER) أو اشتراك السنتر منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "ليس لديك صلاحية لتنفيذ هذا الإجراء.",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "الحصة الإضافية غير موجودة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 404,
+                  "message": "الحصة الإضافية المطلوبة غير موجودة.",
+                  "error": "Not Found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/extra-sessions/{id}/students": {
+      "post": {
+        "tags": [
+          "Extra Sessions"
+        ],
+        "summary": "إضافة طلاب إلى الحصة الإضافية",
+        "description": "إضافة طلاب مسجلين في المجموعة إلى حصة إضافية قائمة من نوع SELECTED.",
+        "operationId": "ExtraSessionsController_addStudents",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "معرف الحصة الإضافية",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "studentIds"
+                ],
+                "properties": {
+                  "studentIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "معرفات الطلاب المطلوب إضافتهم"
+                  }
+                }
+              },
+              "example": {
+                "studentIds": [
+                  "clystu002",
+                  "clystu003"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "تمت إضافة الطلاب بنجاح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تمت إضافة 2 طالب بنجاح للحصة الإضافية.",
+                  "data": {
+                    "addedCount": 2
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "بعض الطلاب غير مسجلين في المجموعة أو الحصة ملغاة/مكتملة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "بعض الطلاب المحددين غير مسجلين في هذه المجموعة أو غير نشطين.",
+                  "error": "Bad Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "المستخدم غير مسجل الدخول أو رمزه غير صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "غير مصرح لك بالوصول.",
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "المستخدم لا يمتلك صلاحية المالك (OWNER) أو اشتراك السنتر منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "ليس لديك صلاحية لتنفيذ هذا الإجراء.",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "الحصة الإضافية غير موجودة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 404,
+                  "message": "الحصة الإضافية المطلوبة غير موجودة.",
+                  "error": "Not Found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/extra-sessions/{id}/students/{studentId}/pay": {
+      "post": {
+        "tags": [
+          "Extra Sessions"
+        ],
+        "summary": "تسجيل سداد رسوم الحصة الإضافية لطالب",
+        "description": "تسجيل دفع كاش فوري لطالب في الحصة الإضافية، وتسجيل حركة التدقيق PAYMENT_COLLECTION، وإرسال إيصال إلكتروني لولي الأمر عبر واتساب.",
+        "operationId": "ExtraSessionsController_payStudent",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "معرف الحصة الإضافية",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "in": "path",
+            "required": true,
+            "description": "معرف الطالب المسدد",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "minimum": 0.01,
+                    "description": "المبلغ المدفوع (اختياري، الافتراضي = المبلغ المستحق)"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "ملاحظات التحصيل"
+                  }
+                }
+              },
+              "example": {
+                "amount": 50,
+                "notes": "تحصيل كاش بواسطة السكرتارية على باب القاعة"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "تم تسجيل سداد الرسوم بنجاح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم تسجيل سداد رسوم الحصة الإضافية بنجاح.",
+                  "data": {
+                    "id": "clyextstu001",
+                    "extraSessionId": "clyext001abc123456789",
+                    "studentId": "clystu001",
+                    "amountDue": "50.00",
+                    "isWaived": false,
+                    "paid": "50.00",
+                    "paidAt": "2026-11-05T14:30:00.000Z",
+                    "notes": "تم التحصيل نقداً في مكتب الاستقبال",
+                    "student": {
+                      "id": "clystu001",
+                      "code": "STU-1001",
+                      "parentPhone": "01012345678",
+                      "user": {
+                        "fullName": "عمر خالد إبراهيم",
+                        "phone": "01234567890",
+                        "avatar": null
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "الدفع مكرر أو الطالب معفي أو الحصة ملغاة",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "تم تسجيل دفع هذا الطالب مسبقاً لهذه الحصة.",
+                  "error": "Bad Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "المستخدم غير مسجل الدخول أو رمزه غير صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "غير مصرح لك بالوصول.",
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "المستخدم لا يمتلك صلاحية المالك (OWNER) أو اشتراك السنتر منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "ليس لديك صلاحية لتنفيذ هذا الإجراء.",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "سجل الطالب في هذه الحصة غير موجود",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 404,
+                  "message": "سجل الطالب في هذه الحصة الإضافية غير موجود.",
+                  "error": "Not Found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/extra-sessions/{id}/students/{studentId}/waive": {
+      "patch": {
+        "tags": [
+          "Extra Sessions"
+        ],
+        "summary": "إعفاء طالب من رسوم الحصة الإضافية",
+        "description": "تصفير المبلغ المستحق (amountDue = 0) وتعيين isWaived = true وتسجيل حركة التدقيق STATUS_CHANGE.",
+        "operationId": "ExtraSessionsController_waiveStudent",
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "معرف الحصة الإضافية",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "in": "path",
+            "required": true,
+            "description": "معرف الطالب المراد إعفاؤه",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notes": {
+                    "type": "string",
+                    "description": "سبب الإعفاء"
+                  }
+                }
+              },
+              "example": {
+                "notes": "إعفاء بقرار المالك للتفوق الأكاديمي"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "تم إعفاء الطالب بنجاح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "success": true,
+                  "message": "تم إعفاء الطالب من رسوم الحصة الإضافية بنجاح.",
+                  "data": {
+                    "id": "clyextstu001",
+                    "extraSessionId": "clyext001abc123456789",
+                    "studentId": "clystu001",
+                    "amountDue": "0.00",
+                    "isWaived": true,
+                    "paid": null,
+                    "paidAt": null,
+                    "notes": "إعفاء بقرار المالك للتفوق الأكاديمي",
+                    "student": {
+                      "id": "clystu001",
+                      "code": "STU-1001",
+                      "parentPhone": "01012345678",
+                      "user": {
+                        "fullName": "عمر خالد إبراهيم",
+                        "phone": "01234567890",
+                        "avatar": null
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "الطالب معفي بالفعل أو قام بالدفع مسبقاً",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "هذا الطالب معفي بالفعل من رسوم الحصة.",
+                  "error": "Bad Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "المستخدم غير مسجل الدخول أو رمزه غير صالح",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "غير مصرح لك بالوصول.",
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "المستخدم لا يمتلك صلاحية المالك (OWNER) أو اشتراك السنتر منتهي",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "ليس لديك صلاحية لتنفيذ هذا الإجراء.",
+                  "error": "Forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "سجل الطالب في هذه الحصة غير موجود",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "statusCode": 404,
+                  "message": "سجل الطالب في هذه الحصة الإضافية غير موجود.",
+                  "error": "Not Found"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "info": {
@@ -11776,7 +13189,12 @@
     "version": "1.0",
     "contact": {}
   },
-  "tags": [],
+  "tags": [
+    {
+      "name": "Extra Sessions",
+      "description": "إدارة الحصص الإضافية (Extra Sessions) لمجموعات السنتر وسداد الرسوم كاش والإعفاء وإشعارات الواتساب للمالك حصراً."
+    }
+  ],
   "servers": [],
   "components": {
     "securitySchemes": {

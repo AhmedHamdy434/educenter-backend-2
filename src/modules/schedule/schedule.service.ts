@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DayOfWeek } from '@prisma/client';
+import { DayOfWeek, ExtraSessionStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import {
   addMonths,
@@ -239,8 +239,7 @@ export class ScheduleService {
       cur.setUTCDate(cur.getUTCDate() + 1);
     }
 
-    // 4. الحصص الإضافية/التعويضية (Extra Sessions)
-    // أي جلسة موجودة في قاعدة البيانات ولم تُطابق موعداً أسبوعياً مجدولاً
+    // 4. الجلسات السابقة غير المجدولة (تُعرض كجلسات عادية كما كانت extraSessionId = null)
     for (const session of attendanceSessions) {
       if (!matchedSessionIds.has(session.id)) {
         const group = groupsMap.get(session.groupId);
@@ -263,7 +262,7 @@ export class ScheduleService {
         );
 
         resultSessions.push({
-          id: `extra-session-${session.id}`,
+          id: `regular-session-${session.id}`,
           groupId: group.id,
           groupName: group.name,
           subject: group.subject,
@@ -281,10 +280,84 @@ export class ScheduleService {
           attendanceStatus,
           studentsCount,
           recordedCount,
-          isExtraSession: true,
+          isExtraSession: false,
           isGroupInactive: !group.isActive,
         });
       }
+    }
+
+    // 5. الحصص الإضافية الفعلية من الموديل الحقيقي ExtraSession
+    const extraSessions = await this.prisma.extraSession.findMany({
+      where: {
+        centerId,
+        date: { gte: startDate, lte: endDate },
+        status: { not: ExtraSessionStatus.CANCELED },
+        ...(filters.groupId ? { groupId: filters.groupId } : {}),
+        ...(filters.teacherId
+          ? { group: { teacherId: filters.teacherId } }
+          : {}),
+        ...(filters.gradeId ? { group: { gradeId: filters.gradeId } } : {}),
+        ...(filters.subjectId
+          ? { group: { subjectId: filters.subjectId } }
+          : {}),
+      },
+      include: {
+        group: {
+          select: scheduleGroupSelect,
+        },
+        participants: {
+          select: { id: true },
+        },
+        attendanceSession: {
+          select: {
+            id: true,
+            _count: {
+              select: { records: true },
+            },
+          },
+        },
+      },
+    });
+
+    for (const es of extraSessions) {
+      const dateStr = getCairoDateString(es.date);
+      const sessionParts = getCairoDateParts(es.date);
+      const dayOfWeek = JS_TO_DAY_OF_WEEK[sessionParts.dayOfWeek];
+      const studentsCount = es.participants.length;
+      const recordedCount = es.attendanceSession?._count.records ?? 0;
+      const attendanceStatus = this.calculateAttendanceStatus(
+        es.attendanceSession?.id ?? null,
+        recordedCount,
+        studentsCount,
+      );
+
+      resultSessions.push({
+        id: `extra-session-${es.id}`,
+        extraSessionId: es.id,
+        groupId: es.groupId,
+        groupName: es.group.name,
+        subject: es.group.subject,
+        grade: es.group.grade,
+        teacher: {
+          id: es.group.teacher.id,
+          fullName: es.group.teacher.user.fullName,
+          avatar: es.group.teacher.user.avatar,
+        },
+        date: dateStr,
+        dayOfWeek,
+        hour: es.hour,
+        minute: es.minute,
+        sessionId: es.attendanceSession?.id ?? null,
+        attendanceStatus,
+        studentsCount,
+        recordedCount,
+        isExtraSession: true,
+        isGroupInactive: !es.group.isActive,
+        title: es.title,
+        type: es.type,
+        fee: Number(es.fee),
+        extraSessionStatus: es.status,
+      });
     }
 
     // 5. الترتيب: حسب التاريخ تصاعدياً ثم الساعة ثم الدقيقة ثم اسم المجموعة

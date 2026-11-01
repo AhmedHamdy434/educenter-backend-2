@@ -36,6 +36,11 @@ export interface ScheduleSessionItem {
   recordedCount: number;
   isExtraSession: boolean;
   isGroupInactive: boolean;
+  extraSessionId?: string;
+  title?: string | null;
+  type?: string;
+  fee?: number;
+  extraSessionStatus?: string;
 }
 
 export interface CalendarScheduleResponseData {

@@ -66,6 +66,7 @@ model Center {
   attendanceSessions AttendanceSession[]
   studentAttendances StudentAttendance[]
   monthlyPayments    MonthlyPayment[]
+  extraSessions      ExtraSession[]
   notifications      Notification[]
   auditLogs          AuditLog[]
 
@@ -217,6 +218,7 @@ model Student {
   groups      GroupStudent[]
   attendance  StudentAttendance[]
   magicTokens ParentMagicToken[]
+  extraSessions ExtraSessionStudent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -344,6 +346,7 @@ model Group {
   schedule           GroupSchedule[]
   students           GroupStudent[]
   attendanceSessions AttendanceSession[]
+  extraSessions      ExtraSession[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -401,6 +404,9 @@ model AttendanceSession {
   centerId String
   center   Center @relation(fields: [centerId], references: [id], onDelete: Cascade)
 
+  extraSessionId String?       @unique
+  extraSession   ExtraSession? @relation(fields: [extraSessionId], references: [id], onDelete: Cascade)
+
   date DateTime // Normalized date (UTC midnight)
 
   records StudentAttendance[]
@@ -408,7 +414,6 @@ model AttendanceSession {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([groupId, date])
   @@index([groupId])
   @@index([centerId])
 }
@@ -472,6 +477,9 @@ enum NotificationType {
   NEW_ACCOUNT
   SUBSCRIPTION_EXPIRY
   SYSTEM_ALERT
+  EXTRA_SESSION_SCHEDULED
+  EXTRA_SESSION_CANCELED
+  EXTRA_SESSION_REMINDER
 }
 
 model Notification {
@@ -533,5 +541,75 @@ model ParentMagicToken {
 
   @@index([studentId])
 }
+
+enum ExtraSessionType {
+  MAKEUP
+  REVISION
+  EXAM_PREP
+  OTHER
+}
+
+enum ExtraSessionStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELED
+}
+
+enum ExtraSessionAudience {
+  ALL_GROUP
+  SELECTED
+}
+
+model ExtraSession {
+  id              String               @id @default(cuid())
+  centerId        String
+  center          Center               @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  groupId         String
+  group           Group                @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  title           String?
+  type            ExtraSessionType     @default(OTHER)
+  audience        ExtraSessionAudience @default(ALL_GROUP)
+  status          ExtraSessionStatus   @default(SCHEDULED)
+
+  date            DateTime             @db.Date
+  hour            Int
+  minute          Int
+  durationMinutes Int                  @default(60)
+  location        String?
+
+  fee             Decimal              @default(0.00) @db.Decimal(10, 2)
+  notes           String?
+  reminderSentAt  DateTime?
+
+  participants      ExtraSessionStudent[]
+  attendanceSession AttendanceSession?
+
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([centerId, date])
+  @@index([groupId])
+}
+
+model ExtraSessionStudent {
+  id             String       @id @default(cuid())
+  extraSessionId String
+  extraSession   ExtraSession @relation(fields: [extraSessionId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  centerId       String
+
+  amountDue      Decimal      @db.Decimal(10, 2)
+  isWaived       Boolean      @default(false)
+  paid           Decimal?     @db.Decimal(10, 2)
+  paidAt         DateTime?
+  notes          String?
+
+  @@unique([extraSessionId, studentId])
+  @@index([studentId])
+  @@index([centerId])
+}
+
 
 

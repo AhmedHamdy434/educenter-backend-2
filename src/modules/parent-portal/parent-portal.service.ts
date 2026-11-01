@@ -128,6 +128,12 @@ export class ParentPortalService {
                 session: {
                   select: {
                     date: true,
+                    extraSessionId: true,
+                    extraSession: {
+                      select: {
+                        status: true,
+                      },
+                    },
                     group: { select: { name: true } },
                   },
                 },
@@ -150,19 +156,33 @@ export class ParentPortalService {
 
     const student = magicToken.student;
 
-    // حساب إحصائيات الحضور
-    const totalSessions = student.attendance?.length ?? 0;
-    const presentCount =
-      student.attendance?.filter((a) => a.status === 'PRESENT').length ?? 0;
-    const absentCount =
-      student.attendance?.filter((a) => a.status === 'ABSENT').length ?? 0;
-    const lateCount =
-      student.attendance?.filter((a) => a.status === 'LATE').length ?? 0;
-    const excusedCount =
-      student.attendance?.filter((a) => a.status === 'EXCUSED').length ?? 0;
-    const attendedAnotherGroupCount =
-      student.attendance?.filter((a) => a.status === 'ATTENDED_ANOTHER_GROUP')
-        .length ?? 0;
+    // حساب إحصائيات الحضور للحصص العادية فقط (extraSessionId = null)
+    const allAttendance = student.attendance || [];
+    const regularAttendance = allAttendance.filter(
+      (a) => a.session.extraSessionId === null,
+    );
+    const extraAttendance = allAttendance.filter(
+      (a) =>
+        a.session.extraSessionId !== null &&
+        a.session.extraSession?.status !== 'CANCELED',
+    );
+
+    const totalSessions = regularAttendance.length;
+    const presentCount = regularAttendance.filter(
+      (a) => a.status === 'PRESENT',
+    ).length;
+    const absentCount = regularAttendance.filter(
+      (a) => a.status === 'ABSENT',
+    ).length;
+    const lateCount = regularAttendance.filter(
+      (a) => a.status === 'LATE',
+    ).length;
+    const excusedCount = regularAttendance.filter(
+      (a) => a.status === 'EXCUSED',
+    ).length;
+    const attendedAnotherGroupCount = regularAttendance.filter(
+      (a) => a.status === 'ATTENDED_ANOTHER_GROUP',
+    ).length;
 
     const attendanceRate =
       totalSessions > 0
@@ -171,8 +191,24 @@ export class ParentPortalService {
           )
         : 100;
 
-    // سجل الغياب والتأخير والاستئذان
-    const recentAbsences = (student.attendance || [])
+    const extraAttendedCount = extraAttendance.filter(
+      (a) =>
+        a.status === 'PRESENT' ||
+        a.status === 'LATE' ||
+        a.status === 'ATTENDED_ANOTHER_GROUP',
+    ).length;
+    const extraAbsentCount = extraAttendance.filter(
+      (a) => a.status === 'ABSENT',
+    ).length;
+
+    const extraSessions = {
+      total: extraAttendance.length,
+      attended: extraAttendedCount,
+      absent: extraAbsentCount,
+    };
+
+    // سجل الغياب والتأخير والاستئذان للحصص العادية
+    const recentAbsences = regularAttendance
       .filter(
         (att) =>
           att.status !== 'PRESENT' && att.status !== 'ATTENDED_ANOTHER_GROUP',
@@ -193,6 +229,7 @@ export class ParentPortalService {
       excusedCount,
       attendedAnotherGroupCount,
       attendanceRate,
+      extraSessions,
       recentAbsences,
     };
 

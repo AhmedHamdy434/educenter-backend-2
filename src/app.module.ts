@@ -26,6 +26,7 @@ import { ParentPortalModule } from './modules/parent-portal/parent-portal.module
 import { SubscriptionPaymentsModule } from './modules/subscription-payments/subscription-payments.module';
 import { HomeStatsModule } from './modules/home-stats/home-stats.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
+import { ExtraSessionsModule } from './modules/extra-sessions/extra-sessions.module';
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { ScheduleModule } from './modules/schedule/schedule.module';
     AuditLogsModule,
     ParentPortalModule,
     ScheduleModule,
+    ExtraSessionsModule,
   ],
   controllers: [],
   providers: [
