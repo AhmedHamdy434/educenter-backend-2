@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   UseGuards,
   HttpStatus,
   HttpCode,
@@ -19,6 +20,7 @@ import { CurrentCenterId } from '../../common/decorators/current-center-id.decor
 import type { RequestUser } from '../auth/interfaces/authenticated-request.interface';
 import { AttendanceService } from './attendance.service';
 import { SaveAttendanceDto } from './dto/save-attendance.dto';
+import { StartSessionQueryDto } from './dto/start-session-query.dto';
 
 @Controller()
 @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
@@ -33,12 +35,14 @@ export class AttendanceController {
     @CurrentCenterId() centerId: string,
     @CurrentUser() user: RequestUser,
     @Param('groupId') groupId: string,
+    @Query() query?: StartSessionQueryDto,
   ) {
     return this.attendanceService.startOrGetSession(
       centerId,
       groupId,
       user.role,
       user.id,
+      query,
     );
   }
 

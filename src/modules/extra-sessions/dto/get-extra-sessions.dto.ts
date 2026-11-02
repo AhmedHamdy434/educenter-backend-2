@@ -33,4 +33,3 @@ export class GetExtraSessionsDto extends BaseQueryDto {
   })
   declare readonly sortBy?: string;
 }
-

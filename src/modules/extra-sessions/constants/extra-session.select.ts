@@ -36,11 +36,11 @@ export const extraSessionListSelect = {
   date: true,
   hour: true,
   minute: true,
-  durationMinutes: true,
   location: true,
   fee: true,
   notes: true,
-  reminderSentAt: true,
+  cancellationNotes: true,
+  canceledAt: true,
   createdAt: true,
   updatedAt: true,
   group: {
@@ -102,4 +102,3 @@ export type ExtraSessionStudentWithAttendance = ExtraSessionStudentItem & {
   attendanceStatus: AttendanceStatus | null;
   absenceReason: string | null;
 };
-

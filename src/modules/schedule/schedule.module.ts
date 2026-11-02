@@ -10,4 +10,3 @@ import { ScheduleService } from './schedule.service';
   exports: [ScheduleService],
 })
 export class ScheduleModule {}
-

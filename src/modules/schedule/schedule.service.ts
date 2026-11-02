@@ -138,10 +138,11 @@ export class ScheduleService {
       groups.map((g) => [g.id, g]),
     );
 
-    // 2. استعلام الجلسات المنعقدة للسنتر في النطاق الزمني بـ Single Query
+    // 2. استعلام الجلسات المنعقدة للسنتر في النطاق الزمني بـ Single Query (للجلسات العادية فقط)
     const attendanceSessions = await this.prisma.attendanceSession.findMany({
       where: {
         centerId,
+        extraSessionId: null,
         date: { gte: startDate, lte: endDate },
         ...(filters.groupId ? { groupId: filters.groupId } : {}),
         ...(filters.teacherId
@@ -229,6 +230,7 @@ export class ScheduleService {
               studentsCount,
               recordedCount,
               isExtraSession: false,
+              extraSessionId: null,
               isGroupInactive: !group.isActive,
             });
           }
@@ -281,6 +283,7 @@ export class ScheduleService {
           studentsCount,
           recordedCount,
           isExtraSession: false,
+          extraSessionId: null,
           isGroupInactive: !group.isActive,
         });
       }
@@ -333,7 +336,6 @@ export class ScheduleService {
 
       resultSessions.push({
         id: `extra-session-${es.id}`,
-        extraSessionId: es.id,
         groupId: es.groupId,
         groupName: es.group.name,
         subject: es.group.subject,
@@ -352,6 +354,7 @@ export class ScheduleService {
         studentsCount,
         recordedCount,
         isExtraSession: true,
+        extraSessionId: es.id,
         isGroupInactive: !es.group.isActive,
         title: es.title,
         type: es.type,

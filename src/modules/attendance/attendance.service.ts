@@ -8,14 +8,17 @@ import {
   AttendanceStatus,
   DayOfWeek,
   ExtraSessionStatus,
+  Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { AppRole } from '../../common/enums/app-role.enum';
 import {
   getCairoDateParts,
   getTodayMidnightUtcInCairo,
+  parseDateStringToUtcMidnight,
 } from '../../common/utils/date.util';
 import { SaveAttendanceDto } from './dto/save-attendance.dto';
+import { StartSessionQueryDto } from './dto/start-session-query.dto';
 
 const JS_TO_DAY_OF_WEEK: Record<number, DayOfWeek> = {
   0: DayOfWeek.SUNDAY,
@@ -71,13 +74,16 @@ export class AttendanceService {
   }
 
   /**
-   * Start or retrieve today's attendance session for a group.
+   * Start or retrieve an attendance session for a group.
+   * Can open today's session, a past session, or an extra session.
+   * Strictly forbids starting a session for a future date (today >= sessionDate).
    */
   async startOrGetSession(
     centerId: string,
     groupId: string,
     userRole: AppRole,
     userId: string,
+    query?: StartSessionQueryDto,
   ) {
     const group = await this.validateGroupAccess(
       centerId,
@@ -92,74 +98,75 @@ export class AttendanceService {
       );
     }
 
-    const date = this.getTodayMidnightUtc();
-    const cairoParts = getCairoDateParts(date);
-    const todayDayOfWeek = JS_TO_DAY_OF_WEEK[cairoParts.dayOfWeek];
-    const isScheduledToday = group.schedule?.some(
-      (s) => s.day === todayDayOfWeek,
-    );
+    const today = this.getTodayMidnightUtc();
 
-    if (isScheduledToday) {
-      let session = await this.prisma.attendanceSession.findFirst({
-        where: {
-          groupId,
-          date,
-          extraSessionId: null,
-        },
-      });
+    // 1. تحديد تاريخ الجلسة المطلوبة (افتراضياً تاريخ اليوم)
+    const date = query?.date ? parseDateStringToUtcMidnight(query.date) : today;
 
-      if (!session) {
-        try {
-          session = await this.prisma.attendanceSession.create({
-            data: {
-              groupId,
-              centerId,
-              date,
-            },
-          });
-        } catch (error: any) {
-          if (error?.code === 'P2002') {
-            const existing = await this.prisma.attendanceSession.findFirst({
-              where: {
-                groupId,
-                date,
-                extraSessionId: null,
-              },
-            });
-            if (existing) {
-              session = existing;
-            } else {
-              throw error;
-            }
-          } else {
-            throw error;
-          }
-        }
-      }
-
-      return session;
+    // التحقق الصارم: منع بدء جلسة حضور لتاريخ مستقبلي
+    const targetDateMidnight = getTodayMidnightUtcInCairo(date);
+    if (targetDateMidnight.getTime() > today.getTime()) {
+      throw new BadRequestException('لا يمكن بدء جلسة حضور لتاريخ مستقبلي.');
     }
 
-    // اليوم ليس ضمن جدول المجموعة: التحقق من وجود حصة إضافية غير ملغاة
-    const extraSession = await this.prisma.extraSession.findFirst({
+    const cairoParts = getCairoDateParts(date);
+    const targetDayOfWeek = JS_TO_DAY_OF_WEEK[cairoParts.dayOfWeek];
+    const isScheduledOnDate = group.schedule?.some(
+      (s) => s.day === targetDayOfWeek,
+    );
+
+    if (!isScheduledOnDate) {
+      throw new BadRequestException(
+        'لا يمكن بدء جلسة حضور عادية في يوم لا يتضمن موعداً مجدولاً للمجموعة. للحالات الطارئة، يرجى إنشاء "حصة إضافية" أولاً.',
+      );
+    }
+
+    let session = await this.prisma.attendanceSession.findFirst({
       where: {
         groupId,
-        centerId,
         date,
-        status: { not: ExtraSessionStatus.CANCELED },
-      },
-      include: {
-        attendanceSession: true,
+        extraSessionId: null,
       },
     });
 
-    if (extraSession?.attendanceSession) {
-      return extraSession.attendanceSession;
+    if (!session) {
+      try {
+        session = await this.prisma.attendanceSession.create({
+          data: {
+            groupId,
+            centerId,
+            date,
+          },
+        });
+      } catch (error: unknown) {
+        const isP2002 =
+          (error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === 'P2002') ||
+          (typeof error === 'object' &&
+            error !== null &&
+            'code' in error &&
+            error.code === 'P2002');
+
+        if (isP2002) {
+          const existing = await this.prisma.attendanceSession.findFirst({
+            where: {
+              groupId,
+              date,
+              extraSessionId: null,
+            },
+          });
+          if (existing) {
+            session = existing;
+          } else {
+            throw error;
+          }
+        } else {
+          throw error;
+        }
+      }
     }
 
-    throw new BadRequestException(
-      'لا يمكن بدء جلسة حضور عادية في يوم لا يتضمن موعداً مجدولاً للمجموعة. للحالات الطارئة، يرجى إنشاء "حصة إضافية" أولاً.',
-    );
+    return session;
   }
 
   /**
@@ -176,44 +183,22 @@ export class AttendanceService {
 
     const session = await this.prisma.attendanceSession.findFirst({
       where: { id: sessionId, groupId, centerId },
+      include: {
+        extraSession: {
+          select: {
+            id: true,
+            title: true,
+            type: true,
+            fee: true,
+            status: true,
+          },
+        },
+      },
     });
 
     if (!session) {
       throw new NotFoundException('جلسة تحضير الحضور المطلوبة غير موجودة.');
     }
-
-    // Get all active students enrolled in this group
-    const enrolledStudents = await this.prisma.groupStudent.findMany({
-      where: {
-        groupId,
-        student: {
-          user: {
-            isActive: true,
-          },
-        },
-      },
-      include: {
-        student: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                fullName: true,
-                phone: true,
-                avatar: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: {
-        student: {
-          user: {
-            fullName: 'asc',
-          },
-        },
-      },
-    });
 
     // Get recorded attendance for this session
     const attendanceRecords = await this.prisma.studentAttendance.findMany({
@@ -222,18 +207,122 @@ export class AttendanceService {
 
     const recordsMap = new Map(attendanceRecords.map((r) => [r.studentId, r]));
 
-    const students = enrolledStudents.map((item) => {
-      const record = recordsMap.get(item.studentId);
-      return {
-        studentId: item.studentId,
-        studentCode: item.student.code,
-        fullName: item.student.user.fullName,
-        phone: item.student.user.phone,
-        avatar: item.student.user.avatar,
-        status: record ? record.status : null,
-        absenceReason: record ? record.absenceReason : null,
+    let students: Array<{
+      studentId: string;
+      studentCode: string;
+      fullName: string;
+      phone: string | null;
+      avatar: string | null;
+      status: AttendanceStatus | null;
+      absenceReason: string | null;
+      extraSessionInfo?: {
+        amountDue: number;
+        paid: number | null;
+        isWaived: boolean;
+        paidAt: string | null;
+        notes: string | null;
       };
-    });
+    }>;
+
+    // إذا كانت الجلسة لحصة إضافية، نجلب الطلاب المسجلين بالحصة الإضافية مع بيانات الدفع
+    if (session.extraSessionId) {
+      const extraStudents = await this.prisma.extraSessionStudent.findMany({
+        where: {
+          extraSessionId: session.extraSessionId,
+          centerId,
+        },
+        include: {
+          student: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  fullName: true,
+                  phone: true,
+                  avatar: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: {
+          student: {
+            user: {
+              fullName: 'asc',
+            },
+          },
+        },
+      });
+
+      students = extraStudents.map((item) => {
+        const record = recordsMap.get(item.studentId);
+        return {
+          studentId: item.studentId,
+          studentCode: item.student.code,
+          fullName: item.student.user.fullName,
+          phone: item.student.user.phone,
+          avatar: item.student.user.avatar,
+          status: record ? record.status : null,
+          absenceReason: record ? record.absenceReason : null,
+          extraSessionInfo: {
+            amountDue: new Prisma.Decimal(item.amountDue).toNumber(),
+            paid:
+              item.paid !== null
+                ? new Prisma.Decimal(item.paid).toNumber()
+                : null,
+            isWaived: item.isWaived,
+            paidAt: item.paidAt ? item.paidAt.toISOString() : null,
+            notes: item.notes,
+          },
+        };
+      });
+    } else {
+      // جلسة عادية: جلب الطلاب المقيدين في المجموعة
+      const enrolledStudents = await this.prisma.groupStudent.findMany({
+        where: {
+          groupId,
+          student: {
+            user: {
+              isActive: true,
+            },
+          },
+        },
+        include: {
+          student: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  fullName: true,
+                  phone: true,
+                  avatar: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: {
+          student: {
+            user: {
+              fullName: 'asc',
+            },
+          },
+        },
+      });
+
+      students = enrolledStudents.map((item) => {
+        const record = recordsMap.get(item.studentId);
+        return {
+          studentId: item.studentId,
+          studentCode: item.student.code,
+          fullName: item.student.user.fullName,
+          phone: item.student.user.phone,
+          avatar: item.student.user.avatar,
+          status: record ? record.status : null,
+          absenceReason: record ? record.absenceReason : null,
+        };
+      });
+    }
 
     return { session, students };
   }
@@ -268,6 +357,14 @@ export class AttendanceService {
 
     if (!session) {
       throw new NotFoundException('جلسة تحضير الحضور المطلوبة غير موجودة.');
+    }
+
+    const today = this.getTodayMidnightUtc();
+    const sessionDate = getTodayMidnightUtcInCairo(session.date);
+    if (sessionDate.getTime() > today.getTime()) {
+      throw new BadRequestException(
+        'لا يمكن تسجيل الحضور لجلسة موعدها في المستقبل.',
+      );
     }
 
     // Verify each record has either studentId or studentCode
@@ -329,21 +426,40 @@ export class AttendanceService {
 
     const studentIds = dto.records.map((r) => r.studentId as string);
 
-    // Verify all students are enrolled in this group
-    const enrollments = await this.prisma.groupStudent.findMany({
-      where: {
-        groupId,
-        studentId: { in: studentIds },
-      },
-    });
+    // التحقق من صحة انتساب الطلاب: إذا كانت جلسة حصة إضافية، نتحقق من ExtraSessionStudent
+    if (session.extraSessionId) {
+      const extraParticipants = await this.prisma.extraSessionStudent.findMany({
+        where: {
+          extraSessionId: session.extraSessionId,
+          studentId: { in: studentIds },
+        },
+      });
 
-    const enrolledIds = new Set(enrollments.map((e) => e.studentId));
-    const nonEnrolled = studentIds.filter((id) => !enrolledIds.has(id));
+      const extraIds = new Set(extraParticipants.map((p) => p.studentId));
+      const nonParticipants = studentIds.filter((id) => !extraIds.has(id));
 
-    if (nonEnrolled.length > 0) {
-      throw new BadRequestException(
-        'لا يمكن تسجيل الحضور لطلاب غير مقيدين بهذه المجموعة.',
-      );
+      if (nonParticipants.length > 0) {
+        throw new BadRequestException(
+          'لا يمكن تسجيل الحضور لطلاب غير مسجلين في هذه الحصة الإضافية.',
+        );
+      }
+    } else {
+      // جلسة عادية: التحقق من القيد في المجموعة
+      const enrollments = await this.prisma.groupStudent.findMany({
+        where: {
+          groupId,
+          studentId: { in: studentIds },
+        },
+      });
+
+      const enrolledIds = new Set(enrollments.map((e) => e.studentId));
+      const nonEnrolled = studentIds.filter((id) => !enrolledIds.has(id));
+
+      if (nonEnrolled.length > 0) {
+        throw new BadRequestException(
+          'لا يمكن تسجيل الحضور لطلاب غير مقيدين بهذه المجموعة.',
+        );
+      }
     }
 
     // Deduplicate records by studentId taking the latest record
@@ -369,13 +485,78 @@ export class AttendanceService {
             studentId,
             centerId,
             status: record.status,
-            absenceReason: record.absenceReason || null,
+            absenceReason: record.absenceReason?.trim() || null,
           },
           update: {
             status: record.status,
-            absenceReason: record.absenceReason || null,
+            absenceReason: record.absenceReason?.trim() || null,
           },
         });
+
+        // إذا كانت الحصة إضافية، تحديث حالة الدفع والإعفاء إن وردت
+        if (session.extraSessionId) {
+          const participant = await tx.extraSessionStudent.findUnique({
+            where: {
+              extraSessionId_studentId: {
+                extraSessionId: session.extraSessionId,
+                studentId,
+              },
+            },
+          });
+
+          if (participant) {
+            let newPaid: Prisma.Decimal | null | undefined = undefined;
+            let newIsWaived: boolean | undefined = undefined;
+            let newPaidAt: Date | null | undefined = undefined;
+            let newNotes: string | null | undefined = undefined;
+
+            if (record.isWaived !== undefined) {
+              newIsWaived = record.isWaived;
+            }
+
+            if (record.paid !== undefined && record.paid !== null) {
+              const paidDecimal = new Prisma.Decimal(record.paid);
+              if (paidDecimal.lessThan(0)) {
+                throw new BadRequestException(
+                  'المبلغ المدفوع لا يمكن أن يكون سالباً.',
+                );
+              }
+              if (paidDecimal.greaterThan(participant.amountDue)) {
+                throw new BadRequestException(
+                  'المبلغ المدفوع لا يمكن أن يتجاوز المبلغ المستحق على الطالب.',
+                );
+              }
+              newPaid = paidDecimal;
+              newPaidAt = paidDecimal.greaterThan(0) ? new Date() : null;
+              // دفع مبلغ أكبر من صفر يلغي الإعفاء تلقائياً (دفع بعد إعفاء)
+              if (paidDecimal.greaterThan(0)) {
+                newIsWaived = false;
+              }
+            }
+
+            if (record.paymentNotes !== undefined) {
+              newNotes = record.paymentNotes.trim() || null;
+            }
+
+            if (
+              newPaid !== undefined ||
+              newIsWaived !== undefined ||
+              newNotes !== undefined
+            ) {
+              await tx.extraSessionStudent.update({
+                where: { id: participant.id },
+                data: {
+                  ...(newPaid !== undefined && {
+                    paid: newPaid,
+                    paidAt: newPaidAt,
+                  }),
+                  ...(newIsWaived !== undefined && { isWaived: newIsWaived }),
+                  ...(newNotes !== undefined && { notes: newNotes }),
+                },
+              });
+            }
+          }
+        }
       }
     });
 

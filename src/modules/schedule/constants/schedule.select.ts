@@ -60,7 +60,7 @@ export const scheduleAttendanceSessionSelect = {
   },
 } satisfies Prisma.AttendanceSessionSelect;
 
-export type ScheduleAttendanceSessionEntity = Prisma.AttendanceSessionGetPayload<{
-  select: typeof scheduleAttendanceSessionSelect;
-}>;
-
+export type ScheduleAttendanceSessionEntity =
+  Prisma.AttendanceSessionGetPayload<{
+    select: typeof scheduleAttendanceSessionSelect;
+  }>;

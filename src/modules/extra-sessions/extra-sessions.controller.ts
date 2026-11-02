@@ -128,4 +128,24 @@ export class ExtraSessionsController {
       user.id,
     );
   }
+
+  @Post(':id/session')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'بدء وفتح جلسة الحضور للحصة الإضافية (في نفس اليوم أو بعده فقط)',
+  })
+  @ResponseMessage('تم بدء جلسة الحضور للحصة الإضافية بنجاح.')
+  @Roles(AppRole.OWNER, AppRole.TEACHER)
+  async startAttendanceSession(
+    @CurrentCenterId() centerId: string,
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+  ) {
+    return this.extraSessionsService.startAttendanceSession(
+      centerId,
+      id,
+      user.role,
+      user.id,
+    );
+  }
 }

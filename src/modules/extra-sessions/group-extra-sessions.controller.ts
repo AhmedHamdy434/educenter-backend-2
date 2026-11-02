@@ -7,10 +7,8 @@ import {
   Param,
   Post,
   Query,
-  Res,
   UseGuards,
 } from '@nestjs/common';
-import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -34,26 +32,18 @@ export class GroupExtraSessionsController {
   constructor(private readonly extraSessionsService: ExtraSessionsService) {}
 
   @Post()
+  @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary:
-      'إنشاء حصة إضافية جديدة لمجموعة محددة مع فحص التعارضات وفتح جلسة الحضور',
+    summary: 'إنشاء وجدولة حصة إضافية جديدة لمجموعة محددة',
   })
-  @ResponseMessage('تمت معالجة طلب إنشاء الحصة الإضافية بنجاح.')
+  @ResponseMessage('تم إنشاء الحصة الإضافية بنجاح.')
   async create(
     @CurrentCenterId() centerId: string,
     @CurrentUser() user: RequestUser,
     @Param('groupId') groupId: string,
     @Body() dto: CreateExtraSessionDto,
-    @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.extraSessionsService.create(
-      centerId,
-      groupId,
-      dto,
-      user.id,
-    );
-    res.status(result.created ? HttpStatus.CREATED : HttpStatus.OK);
-    return result;
+    return this.extraSessionsService.create(centerId, groupId, dto, user.id);
   }
 
   @Get()

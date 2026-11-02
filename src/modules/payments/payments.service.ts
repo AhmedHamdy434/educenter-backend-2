@@ -189,10 +189,11 @@ export class PaymentsService {
 
     let statsPaid = 0;
     let statsUnpaid = 0;
-    let statsExpected = 0;
-    let statsCollected = 0;
+    let statsExpectedDecimal = new Prisma.Decimal(0);
+    let statsCollectedDecimal = new Prisma.Decimal(0);
 
     let targetRequiredStudentsCount = 0;
+    const currentMonthlyFeeDecimal = new Prisma.Decimal(group.monthlyFee);
 
     for (const gs of allStudentsForStats) {
       const studentStart = this.normalizeToFirstOfMonth(
@@ -207,32 +208,38 @@ export class PaymentsService {
         const isRequired = reqMonths.includes(targetMonthForStats);
         if (isRequired) {
           targetRequiredStudentsCount++;
-          statsExpected += monthlyFee;
           const payment = gs.payments.find(
             (p) => this.formatDate(p.subscriptionDate) === targetMonthForStats,
           );
           if (payment) {
             statsPaid++;
-            statsCollected += Number(payment.amount);
+            const paymentAmount = new Prisma.Decimal(payment.amount);
+            statsCollectedDecimal = statsCollectedDecimal.plus(paymentAmount);
+            // الشهور المسددة مسبقاً: المتوقع يطابق المحصل الفعلي لتجنب إظهار عجز وهمي عند تغير تسعيرة المجموعة
+            statsExpectedDecimal = statsExpectedDecimal.plus(paymentAmount);
           } else {
             statsUnpaid++;
+            statsExpectedDecimal = statsExpectedDecimal.plus(
+              currentMonthlyFeeDecimal,
+            );
           }
         }
       } else {
         // إحصائيات إجمالية لكل الأشهر
-        const paidSet = new Set(
-          gs.payments.map((p) => this.formatDate(p.subscriptionDate)),
-        );
         for (const rm of reqMonths) {
-          statsExpected += monthlyFee;
-          if (paidSet.has(rm)) {
+          const p = gs.payments.find(
+            (pay) => this.formatDate(pay.subscriptionDate) === rm,
+          );
+          if (p) {
             statsPaid++;
-            const p = gs.payments.find(
-              (pay) => this.formatDate(pay.subscriptionDate) === rm,
-            );
-            if (p) statsCollected += Number(p.amount);
+            const paymentAmount = new Prisma.Decimal(p.amount);
+            statsCollectedDecimal = statsCollectedDecimal.plus(paymentAmount);
+            statsExpectedDecimal = statsExpectedDecimal.plus(paymentAmount);
           } else {
             statsUnpaid++;
+            statsExpectedDecimal = statsExpectedDecimal.plus(
+              currentMonthlyFeeDecimal,
+            );
           }
         }
       }
@@ -245,8 +252,8 @@ export class PaymentsService {
         : allStudentsForStats.length,
       paid: statsPaid,
       unpaid: statsUnpaid,
-      expected: statsExpected,
-      collected: statsCollected,
+      expected: statsExpectedDecimal.toNumber(),
+      collected: statsCollectedDecimal.toNumber(),
       groupMonths: groupMonthsFormatted,
     };
     // ─────────────────────────────────────────────────────────────────
@@ -595,7 +602,7 @@ export class PaymentsService {
     ];
 
     const rows = studentsData.map((st) => {
-      const row: Record<string, any> = {
+      const row: Record<string, string | number> = {
         fullName: st.studentInfo.fullName,
         phone: st.studentInfo.phone || '—',
         paidCount: st.paidMonths.length,

@@ -11,4 +11,3 @@ export class CancelExtraSessionDto {
   @IsString({ message: 'ملاحظات الاسترداد يجب أن تكون نصاً صالحاً.' })
   readonly confirmRefundNotes?: string;
 }
-

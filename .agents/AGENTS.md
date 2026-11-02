@@ -129,7 +129,7 @@
   - **Error (Default NestJS Format):**
     `{ "statusCode": 400, "message": "..." | ["...", "..."], "error": "Bad Request" }`
 * **Current OpenAPI Documentation Status:**
-  - **Completed Modules (61 Operations Documented & Live in Swagger):**
+  - **Completed Modules (69 Operations Documented & Live in Swagger):**
     1. `Auth` (7 endpoints): `/api/auth/login`, `/api/auth/super-admin/login`, `/api/auth/super-admin/me`, `/api/auth/me`, `/api/auth/change-password`, `/api/auth/forgot-password`, `/api/auth/reset-password`
     2. `Centers` (9 endpoints): `POST /api/centers`, `GET /api/centers`, `GET /api/centers/me`, `GET /api/centers/my-subscription`, `GET /api/centers/:id`, `PATCH /api/centers/:id`, `PATCH /api/centers/:id/status`, `POST /api/centers/:id/subscribe`, `POST /api/centers/:id/renew`
     3. `Subscription Plans` (5 endpoints): `POST /api/subscription-plans`, `GET /api/subscription-plans`, `GET /api/subscription-plans/:id`, `PATCH /api/subscription-plans/:id`, `PATCH /api/subscription-plans/:id/toggle-status`
@@ -142,6 +142,8 @@
     10. `Groups` (12 endpoints): `POST /api/groups`, `GET /api/groups`, `GET /api/groups/export/excel`, `GET /api/groups/export/pdf`, `GET /api/groups/export/template`, `POST /api/groups/import/excel`, `GET /api/groups/:id`, `PATCH /api/groups/:id`, `PATCH /api/groups/:id/toggle-status`, `POST /api/groups/:id/students`, `DELETE /api/groups/:id/students`, `DELETE /api/groups/:id`
     11. `Home Stats` (1 endpoint): `GET /api/home-stats`
     12. `Schedule` (2 endpoints): `GET /api/schedule/calendar`, `GET /api/schedule/upcoming`
+    13. `Extra Sessions` (9 endpoints): `POST /api/groups/:groupId/extra-sessions`, `GET /api/groups/:groupId/extra-sessions`, `GET /api/extra-sessions/:id`, `PATCH /api/extra-sessions/:id`, `PATCH /api/extra-sessions/:id/cancel`, `POST /api/extra-sessions/:id/students`, `POST /api/extra-sessions/:id/students/:studentId/pay`, `PATCH /api/extra-sessions/:id/students/:studentId/waive`, `POST /api/extra-sessions/:id/session`
+      *(Note: Extra sessions have no `durationMinutes` field and no schedule conflict warnings or force requirements; creation returns 201 Created directly with session and financialSummary; attendance sessions are opened strictly on or after sessionDate in Cairo timezone via `POST /api/extra-sessions/:id/session`)*
   - **Pending Modules (Paused until User Finishes Pending Logic Changes):**
     1. `Attendance` (6 endpoints)
     2. `Payments` (4 endpoints)

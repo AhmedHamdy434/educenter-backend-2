@@ -1,10 +1,13 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsEnum,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { AttendanceStatus } from '@prisma/client';
@@ -23,8 +26,22 @@ export class AttendanceRecordDto {
   readonly status: AttendanceStatus;
 
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'سبب الغياب أو الملاحظة يجب أن يكون نصياً.' })
   readonly absenceReason?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({}, { message: 'المبلغ المدفوع يجب أن يكون رقماً صالحاً.' })
+  @Min(0, { message: 'المبلغ المدفوع لا يمكن أن يكون سالباً.' })
+  readonly paid?: number;
+
+  @IsOptional()
+  @IsBoolean({ message: 'حالة الإعفاء يجب أن تكون قيمة منطقية.' })
+  readonly isWaived?: boolean;
+
+  @IsOptional()
+  @IsString({ message: 'ملاحظات الدفع يجب أن تكون نصية.' })
+  readonly paymentNotes?: string;
 }
 
 export class SaveAttendanceDto {

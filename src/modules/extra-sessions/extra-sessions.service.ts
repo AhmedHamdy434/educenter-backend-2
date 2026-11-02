@@ -1,23 +1,21 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import {
+  AttendanceSession,
   AttendanceStatus,
-  AuditAction,
-  DayOfWeek,
   ExtraSessionAudience,
   ExtraSessionStatus,
   ExtraSessionType,
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../../database/prisma/prisma.service';
-import { AuditLogsService } from '../audit-logs/audit-logs.service';
-import { WhatsAppService } from '../notifications/whatsapp.service';
+import { AppRole } from '../../common/enums/app-role.enum';
 import {
-  getCairoDateParts,
-  getCairoDateString,
+  getTodayMidnightUtcInCairo,
   parseDateStringToUtcMidnight,
 } from '../../common/utils/date.util';
 import { buildMeta, PaginationMeta } from '../../common/utils/buildMeta';
@@ -38,21 +36,6 @@ import {
   ExtraSessionStudentWithAttendance,
 } from './constants/extra-session.select';
 
-export interface ExtraSessionWarning {
-  code: string;
-  message: string;
-  conflictingId?: string;
-}
-
-export interface CreateExtraSessionResult {
-  created: boolean;
-  warnings?: ExtraSessionWarning[];
-  session?: Omit<ExtraSessionDetails, 'participants'> & {
-    participants: ExtraSessionStudentWithAttendance[];
-    financialSummary: ExtraSessionFinancialSummary;
-  };
-}
-
 export interface ExtraSessionFinancialSummary {
   totalDue: number;
   totalCollected: number;
@@ -64,38 +47,28 @@ export interface ExtraSessionFinancialSummary {
   unpaidCount: number;
 }
 
-const JS_TO_DAY_OF_WEEK: Record<number, DayOfWeek> = {
-  0: DayOfWeek.SUNDAY,
-  1: DayOfWeek.MONDAY,
-  2: DayOfWeek.TUESDAY,
-  3: DayOfWeek.WEDNESDAY,
-  4: DayOfWeek.THURSDAY,
-  5: DayOfWeek.FRIDAY,
-  6: DayOfWeek.SATURDAY,
-};
-
 @Injectable()
 export class ExtraSessionsService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly auditLogsService: AuditLogsService,
-    private readonly whatsappService: WhatsAppService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   /**
    * إنشاء حصة إضافية جديدة لمجموعة محددة.
-   * يتحقق من التعارضات، وينشئ الحصة وقائمة طلابها وجلسة الحضور في Transaction واحدة.
+   * ينشئ الحصة وقائمة طلابها وجلسة الحضور في Transaction واحدة.
    */
   async create(
     centerId: string,
     groupId: string,
     dto: CreateExtraSessionDto,
     userId: string,
-  ): Promise<CreateExtraSessionResult> {
+  ): Promise<
+    Omit<ExtraSessionDetails, 'participants'> & {
+      participants: ExtraSessionStudentWithAttendance[];
+      financialSummary: ExtraSessionFinancialSummary;
+    }
+  > {
     const group = await this.prisma.group.findFirst({
       where: { id: groupId, centerId },
       include: {
-        schedule: true,
         teacher: { select: { id: true, user: { select: { fullName: true } } } },
       },
     });
@@ -111,132 +84,8 @@ export class ExtraSessionsService {
     }
 
     const date = parseDateStringToUtcMidnight(dto.date);
-    const cairoParts = getCairoDateParts(date);
-    const sessionDayOfWeek = JS_TO_DAY_OF_WEEK[cairoParts.dayOfWeek];
-    const duration = dto.durationMinutes ?? 60;
-    const startMin = dto.hour * 60 + dto.minute;
-    const endMin = startMin + duration;
 
-    // 1. فحص التعارضات (Warnings)
-    const warnings: ExtraSessionWarning[] = [];
-
-    // أ. فحص تعارض مواعيد المعلم الأساسية
-    const teacherGroups = await this.prisma.group.findMany({
-      where: {
-        centerId,
-        teacherId: group.teacherId,
-        isActive: true,
-        schedule: {
-          some: { day: sessionDayOfWeek },
-        },
-      },
-      select: {
-        id: true,
-        name: true,
-        schedule: {
-          where: { day: sessionDayOfWeek },
-          select: { id: true, hour: true, minute: true },
-        },
-      },
-    });
-
-    for (const tg of teacherGroups) {
-      for (const slot of tg.schedule) {
-        const slotStart = slot.hour * 60 + slot.minute;
-        const slotEnd = slotStart + 60;
-        if (Math.max(startMin, slotStart) < Math.min(endMin, slotEnd)) {
-          warnings.push({
-            code: 'TEACHER_SCHEDULE_CONFLICT',
-            message: `المعلم لديه حصة مجدولة لمجموعة (${tg.name}) في نفس التوقيت تقريباً (${slot.hour}:${String(slot.minute).padStart(2, '0')}).`,
-            conflictingId: tg.id,
-          });
-        }
-      }
-    }
-
-    // ب. فحص تعارض المعلم مع حصص إضافية أخرى في نفس اليوم
-    const teacherOtherExtra = await this.prisma.extraSession.findMany({
-      where: {
-        centerId,
-        date,
-        status: { not: ExtraSessionStatus.CANCELED },
-        group: { teacherId: group.teacherId },
-      },
-      select: {
-        id: true,
-        title: true,
-        hour: true,
-        minute: true,
-        durationMinutes: true,
-        group: { select: { id: true, name: true } },
-      },
-    });
-
-    for (const es of teacherOtherExtra) {
-      const esStart = es.hour * 60 + es.minute;
-      const esEnd = esStart + es.durationMinutes;
-      if (Math.max(startMin, esStart) < Math.min(endMin, esEnd)) {
-        warnings.push({
-          code: 'TEACHER_EXTRA_CONFLICT',
-          message: `المعلم لديه حصة إضافية أخرى (${es.title || es.group.name}) في نفس التوقيت (${es.hour}:${String(es.minute).padStart(2, '0')}).`,
-          conflictingId: es.id,
-        });
-      }
-    }
-
-    // ج. فحص تعارض المجموعة مع مواعيدها الأساسية في نفس اليوم
-    for (const slot of group.schedule) {
-      if (slot.day === sessionDayOfWeek) {
-        const slotStart = slot.hour * 60 + slot.minute;
-        const slotEnd = slotStart + 60;
-        if (Math.max(startMin, slotStart) < Math.min(endMin, slotEnd)) {
-          warnings.push({
-            code: 'GROUP_REGULAR_CONFLICT',
-            message: `المجموعة لديها موعد أساسي مجدول في هذا اليوم في نفس التوقيت (${slot.hour}:${String(slot.minute).padStart(2, '0')}).`,
-            conflictingId: group.id,
-          });
-        }
-      }
-    }
-
-    // د. فحص تعارض المجموعة مع حصة إضافية أخرى في نفس اليوم
-    const groupOtherExtra = await this.prisma.extraSession.findMany({
-      where: {
-        centerId,
-        groupId,
-        date,
-        status: { not: ExtraSessionStatus.CANCELED },
-      },
-      select: {
-        id: true,
-        title: true,
-        hour: true,
-        minute: true,
-        durationMinutes: true,
-      },
-    });
-
-    for (const es of groupOtherExtra) {
-      const esStart = es.hour * 60 + es.minute;
-      const esEnd = esStart + es.durationMinutes;
-      if (Math.max(startMin, esStart) < Math.min(endMin, esEnd)) {
-        warnings.push({
-          code: 'GROUP_EXTRA_CONFLICT',
-          message: `المجموعة لديها بالفعل حصة إضافية أخرى (${es.title || 'بدون عنوان'}) في نفس التوقيت (${es.hour}:${String(es.minute).padStart(2, '0')}).`,
-          conflictingId: es.id,
-        });
-      }
-    }
-
-    // إذا وُجدت تعارضات ولم يطلب المالك فرض الإنشاء (force = true)
-    if (warnings.length > 0) {
-      return {
-        created: false,
-        warnings,
-      };
-    }
-
-    // 2. التحقق من الطلاب المشاركين
+    // 1. التحقق من الطلاب المشاركين
     let studentIdsToInclude: string[] = [];
 
     if (dto.audience === ExtraSessionAudience.SELECTED) {
@@ -283,7 +132,7 @@ export class ExtraSessionsService {
     const fee = dto.fee ?? 0;
     const isFree = fee === 0;
 
-    // 3. التنفيذ Transactional
+    // 2. التنفيذ Transactional
     const createdSession = await this.prisma.$transaction(async (tx) => {
       // أ. إنشاء الحصة الإضافية
       const extraSession = await tx.extraSession.create({
@@ -297,24 +146,13 @@ export class ExtraSessionsService {
           date,
           hour: dto.hour,
           minute: dto.minute,
-          durationMinutes: duration,
           location: dto.location?.trim() || null,
           fee: new Prisma.Decimal(fee),
           notes: dto.notes?.trim() || null,
         },
       });
 
-      // ب. فتح جلسة الحضور AttendanceSession المقترنة بها في نفس اللحظة
-      await tx.attendanceSession.create({
-        data: {
-          centerId,
-          groupId,
-          extraSessionId: extraSession.id,
-          date,
-        },
-      });
-
-      // ج. إنشاء سجلات الطلاب ExtraSessionStudent
+      // ب. إنشاء سجلات الطلاب ExtraSessionStudent
       if (studentIdsToInclude.length > 0) {
         await tx.extraSessionStudent.createMany({
           data: studentIdsToInclude.map((studentId) => ({
@@ -333,30 +171,7 @@ export class ExtraSessionsService {
       return extraSession;
     });
 
-    // 4. تسجيل AuditLog
-    await this.auditLogsService.log({
-      centerId,
-      userId,
-      action: AuditAction.CREATE,
-      entity: 'ExtraSession',
-      entityId: createdSession.id,
-      details: {
-        groupId,
-        date: dto.date,
-        time: `${dto.hour}:${String(dto.minute).padStart(2, '0')}`,
-        fee,
-        audience: dto.audience,
-        studentsCount: studentIdsToInclude.length,
-      },
-    });
-
-    const fullDetails = await this.findOne(centerId, createdSession.id);
-
-    return {
-      created: true,
-      warnings: warnings.length > 0 ? warnings : [],
-      session: fullDetails,
-    };
+    return this.findOne(centerId, createdSession.id);
   }
 
   /**
@@ -397,7 +212,7 @@ export class ExtraSessionsService {
     const orderBy =
       query.getOrderBy<Prisma.ExtraSessionOrderByWithRelationInput>(
         allowedSortFields,
-        { date: Prisma.SortOrder.desc },
+        { date: Prisma.SortOrder.asc },
       );
 
     const [total, data] = await Promise.all([
@@ -553,7 +368,22 @@ export class ExtraSessionsService {
       ? parseDateStringToUtcMidnight(dto.date)
       : undefined;
     const isFeeChanged =
-      dto.fee !== undefined && dto.fee !== Number(existing.fee);
+      dto.fee !== undefined &&
+      (existing.fee === null ||
+        !existing.fee.equals(new Prisma.Decimal(dto.fee)));
+
+    if (isFeeChanged && dto.fee !== undefined) {
+      const newFeeDecimal = new Prisma.Decimal(dto.fee);
+      const conflictingParticipant = existing.participants.find(
+        (p) =>
+          !p.isWaived && p.paid !== null && p.paid.greaterThan(newFeeDecimal),
+      );
+      if (conflictingParticipant) {
+        throw new BadRequestException(
+          'لا يمكن تعديل الرسوم إلى قيمة أقل من المبالغ المدفوعة بالفعل من بعض الطلاب.',
+        );
+      }
+    }
 
     await this.prisma.$transaction(async (tx) => {
       // أ. تحديث بيانات الحصة
@@ -566,7 +396,6 @@ export class ExtraSessionsService {
           date: newDate,
           hour: dto.hour,
           minute: dto.minute,
-          durationMinutes: dto.durationMinutes,
           location:
             dto.location !== undefined
               ? dto.location?.trim() || null
@@ -585,12 +414,11 @@ export class ExtraSessionsService {
         });
       }
 
-      // ج. إذا تغير السعر، نحدث amountDue لغير الدافعين وغير المعفيين فقط
+      // ج. إذا تغير السعر، نحدث amountDue لجميع المشاركين غير المعفيين
       if (isFeeChanged && dto.fee !== undefined) {
         await tx.extraSessionStudent.updateMany({
           where: {
             extraSessionId: id,
-            paid: null,
             isWaived: false,
           },
           data: {
@@ -598,19 +426,6 @@ export class ExtraSessionsService {
           },
         });
       }
-    });
-
-    // تسجيل في الـ AuditLog
-    await this.auditLogsService.log({
-      centerId,
-      userId,
-      action: AuditAction.UPDATE,
-      entity: 'ExtraSession',
-      entityId: id,
-      details: {
-        ...JSON.parse(JSON.stringify(dto)),
-        isFeeChanged,
-      },
     });
 
     return this.findOne(centerId, id);
@@ -666,49 +481,19 @@ export class ExtraSessionsService {
       );
     }
 
-    // تحديث الحالة فقط دون مسح السجلات
+    // تحديث الحالة وحفظ ملاحظات وتاريخ الإلغاء دون مسح السجلات أو لمس حقل notes
     await this.prisma.extraSession.update({
       where: { id },
       data: {
         status: ExtraSessionStatus.CANCELED,
+        cancellationNotes: dto.confirmRefundNotes?.trim() || null,
+        canceledAt: new Date(),
       },
     });
-
-    // تسجيل AuditLog بالحركة
-    await this.auditLogsService.log({
-      centerId,
-      userId,
-      action: AuditAction.STATUS_CHANGE,
-      entity: 'ExtraSession',
-      entityId: id,
-      details: {
-        status: 'CANCELED',
-        hasPayments,
-        confirmRefundNotes: dto.confirmRefundNotes?.trim() || null,
-      },
-    });
-
-    // إرسال رسائل واتساب لأولياء الأمور (Graceful Failure)
-    const dateStr = getCairoDateString(session.date);
-    const timeStr = `${session.hour}:${String(session.minute).padStart(2, '0')}`;
-    const message = `نحيطكم علماً بإلغاء الحصة الإضافية لمجموعة (${session.group.name}) المقررة يوم ${dateStr} الساعة ${timeStr}. نعتذر عن الإزعاج.`;
-
-    for (const p of session.participants) {
-      const phone = p.student.parentPhone;
-      if (phone) {
-        // إرسال بالخلفية بدون تعطيل الرد
-        this.whatsappService
-          .sendMessage({
-            to: phone,
-            message,
-          })
-          .catch(() => {});
-      }
-    }
 
     return {
       success: true,
-      message: 'تم إلغاء الحصة الإضافية بنجاح وإشعار أولياء الأمور.',
+      message: 'تم إلغاء الحصة الإضافية بنجاح.',
     };
   }
 
@@ -789,18 +574,6 @@ export class ExtraSessionsService {
       })),
     });
 
-    await this.auditLogsService.log({
-      centerId,
-      userId,
-      action: AuditAction.UPDATE,
-      entity: 'ExtraSession',
-      entityId: id,
-      details: {
-        action: 'ADD_STUDENTS',
-        addedStudentIds: newStudentIds,
-      },
-    });
-
     return {
       addedCount: newStudentIds.length,
       message: `تمت إضافة ${newStudentIds.length} طالب بنجاح للحصة الإضافية.`,
@@ -810,7 +583,6 @@ export class ExtraSessionsService {
   /**
    * تسجيل دفع كاش لطالب في الحصة الإضافية.
    * يمنع الدفع المزدوج أو دفع طالب معفي.
-   * يسجل AuditLog ويرسل إيصال واتساب لولي الأمر.
    */
   async payStudent(
     centerId: string,
@@ -850,60 +622,34 @@ export class ExtraSessionsService {
       throw new BadRequestException('لا يمكن تسجيل دفع لحصة إضافية ملغاة.');
     }
 
-    if (record.isWaived) {
+    const amountToPay =
+      dto.amount !== undefined
+        ? new Prisma.Decimal(dto.amount)
+        : record.amountDue;
+
+    if (amountToPay.lessThan(0)) {
+      throw new BadRequestException('المبلغ المدفوع لا يمكن أن يكون سالباً.');
+    }
+
+    if (amountToPay.greaterThan(record.amountDue)) {
       throw new BadRequestException(
-        'هذا الطالب معفي من سداد رسوم الحصة الإضافية.',
+        'المبلغ المدفوع لا يمكن أن يتجاوز المبلغ المستحق على الطالب.',
       );
     }
 
-    if (record.paid !== null && Number(record.paid) > 0) {
-      throw new BadRequestException(
-        'تم تسجيل دفع هذا الطالب مسبقاً لهذه الحصة.',
-      );
-    }
-
-    const amountToPay = dto.amount ?? Number(record.amountDue);
-    const paidAt = new Date();
+    const paidAt = amountToPay.greaterThan(0) ? new Date() : null;
 
     const updated = await this.prisma.extraSessionStudent.update({
       where: { id: record.id },
       data: {
-        paid: new Prisma.Decimal(amountToPay),
+        paid: amountToPay,
         paidAt,
-        notes: dto.notes?.trim() || record.notes,
+        isWaived: false, // الدفع يلغي الإعفاء تلقائياً (دفع بعد إعفاء)
+        notes:
+          dto.notes !== undefined ? dto.notes?.trim() || null : record.notes,
       },
       select: extraSessionStudentSelect,
     });
-
-    // تسجيل AuditLog
-    await this.auditLogsService.log({
-      centerId,
-      userId,
-      action: AuditAction.PAYMENT_COLLECTION,
-      entity: 'ExtraSessionStudent',
-      entityId: record.id,
-      details: {
-        extraSessionId: id,
-        studentId,
-        amount: amountToPay,
-        paidAt,
-      },
-    });
-
-    // إرسال إيصال واتساب (Graceful Failure)
-    const parentPhone = record.student.parentPhone;
-    if (parentPhone) {
-      const sessionTitle =
-        record.extraSession.title ||
-        `حصة إضافية لمجموعة ${record.extraSession.group.name}`;
-      const msg = `تم بنجاح استلام مبلغ ${amountToPay} ج.م رسوم (${sessionTitle}) للطالب ${record.student.user.fullName}. شكراً لتعاونكم.`;
-      this.whatsappService
-        .sendMessage({
-          to: parentPhone,
-          message: msg,
-        })
-        .catch(() => {});
-    }
 
     return updated;
   }
@@ -937,9 +683,12 @@ export class ExtraSessionsService {
       throw new BadRequestException('هذا الطالب معفي بالفعل من رسوم الحصة.');
     }
 
-    if (record.paid !== null && Number(record.paid) > 0) {
+    if (
+      record.paid !== null &&
+      record.paid.greaterThanOrEqualTo(record.amountDue)
+    ) {
       throw new BadRequestException(
-        'لا يمكن إعفاء طالب قام بالدفع بالفعل. يمكنك رد المبلغ أولاً.',
+        'هذا الطالب قام بسداد كامل رسوم الحصة بالفعل، لا حاجة لإعفائه.',
       );
     }
 
@@ -947,26 +696,105 @@ export class ExtraSessionsService {
       where: { id: record.id },
       data: {
         isWaived: true,
-        amountDue: new Prisma.Decimal(0.0),
-        notes: dto.notes?.trim() || 'تم الإعفاء من قبل الإدارة',
+        notes:
+          dto.notes !== undefined ? dto.notes?.trim() || null : record.notes,
       },
       select: extraSessionStudentSelect,
     });
 
-    await this.auditLogsService.log({
-      centerId,
-      userId,
-      action: AuditAction.STATUS_CHANGE,
-      entity: 'ExtraSessionStudent',
-      entityId: record.id,
-      details: {
-        action: 'WAIVE',
-        studentId,
-        extraSessionId: id,
-        notes: dto.notes,
+    return updated;
+  }
+
+  /**
+   * بدء وفتح جلسة الحضور للحصة الإضافية.
+   * لا يمكن بدء الجلسة قبل حلول تاريخ موعد الحصة الإضافية (يُسمح في نفس اليوم أو بعده فقط).
+   */
+  async startAttendanceSession(
+    centerId: string,
+    id: string,
+    userRole: AppRole,
+    userId: string,
+  ): Promise<AttendanceSession> {
+    const session = await this.prisma.extraSession.findFirst({
+      where: { id, centerId },
+      include: {
+        attendanceSession: true,
+        group: {
+          select: {
+            id: true,
+            teacherId: true,
+            isActive: true,
+          },
+        },
       },
     });
 
-    return updated;
+    if (!session) {
+      throw new NotFoundException('الحصة الإضافية المطلوبة غير موجودة.');
+    }
+
+    if (!session.group.isActive) {
+      throw new BadRequestException(
+        'لا يمكن بدء جلسة حضور لمجموعة دراسية غير نشطة.',
+      );
+    }
+
+    if (userRole === AppRole.TEACHER && session.group.teacherId) {
+      const teacher = await this.prisma.teacher.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+      if (!teacher || session.group.teacherId !== teacher.id) {
+        throw new ForbiddenException(
+          'غير مصرح لك ببدء جلسة حضور لهذه المجموعة.',
+        );
+      }
+    }
+
+    if (session.status === ExtraSessionStatus.CANCELED) {
+      throw new BadRequestException('لا يمكن بدء جلسة حضور لحصة إضافية ملغاة.');
+    }
+
+    // التحقق الصارم: لا يمكن بدء جلسة الحضور قبل تاريخ موعد الحصة (يُسمح في نفس اليوم أو بعده فقط)
+    const today = getTodayMidnightUtcInCairo();
+    const sessionDate = getTodayMidnightUtcInCairo(session.date);
+    if (sessionDate.getTime() > today.getTime()) {
+      throw new BadRequestException(
+        'لا يمكن بدء جلسة الحضور قبل حلول تاريخ موعد الحصة الإضافية.',
+      );
+    }
+
+    // إذا كانت الجلسة مفتوحة مسبقاً، يتم إرجاعها مباشرة
+    if (session.attendanceSession) {
+      return session.attendanceSession;
+    }
+
+    try {
+      return await this.prisma.attendanceSession.create({
+        data: {
+          centerId,
+          groupId: session.groupId,
+          extraSessionId: session.id,
+          date: session.date,
+        },
+      });
+    } catch (error: unknown) {
+      const isP2002 =
+        (error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002') ||
+        (typeof error === 'object' &&
+          error !== null &&
+          'code' in error &&
+          error.code === 'P2002');
+      if (isP2002) {
+        const existing = await this.prisma.attendanceSession.findFirst({
+          where: { extraSessionId: session.id, centerId },
+        });
+        if (existing) {
+          return existing;
+        }
+      }
+      throw error;
+    }
   }
 }

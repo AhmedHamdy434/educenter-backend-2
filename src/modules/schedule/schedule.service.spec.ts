@@ -2,10 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DayOfWeek } from '@prisma/client';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { ScheduleService } from './schedule.service';
-import {
-  getCairoDateString,
-  getCairoDateParts,
-} from '../../common/utils/date.util';
+import { getCairoDateString } from '../../common/utils/date.util';
 
 describe('ScheduleService', () => {
   let service: ScheduleService;
@@ -98,6 +95,7 @@ describe('ScheduleService', () => {
       expect(firstSession.studentsCount).toBe(20);
       expect(firstSession.recordedCount).toBe(0);
       expect(firstSession.isExtraSession).toBe(false);
+      expect(firstSession.extraSessionId).toBeNull();
       expect(firstSession.isGroupInactive).toBe(false);
     });
 
@@ -278,6 +276,7 @@ describe('ScheduleService', () => {
       const makeupCard = result.sessions.find((s) => s.date === '2026-10-07');
       expect(makeupCard).toBeDefined();
       expect(makeupCard?.isExtraSession).toBe(true);
+      expect(makeupCard?.extraSessionId).toBe('es-1');
       expect(makeupCard?.dayOfWeek).toBe(DayOfWeek.WEDNESDAY);
       expect(makeupCard?.sessionId).toBe('session-makeup');
       expect(makeupCard?.attendanceStatus).toBe('COMPLETED');
@@ -385,7 +384,6 @@ describe('ScheduleService', () => {
   describe('getUpcomingSchedule', () => {
     it('should generate upcoming sessions starting strictly from today to the end of the current month', async () => {
       const todayDateStr = getCairoDateString();
-      const todayParts = getCairoDateParts();
 
       const mockGroup = {
         id: 'group-1',

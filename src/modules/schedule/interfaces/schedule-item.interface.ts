@@ -35,8 +35,8 @@ export interface ScheduleSessionItem {
   studentsCount: number;
   recordedCount: number;
   isExtraSession: boolean;
+  extraSessionId: string | null;
   isGroupInactive: boolean;
-  extraSessionId?: string;
   title?: string | null;
   type?: string;
   fee?: number;

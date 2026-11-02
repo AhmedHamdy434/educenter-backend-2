@@ -20,9 +20,6 @@ import { StudentsModule } from './modules/students/students.module';
 import { GroupsModule } from './modules/groups/groups.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { PaymentsModule } from './modules/payments/payments.module';
-import { NotificationsModule } from './modules/notifications/notifications.module';
-import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
-import { ParentPortalModule } from './modules/parent-portal/parent-portal.module';
 import { SubscriptionPaymentsModule } from './modules/subscription-payments/subscription-payments.module';
 import { HomeStatsModule } from './modules/home-stats/home-stats.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
@@ -57,9 +54,6 @@ import { ExtraSessionsModule } from './modules/extra-sessions/extra-sessions.mod
     GroupsModule,
     AttendanceModule,
     PaymentsModule,
-    NotificationsModule,
-    AuditLogsModule,
-    ParentPortalModule,
     ScheduleModule,
     ExtraSessionsModule,
   ],

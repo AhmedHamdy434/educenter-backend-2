@@ -89,12 +89,9 @@ The codebase organizes domain logic into 16 decoupled NestJS feature modules:
 | `teachers` | Teacher profiles, subject capabilities, quota limits | `TeachersController` | `TeachersService`, `SubscriptionValidationService` |
 | `students` | Student registry, unique center codes, enrollments | `StudentsController` | `StudentsService`, `SubscriptionValidationService` |
 | `groups` | Classes, weekly recurring schedules, student rosters | `GroupsController` | `GroupsService`, `ExcelService`, `PdfService` |
-| `attendance` | Attendance sessions, status recording, absence alerts | `AttendanceController` | `AttendanceService`, `NotificationsService` |
+| `attendance` | Attendance sessions, status recording | `AttendanceController` | `AttendanceService` |
 | `payments` | Monthly tuition matrices, student statement of accounts | `PaymentsController` | `PaymentsService`, `ExcelService` |
 | `home-stats` | Center KPI aggregations and dashboard statistics | `HomeStatsController` | `HomeStatsService` |
-| `notifications` | Internal alerts, SMS/WhatsApp dispatch logs | `NotificationsController` | `NotificationsService` |
-| `audit-logs` | Immutable audit trail with IP address and metadata | `AuditLogsController` | `AuditLogsService` |
-| `parent-portal` | 30-day magic tokens, public responsive student report | `ParentPortalController` | `ParentPortalService` |
 
 ---
 
@@ -390,4 +387,3 @@ Managed centrally by `AllExceptionsFilter`:
    - Global default: 60 requests per minute.
    - Public auth routes (`/auth/login`, `/auth/super-admin/login`): Stricter limit of **5 requests per minute** to thwart credential brute-force attacks.
    - Password reset request (`/auth/forgot-password`): **3 requests per minute**.
-4. **Audit Trail Logging:** All mutating and sensitive operations invoke `AuditLogsService.logAction(centerId, userId, action, entity, entityId, details)` capturing IP address and user agent.

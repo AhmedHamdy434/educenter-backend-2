@@ -67,8 +67,6 @@ model Center {
   studentAttendances StudentAttendance[]
   monthlyPayments    MonthlyPayment[]
   extraSessions      ExtraSession[]
-  notifications      Notification[]
-  auditLogs          AuditLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -159,9 +157,6 @@ model User {
   teacher Teacher?
   student Student?
 
-  notifications Notification[]
-  auditLogs     AuditLog[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -217,7 +212,6 @@ model Student {
   enrollments StudentEnrollment[]
   groups      GroupStudent[]
   attendance  StudentAttendance[]
-  magicTokens ParentMagicToken[]
   extraSessions ExtraSessionStudent[]
 
   createdAt DateTime @default(now())
@@ -471,77 +465,6 @@ model PasswordResetToken {
   @@index([email])
 }
 
-enum NotificationType {
-  ATTENDANCE_ABSENCE
-  PAYMENT_RECEIPT
-  NEW_ACCOUNT
-  SUBSCRIPTION_EXPIRY
-  SYSTEM_ALERT
-  EXTRA_SESSION_SCHEDULED
-  EXTRA_SESSION_CANCELED
-  EXTRA_SESSION_REMINDER
-}
-
-model Notification {
-  id        String           @id @default(cuid())
-  centerId  String
-  center    Center           @relation(fields: [centerId], references: [id], onDelete: Cascade)
-  userId    String?
-  user      User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title     String
-  message   String
-  type      NotificationType @default(SYSTEM_ALERT)
-  recipient String?
-  isSent    Boolean          @default(false)
-  isRead    Boolean          @default(false)
-  metadata  Json?
-  createdAt DateTime         @default(now())
-
-  @@index([centerId])
-  @@index([userId])
-  @@index([type])
-}
-
-enum AuditAction {
-  CREATE
-  UPDATE
-  DELETE
-  STATUS_CHANGE
-  PAYMENT_COLLECTION
-  LOGIN
-}
-
-model AuditLog {
-  id        String      @id @default(cuid())
-  centerId  String
-  center    Center      @relation(fields: [centerId], references: [id], onDelete: Cascade)
-  userId    String?
-  user      User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
-  action    AuditAction
-  entity    String
-  entityId  String
-  details   Json?
-  ipAddress String?
-  userAgent String?
-  createdAt DateTime    @default(now())
-
-  @@index([centerId])
-  @@index([userId])
-  @@index([entity])
-  @@index([action])
-}
-
-model ParentMagicToken {
-  id        String   @id @default(cuid())
-  token     String   @unique
-  studentId String
-  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-
-  @@index([studentId])
-}
-
 enum ExtraSessionType {
   MAKEUP
   REVISION
@@ -575,12 +498,12 @@ model ExtraSession {
   date            DateTime             @db.Date
   hour            Int
   minute          Int
-  durationMinutes Int                  @default(60)
   location        String?
 
   fee             Decimal              @default(0.00) @db.Decimal(10, 2)
   notes           String?
-  reminderSentAt  DateTime?
+  cancellationNotes String?
+  canceledAt      DateTime?
 
   participants      ExtraSessionStudent[]
   attendanceSession AttendanceSession?

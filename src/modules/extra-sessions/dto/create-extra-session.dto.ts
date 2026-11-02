@@ -81,18 +81,6 @@ export class CreateExtraSessionDto {
   readonly minute!: number;
 
   @ApiPropertyOptional({
-    description: 'مدة الحصة بالدقائق (افتراضياً 60 دقيقة)',
-    example: 90,
-    default: 60,
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt({ message: 'مدة الحصة يجب أن تكون عدداً صحيحاً بالدقائق.' })
-  @Min(15, { message: 'مدة الحصة لا تقل عن 15 دقيقة.' })
-  @Max(360, { message: 'مدة الحصة لا تزيد عن 360 دقيقة.' })
-  readonly durationMinutes?: number = 60;
-
-  @ApiPropertyOptional({
     description: 'مكان انعقاد الحصة أو القاعة',
     example: 'قاعة 3 - الدور الأرضي',
   })

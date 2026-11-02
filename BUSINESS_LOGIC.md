@@ -50,10 +50,6 @@ OWNER         ADMIN        TEACHER       STUDENT    PARENT PORTAL           OWNE
    - `Group`: The actual teaching class unit. Encapsulates **Grade + Subject + Assigned Teacher + Weekly Schedule (`GroupSchedule`) + Capacity + Monthly Fee**.
    - `AttendanceSession` & `StudentAttendance`: Date-based tracking of student presence (`PRESENT`, `ABSENT`, `LATE`, `EXCUSED`) with absence reasons.
    - `MonthlyPayment`: Financial fee tracking recording student tuition payments for each enrolled group month.
-5. **Engagement, Auditing & Communication**:
-   - `Notification`: In-app notification log tracking alerts dispatched to users (absence alerts, payment receipts, onboarding credentials).
-   - `AuditLog`: Immutable audit trail tracking critical administrative and financial operations with user identity, action type, and IP address.
-   - `ParentMagicToken`: Single-use/expiring 30-day tokens allowing parents to access a public, responsive student progress portal.
 
 ---
 
@@ -114,10 +110,6 @@ OWNER         ADMIN        TEACHER       STUDENT    PARENT PORTAL           OWNE
 | **Record Student Monthly Payment** | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | **View Group Payments Matrix** | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | **View Student Payment History** | ❌ | ✅ | ✅ | ✅ *(Taught)* | ✅ *(Own Only)* | ❌ |
-| **View Audit Logs (`/audit-logs`)** | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| **View Notification History (`/notifications`)** | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| **Generate Parent Magic Link (`POST /p/generate/:id`)**| ❌ | ✅ | ✅ | ✅ | ❌ | ❌ |
-| **Access Parent Portal (`GET /p/:token`)** | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
 
 #### Key Security Distinctions: `OWNER` vs `ADMIN`
 1. **Administrator Management (`/admins`)**: Only `OWNER` can create and list center managers.
@@ -224,10 +216,11 @@ OWNER         ADMIN        TEACHER       STUDENT    PARENT PORTAL           OWNE
 
 ### 3.8 Attendance Management (`AttendanceModule`)
 * **Date Normalization & Cairo Timezone**: Date calculations for attendance sessions and daily evaluations must strictly use `src/common/utils/date.util.ts` (`getTodayMidnightUtcInCairo()`). The calendar date in Egypt (`Africa/Cairo`) is evaluated and converted to UTC midnight (`00:00:00.000Z`) to prevent timezone drift across midnight.
-* **Session Lifecycle**: `POST /groups/:groupId/attendance/session` opens or retrieves the attendance session for the current Cairo day (`@@unique([groupId, date])`). Gracefully handles concurrent race conditions (`P2002`).
+* **Strict Date Protection (No Early Start)**: Opening or starting any attendance session (`POST /groups/:groupId/attendance/session`) or saving records (`save`) is strictly blocked for future dates (`sessionDate > today`). Sessions can only be opened in the same day or retroactively after it (`today >= sessionDate`).
+* **Session Lifecycle**: `POST /groups/:groupId/attendance/session` opens or retrieves the attendance session for the current Cairo day (`@@unique([groupId, date])`), an extra session (`extraSessionId`), or a past date. Gracefully handles concurrent race conditions (`P2002`).
 * **Bulk Save (`POST /groups/:groupId/attendance/session/:sessionId/save`)**:
   - Automatically deduplicates records by `studentId` taking the latest entry.
-  - Upserts attendance records (`PRESENT`, `ABSENT`, `LATE`, `EXCUSED`, `ATTENDED_ANOTHER_GROUP`) with absence reasons.
+  - Upserts attendance records (`PRESENT`, `ABSENT`, `LATE`, `EXCUSED`, `ATTENDED_ANOTHER_GROUP`) with absence reasons / notes (حقل `absenceReason` يُسجل ويُسترجع لجميع الحالات سواء كان الطالب حاضراً أو غائباً أو متأخراً لتمكين تسجيل الملاحظات وأسباب الغياب والتأخير بدون قيود).
   - **WhatsApp Alert**: Automatically triggers `WhatsAppService` to alert parents when an `ABSENT` status is recorded.
 * **Reports**:
   - `GET /groups/:groupId/attendance/report`: Attendance rate, top absentees, perfect attendance list.
@@ -268,31 +261,23 @@ OWNER         ADMIN        TEACHER       STUDENT    PARENT PORTAL           OWNE
 
 ---
 
-### 3.11 Notifications & WhatsApp Integration (`NotificationsModule`)
-* **Notification Log (`GET /notifications`)**:
-  - Center admins can view dispatched alerts, recipient phone numbers, delivery status, and metadata.
-* **Event-Driven WhatsApp Dispatch (`WhatsAppService`)**:
-  - **Absence Alert**: Sent to parents immediately upon recording student absence.
-  - **Payment Receipt**: Sent to parents confirming tuition receipt with amount and month.
-  - **New Account Onboarding**: Sent to newly created admins/teachers/students with credentials and login link.
-  - Configured via Meta Cloud API or graceful logging mock in development.
-
----
-
-### 3.12 Audit Logs (`AuditLogsModule`)
-* **Audit Trail (`GET /audit-logs`)**:
-  - Immutable record of sensitive actions (`CREATE`, `UPDATE`, `DELETE`, `STATUS_CHANGE`, `PAYMENT_COLLECTION`, `LOGIN`).
-  - Records `centerId`, `userId`, `action`, `entity`, `entityId`, `details`, and `ipAddress`.
-
----
-
-### 3.13 Parent Portal (`ParentPortalModule`)
-* **Magic Link Generation (`POST /p/generate/:studentId`)**:
-  - Generates a secure, 30-day token in `ParentMagicToken`.
-  - Accessible by `OWNER`, `ADMIN`, and assigned `TEACHER`.
-* **Public Student Portal (`GET /p/:token`)**:
-  - Unauthenticated public endpoint.
-  - Returns student overview: attendance rate and absence count, enrolled groups and teachers, and monthly payment status.
+### 3.11 Extra Sessions Module (`ExtraSessionsModule`)
+* **Core Concept**: Dedicated management of supplementary or ad-hoc classes (revisions, makeup sessions, exam preparations) attached to a specific group.
+* **Flexible Creation & Scheduling (`POST /groups/:groupId/extra-sessions`)**:
+  - Configures participants either for the entire group (`audience: ALL_GROUP`) or selected students (`audience: SELECTED`, `studentIds`).
+  - **No Session Duration & No Overlap Restrictions**: There is no duration field (`durationMinutes`) or artificial schedule conflict check. Extra sessions are scheduled freely at any `date`, `hour`, and `minute` without requiring a `force` flag or generating conflict warnings.
+  - **No Premature Attendance Session**: An `AttendanceSession` is NOT created automatically on scheduling (`attendanceSession: null`). This prevents the session from appearing as "started" prematurely.
+  - **Starting Attendance Session (`POST /extra-sessions/:id/session`)**: Attendance can only be opened when the session date arrives or after it (`today >= sessionDate`). Any attempt to start attendance before the session date is strictly blocked with `400 BadRequestException`.
+  - Direct creation response (`201 Created`) returning full session details with participants and financial summary.
+* **Participant Fee Tracking & Financials**:
+  - `POST /extra-sessions/:id/students/:studentId/pay`: Collects session fee for an individual student.
+  - `PATCH /extra-sessions/:id/students/:studentId/waive`: Waives session fee for an individual student (`isWaived: true`), zeroing out any recorded payment.
+* **Session Lifecycle & Management**:
+  - `GET /groups/:groupId/extra-sessions`: Paginated list of extra sessions for a specific group with date and status filters.
+  - `GET /extra-sessions/:id`: Full details including student participants, payment status, attendance record, and financial summary.
+  - `PATCH /extra-sessions/:id`: Update session metadata (title, location, fee, notes, date, time).
+  - `POST /extra-sessions/:id/students`: Enroll additional students into an existing extra session.
+  - `PATCH /extra-sessions/:id/cancel`: Cancels the session (`status: CANCELED`), preserving existing attendance and payment records.
 
 ---
 
@@ -351,7 +336,7 @@ OWNER         ADMIN        TEACHER       STUDENT    PARENT PORTAL           OWNE
 
 ## 6. Complete API Reference Table
 
-The following table documents all **77 endpoints** implemented in the EduCenter backend API:
+The following table documents all **78 endpoints** implemented in the EduCenter backend API:
 
 | Module | Method | Endpoint Path | Allowed Roles | Business Purpose |
 | :--- | :---: | :--- | :--- | :--- |
@@ -422,16 +407,21 @@ The following table documents all **77 endpoints** implemented in the EduCenter 
 | **Attendance** | `GET` | `/api/students/:studentId/attendance/report` | `OWNER`, `ADMIN`, `TEACHER`, `STUDENT` | Student attendance report & history *(Student restricted to own report)*. |
 | **Payments** | `GET` | `/api/groups/:groupId/payments` | `OWNER`, `ADMIN` | Group payments matrix (computes required, paid, and unpaid months). |
 | **Payments** | `GET` | `/api/groups/:groupId/payments/export/excel` | `OWNER`, `TEACHER` | Export group monthly payment matrix to Excel. |
-| **Payments** | `POST` | `/api/group-students/:groupStudentId/payments` | `OWNER`, `ADMIN` | Record payment, log audit entry, and dispatch WhatsApp receipt. |
+| **Payments** | `POST` | `/api/group-students/:groupStudentId/payments` | `OWNER`, `ADMIN` | Record student tuition payment. |
 | **Payments** | `GET` | `/api/students/:studentId/payments` | `OWNER`, `ADMIN`, `TEACHER`, `STUDENT` | Student payment history *(Student sees own; Teacher sees taught students)*. |
 | **Payments** | `GET` | `/api/students/:studentId/payments/export/excel` | `OWNER`, `TEACHER`, `STUDENT` | Export student payment history to Excel. |
 | **Schedule** | `GET` | `/api/schedule/calendar` | `OWNER` | Monthly calendar schedule view mapping lessons and session attendance. |
 | **Schedule** | `GET` | `/api/schedule/upcoming` | `OWNER` | Chronological upcoming lessons from today through end of current month. |
 | **Home Stats** | `GET` | `/api/home-stats` | `SUPER_ADMIN` | Platform metrics and KPI overview for SuperAdmin dashboard. |
-| **Notifications** | `GET` | `/api/notifications` | `OWNER`, `ADMIN` | List dispatched notification history with delivery statuses and metadata. |
-| **Audit Logs** | `GET` | `/api/audit-logs` | `OWNER`, `ADMIN` | List administrative and financial audit logs with action and entity filters. |
-| **Parent Portal** | `POST` | `/api/p/generate/:studentId` | `OWNER`, `ADMIN`, `TEACHER` | Generate a secure 30-day Parent Magic Token for student progress tracking. |
-| **Parent Portal** | `GET` | `/api/p/:token` | **Public** | Public responsive student report for parents (attendance, groups, payments). |
+| **Extra Sessions** | `POST` | `/api/groups/:groupId/extra-sessions` | `OWNER` | Create an extra session and enroll students (attendance session is deferred until scheduled date). |
+| **Extra Sessions** | `POST` | `/api/extra-sessions/:id/session` | `OWNER`, `TEACHER` | Start/open attendance session for the extra session (enforces sessionDate <= today in Cairo timezone). |
+| **Extra Sessions** | `GET` | `/api/groups/:groupId/extra-sessions` | `OWNER` | Paginated listing of group extra sessions with date and status filters. |
+| **Extra Sessions** | `GET` | `/api/extra-sessions/:id` | `OWNER` | Full details, participant roster, payment status, and financial summary. |
+| **Extra Sessions** | `PATCH` | `/api/extra-sessions/:id` | `OWNER` | Update extra session metadata (location, fee, date, time, notes). |
+| **Extra Sessions** | `PATCH` | `/api/extra-sessions/:id/cancel` | `OWNER` | Cancel an extra session. |
+| **Extra Sessions** | `POST` | `/api/extra-sessions/:id/students` | `OWNER` | Enroll additional students into an existing extra session. |
+| **Extra Sessions** | `POST` | `/api/extra-sessions/:id/students/:studentId/pay` | `OWNER` | Collect extra session fee for an individual student. |
+| **Extra Sessions** | `PATCH` | `/api/extra-sessions/:id/students/:studentId/waive` | `OWNER` | Waive extra session fee for an individual student. |
 
 ---
 
@@ -453,7 +443,7 @@ The following table documents all **77 endpoints** implemented in the EduCenter 
   - **Paginated Collection**: `{ "success": true, "message": "...", "data": [ ... ], "meta": { "total": ..., "page": ..., "limit": ..., "totalPages": ..., "hasNextPage": ..., "hasPreviousPage": ... } }`
   - **Error (NestJS Standard)**: `{ "statusCode": ..., "message": "..." | [...], "error": "..." }`
 
-### 7.2 Current Module Progress & Implementation Status (63 / 77 Operations Complete)
+### 7.2 Current Module Progress & Implementation Status (73 / 84 Operations Complete)
 
 | Module | Endpoints Count | Swagger Status | Status Description |
 | :--- | :---: | :---: | :--- |
@@ -469,11 +459,9 @@ The following table documents all **77 endpoints** implemented in the EduCenter 
 | **Groups** | 12 | ✅ **Completed** | Full CRUD, schedule slots, capacity enforcement, student enroll/remove, export/import Excel & PDF, template. |
 | **Home Stats** | 1 | ✅ **Completed** | SuperAdmin dashboard platform statistics. |
 | **Schedule** | 2 | ✅ **Completed** | Calendar schedule and upcoming lessons endpoints with full schema and examples. |
+| **Extra Sessions** | 9 | ✅ **Completed** | Scheduling, payment tracking, waiver, fee collection, cancelation, and on-date attendance session startup. |
 | **Attendance** | 6 | ⏸️ **Pending** | Paused: Waiting for user updates to attendance session flow and reports. |
 | **Payments** | 5 | ⏸️ **Pending** | Paused: Waiting for user updates to student monthly tuition fee logic. |
-| **Notifications** | 1 | ⏸️ **Pending** | Paused: Waiting for user updates to WhatsApp notifications. |
-| **Audit Logs** | 1 | ⏸️ **Pending** | Paused: Waiting for user updates to audit logging. |
-| **Parent Portal** | 2 | ⏸️ **Pending** | Paused: Waiting for user updates to parent magic links & portal view. |
 
 **Current Live Server Info**:
 - Host: `http://localhost:5000`

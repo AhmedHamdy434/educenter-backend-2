@@ -30,6 +30,9 @@ describe('AttendanceService - Student Code Support', () => {
     teacher: {
       findUnique: jest.Mock;
     };
+    extraSession?: {
+      findFirst: jest.Mock;
+    };
     $transaction: jest.Mock;
   };
 
@@ -128,6 +131,50 @@ describe('AttendanceService - Student Code Support', () => {
         status: null,
         absenceReason: null,
       });
+    });
+
+    it('should return absenceReason for recorded students regardless of status (PRESENT or ABSENT)', async () => {
+      prisma.attendanceSession.findFirst.mockResolvedValue({
+        id: sessionId,
+        groupId,
+        centerId,
+        date: new Date(),
+      });
+
+      prisma.groupStudent.findMany.mockResolvedValue([
+        {
+          studentId: 'student-1',
+          student: {
+            code: 'STU-100234',
+            user: {
+              id: 'u-1',
+              fullName: 'أحمد محمود',
+              phone: '01012345678',
+              avatar: null,
+            },
+          },
+        },
+      ]);
+
+      prisma.studentAttendance.findMany.mockResolvedValue([
+        {
+          studentId: 'student-1',
+          status: AttendanceStatus.PRESENT,
+          absenceReason: 'حضر بدون كتاب',
+        },
+      ]);
+
+      const result = await service.getSessionDetails(
+        centerId,
+        groupId,
+        sessionId,
+        AppRole.OWNER,
+        userId,
+      );
+
+      expect(result.students).toHaveLength(1);
+      expect(result.students[0].status).toBe(AttendanceStatus.PRESENT);
+      expect(result.students[0].absenceReason).toBe('حضر بدون كتاب');
     });
   });
 
@@ -304,6 +351,56 @@ describe('AttendanceService - Student Code Support', () => {
         }),
       );
     });
+
+    it('should save absenceReason when student status is PRESENT (as an attendance note)', async () => {
+      prisma.student.findMany.mockResolvedValue([
+        { id: 'student-1', code: 'STU-100001' },
+      ]);
+      prisma.groupStudent.findMany.mockResolvedValue([
+        { studentId: 'student-1' },
+      ]);
+      const mockTx = {
+        studentAttendance: {
+          upsert: jest.fn().mockResolvedValue({ id: 'att-1' }),
+        },
+      };
+      prisma.$transaction.mockImplementation(
+        async (cb: (tx: typeof mockTx) => Promise<unknown>) => cb(mockTx),
+      );
+
+      const dto = {
+        records: [
+          {
+            studentId: 'student-1',
+            status: AttendanceStatus.PRESENT,
+            absenceReason: 'حضر متأخراً 15 دقيقة مع إذن',
+          },
+        ],
+      };
+
+      const result = await service.saveAttendance(
+        centerId,
+        groupId,
+        sessionId,
+        dto,
+        AppRole.OWNER,
+        userId,
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockTx.studentAttendance.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            status: AttendanceStatus.PRESENT,
+            absenceReason: 'حضر متأخراً 15 دقيقة مع إذن',
+          }),
+          update: expect.objectContaining({
+            status: AttendanceStatus.PRESENT,
+            absenceReason: 'حضر متأخراً 15 دقيقة مع إذن',
+          }),
+        }),
+      );
+    });
   });
 
   describe('getGroupReport with ATTENDED_ANOTHER_GROUP', () => {
@@ -453,7 +550,7 @@ describe('AttendanceService - Student Code Support', () => {
       expect(prisma.attendanceSession.findFirst).toHaveBeenCalledTimes(2);
     });
 
-    it('should throw BadRequestException if starting session on a day outside schedule without an ExtraSession', async () => {
+    it('should throw BadRequestException if starting session on a day outside schedule', async () => {
       prisma.group.findFirst.mockResolvedValue({
         id: groupId,
         centerId,
@@ -462,49 +559,29 @@ describe('AttendanceService - Student Code Support', () => {
         schedule: [], // No slot for today
       });
 
-      prisma.extraSession = {
-        findFirst: jest.fn().mockResolvedValue(null),
-      };
-
       await expect(
         service.startOrGetSession(centerId, groupId, AppRole.OWNER, userId),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should return extra session attendance session if today is outside schedule but an active ExtraSession exists', async () => {
+    it('should throw BadRequestException if target date is in the future', async () => {
       prisma.group.findFirst.mockResolvedValue({
         id: groupId,
         centerId,
         isActive: true,
         teacherId: 'teacher-1',
-        schedule: [],
+        schedule: [{ day: 'MONDAY' }],
       });
 
-      const extraAttendanceSession = {
-        id: 'sess-extra-123',
-        groupId,
-        centerId,
-        extraSessionId: 'es-123',
-        date: new Date(),
-      };
+      const futureDate = new Date();
+      futureDate.setUTCDate(futureDate.getUTCDate() + 7);
+      const futureDateStr = futureDate.toISOString().split('T')[0];
 
-      prisma.extraSession = {
-        findFirst: jest.fn().mockResolvedValue({
-          id: 'es-123',
-          groupId,
-          centerId,
-          attendanceSession: extraAttendanceSession,
+      await expect(
+        service.startOrGetSession(centerId, groupId, AppRole.OWNER, userId, {
+          date: futureDateStr,
         }),
-      };
-
-      const result = await service.startOrGetSession(
-        centerId,
-        groupId,
-        AppRole.OWNER,
-        userId,
-      );
-
-      expect(result).toEqual(extraAttendanceSession);
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
