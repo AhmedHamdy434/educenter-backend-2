@@ -558,6 +558,37 @@ export class AttendanceService {
           }
         }
       }
+
+      // إذا كانت الحصة إضافية، التحقق مما إذا تم تسجيل حضور جميع الطلاب وتحديث حالتها إلى COMPLETED
+      if (session.extraSessionId) {
+        const extraSession = await tx.extraSession.findUnique({
+          where: { id: session.extraSessionId },
+          select: {
+            id: true,
+            status: true,
+            _count: {
+              select: { participants: true },
+            },
+          },
+        });
+
+        if (
+          extraSession &&
+          extraSession.status !== ExtraSessionStatus.CANCELED
+        ) {
+          const recordedCount = await tx.studentAttendance.count({
+            where: { sessionId },
+          });
+
+          const totalParticipants = extraSession._count.participants;
+          if (totalParticipants > 0 && recordedCount >= totalParticipants) {
+            await tx.extraSession.update({
+              where: { id: extraSession.id },
+              data: { status: ExtraSessionStatus.COMPLETED },
+            });
+          }
+        }
+      }
     });
 
     return { success: true, message: 'تم حفظ الحضور والغياب بنجاح.' };

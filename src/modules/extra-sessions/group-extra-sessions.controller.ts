@@ -16,9 +16,7 @@ import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AppRole } from '../../common/enums/app-role.enum';
 import { CurrentCenterId } from '../../common/decorators/current-center-id.decorator';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ResponseMessage } from '../../common/decorators/response-message.decorator';
-import type { RequestUser } from '../auth/interfaces/authenticated-request.interface';
 import { ExtraSessionsService } from './extra-sessions.service';
 import { CreateExtraSessionDto } from './dto/create-extra-session.dto';
 import { GetExtraSessionsDto } from './dto/get-extra-sessions.dto';
@@ -39,11 +37,10 @@ export class GroupExtraSessionsController {
   @ResponseMessage('تم إنشاء الحصة الإضافية بنجاح.')
   async create(
     @CurrentCenterId() centerId: string,
-    @CurrentUser() user: RequestUser,
     @Param('groupId') groupId: string,
     @Body() dto: CreateExtraSessionDto,
   ) {
-    return this.extraSessionsService.create(centerId, groupId, dto, user.id);
+    return this.extraSessionsService.create(centerId, groupId, dto);
   }
 
   @Get()

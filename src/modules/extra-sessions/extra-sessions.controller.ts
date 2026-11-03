@@ -51,11 +51,10 @@ export class ExtraSessionsController {
   @ResponseMessage('تم تعديل بيانات الحصة الإضافية بنجاح.')
   async update(
     @CurrentCenterId() centerId: string,
-    @CurrentUser() user: RequestUser,
     @Param('id') id: string,
     @Body() dto: UpdateExtraSessionDto,
   ) {
-    return this.extraSessionsService.update(centerId, id, dto, user.id);
+    return this.extraSessionsService.update(centerId, id, dto);
   }
 
   @Patch(':id/cancel')
@@ -67,11 +66,10 @@ export class ExtraSessionsController {
   @ResponseMessage('تم إلغاء الحصة الإضافية بنجاح.')
   async cancel(
     @CurrentCenterId() centerId: string,
-    @CurrentUser() user: RequestUser,
     @Param('id') id: string,
     @Body() dto: CancelExtraSessionDto,
   ) {
-    return this.extraSessionsService.cancel(centerId, id, dto, user.id);
+    return this.extraSessionsService.cancel(centerId, id, dto);
   }
 
   @Post(':id/students')
@@ -80,11 +78,10 @@ export class ExtraSessionsController {
   @ResponseMessage('تمت إضافة الطلاب إلى الحصة الإضافية بنجاح.')
   async addStudents(
     @CurrentCenterId() centerId: string,
-    @CurrentUser() user: RequestUser,
     @Param('id') id: string,
     @Body() dto: AddExtraSessionStudentsDto,
   ) {
-    return this.extraSessionsService.addStudents(centerId, id, dto, user.id);
+    return this.extraSessionsService.addStudents(centerId, id, dto);
   }
 
   @Post(':id/students/:studentId/pay')
@@ -95,18 +92,11 @@ export class ExtraSessionsController {
   @ResponseMessage('تم تسجيل سداد رسوم الحصة الإضافية بنجاح.')
   async payStudent(
     @CurrentCenterId() centerId: string,
-    @CurrentUser() user: RequestUser,
     @Param('id') id: string,
     @Param('studentId') studentId: string,
     @Body() dto: PayExtraSessionStudentDto,
   ) {
-    return this.extraSessionsService.payStudent(
-      centerId,
-      id,
-      studentId,
-      dto,
-      user.id,
-    );
+    return this.extraSessionsService.payStudent(centerId, id, studentId, dto);
   }
 
   @Patch(':id/students/:studentId/waive')
@@ -115,18 +105,11 @@ export class ExtraSessionsController {
   @ResponseMessage('تم إعفاء الطالب من رسوم الحصة الإضافية بنجاح.')
   async waiveStudent(
     @CurrentCenterId() centerId: string,
-    @CurrentUser() user: RequestUser,
     @Param('id') id: string,
     @Param('studentId') studentId: string,
     @Body() dto: WaiveExtraSessionStudentDto,
   ) {
-    return this.extraSessionsService.waiveStudent(
-      centerId,
-      id,
-      studentId,
-      dto,
-      user.id,
-    );
+    return this.extraSessionsService.waiveStudent(centerId, id, studentId, dto);
   }
 
   @Post(':id/session')

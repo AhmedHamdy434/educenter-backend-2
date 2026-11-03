@@ -47,6 +47,18 @@ export interface ExtraSessionFinancialSummary {
   unpaidCount: number;
 }
 
+export interface ExtraSessionsGroupStats {
+  totalSessions: number;
+  scheduledSessions: number;
+  completedSessions: number;
+  canceledSessions: number;
+  totalCollected: number;
+}
+
+export interface ExtraSessionListItemWithSummary extends ExtraSessionListItem {
+  financialSummary: ExtraSessionFinancialSummary;
+}
+
 @Injectable()
 export class ExtraSessionsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -59,7 +71,6 @@ export class ExtraSessionsService {
     centerId: string,
     groupId: string,
     dto: CreateExtraSessionDto,
-    userId: string,
   ): Promise<
     Omit<ExtraSessionDetails, 'participants'> & {
       participants: ExtraSessionStudentWithAttendance[];
@@ -175,13 +186,17 @@ export class ExtraSessionsService {
   }
 
   /**
-   * جلب قائمة الحصص الإضافية لمجموعة معينة مع الفلترة والـ Pagination.
+   * جلب قائمة الحصص الإضافية لمجموعة معينة مع الفلترة والـ Pagination وإحصائيات المجموعة.
    */
   async findAllForGroup(
     centerId: string,
     groupId: string,
     query: GetExtraSessionsDto,
-  ): Promise<{ data: ExtraSessionListItem[]; meta: PaginationMeta }> {
+  ): Promise<{
+    data: ExtraSessionListItemWithSummary[];
+    meta: PaginationMeta;
+    stats: ExtraSessionsGroupStats;
+  }> {
     const group = await this.prisma.group.findFirst({
       where: { id: groupId, centerId },
       select: { id: true },
@@ -215,20 +230,109 @@ export class ExtraSessionsService {
         { date: Prisma.SortOrder.asc },
       );
 
-    const [total, data] = await Promise.all([
+    const [total, rawSessions, allGroupSessions] = await Promise.all([
       this.prisma.extraSession.count({ where }),
       this.prisma.extraSession.findMany({
         where,
         skip,
         take,
-        select: extraSessionListSelect,
+        select: {
+          ...extraSessionListSelect,
+          participants: {
+            select: {
+              amountDue: true,
+              paid: true,
+              isWaived: true,
+            },
+          },
+        },
         orderBy,
       }),
+      this.prisma.extraSession.findMany({
+        where: { centerId, groupId },
+        select: {
+          status: true,
+          participants: {
+            select: {
+              paid: true,
+            },
+          },
+        },
+      }),
     ]);
+
+    const data: ExtraSessionListItemWithSummary[] = rawSessions.map(
+      (session) => {
+        const { participants, ...baseSession } = session;
+
+        let totalDue = 0;
+        let totalCollected = 0;
+        let totalWaived = 0;
+        let paidCount = 0;
+        let waivedCount = 0;
+        let unpaidCount = 0;
+
+        for (const p of participants) {
+          const due = Number(p.amountDue);
+          const paid = p.paid ? Number(p.paid) : 0;
+
+          totalDue += due;
+          totalCollected += paid;
+
+          if (p.isWaived) {
+            waivedCount++;
+            totalWaived += due;
+          } else if (p.paid !== null && Number(p.paid) > 0) {
+            paidCount++;
+          } else {
+            unpaidCount++;
+          }
+        }
+
+        const remaining = Math.max(0, totalDue - totalCollected);
+
+        const financialSummary: ExtraSessionFinancialSummary = {
+          totalDue,
+          totalCollected,
+          remaining,
+          totalWaived,
+          studentsCount: participants.length,
+          paidCount,
+          waivedCount,
+          unpaidCount,
+        };
+
+        return {
+          ...baseSession,
+          financialSummary,
+        };
+      },
+    );
+
+    const stats: ExtraSessionsGroupStats = {
+      totalSessions: allGroupSessions.length,
+      scheduledSessions: allGroupSessions.filter(
+        (s) => s.status === ExtraSessionStatus.SCHEDULED,
+      ).length,
+      completedSessions: allGroupSessions.filter(
+        (s) => s.status === ExtraSessionStatus.COMPLETED,
+      ).length,
+      canceledSessions: allGroupSessions.filter(
+        (s) => s.status === ExtraSessionStatus.CANCELED,
+      ).length,
+      totalCollected: allGroupSessions.reduce((acc, s) => {
+        const sum = s.participants.reduce(
+          (pSum, p) => pSum + (p.paid ? Number(p.paid) : 0),
+          0,
+        );
+        return acc + sum;
+      }, 0),
+    };
 
     return {
       data,
       meta: buildMeta(total, query.page, query.limit),
+      stats,
     };
   }
 
@@ -340,7 +444,6 @@ export class ExtraSessionsService {
     centerId: string,
     id: string,
     dto: UpdateExtraSessionDto,
-    userId: string,
   ): Promise<
     Omit<ExtraSessionDetails, 'participants'> & {
       participants: ExtraSessionStudentWithAttendance[];
@@ -440,7 +543,6 @@ export class ExtraSessionsService {
     centerId: string,
     id: string,
     dto: CancelExtraSessionDto,
-    userId: string,
   ): Promise<{ success: boolean; message: string }> {
     const session = await this.prisma.extraSession.findFirst({
       where: { id, centerId },
@@ -504,7 +606,6 @@ export class ExtraSessionsService {
     centerId: string,
     id: string,
     dto: AddExtraSessionStudentsDto,
-    userId: string,
   ): Promise<{ addedCount: number; message: string }> {
     const session = await this.prisma.extraSession.findFirst({
       where: { id, centerId },
@@ -589,7 +690,6 @@ export class ExtraSessionsService {
     id: string,
     studentId: string,
     dto: PayExtraSessionStudentDto,
-    userId: string,
   ): Promise<ExtraSessionStudentItem> {
     const record = await this.prisma.extraSessionStudent.findUnique({
       where: {
@@ -662,7 +762,6 @@ export class ExtraSessionsService {
     id: string,
     studentId: string,
     dto: WaiveExtraSessionStudentDto,
-    userId: string,
   ): Promise<ExtraSessionStudentItem> {
     const record = await this.prisma.extraSessionStudent.findUnique({
       where: {
