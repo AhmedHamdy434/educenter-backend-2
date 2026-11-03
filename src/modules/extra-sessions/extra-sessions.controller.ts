@@ -9,7 +9,6 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { SubscriptionGuard } from '../../common/guards/subscription.guard';
@@ -26,8 +25,6 @@ import { AddExtraSessionStudentsDto } from './dto/add-extra-session-students.dto
 import { PayExtraSessionStudentDto } from './dto/pay-extra-session-student.dto';
 import { WaiveExtraSessionStudentDto } from './dto/waive-extra-session-student.dto';
 
-@ApiTags('Extra Sessions')
-@ApiBearerAuth()
 @Controller('extra-sessions')
 @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
 @Roles(AppRole.OWNER)
@@ -36,10 +33,6 @@ export class ExtraSessionsController {
 
   @Get(':id')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary:
-      'تفاصيل حصة إضافية محددة مع قائمة الطلاب والملخص المالي وجلسة الحضور',
-  })
   @ResponseMessage('تم جلب تفاصيل الحصة الإضافية بنجاح.')
   async findOne(@CurrentCenterId() centerId: string, @Param('id') id: string) {
     return this.extraSessionsService.findOne(centerId, id);
@@ -47,7 +40,6 @@ export class ExtraSessionsController {
 
   @Patch(':id')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'تعديل بيانات الحصة الإضافية ورسومها' })
   @ResponseMessage('تم تعديل بيانات الحصة الإضافية بنجاح.')
   async update(
     @CurrentCenterId() centerId: string,
@@ -59,10 +51,6 @@ export class ExtraSessionsController {
 
   @Patch(':id/cancel')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary:
-      'إلغاء الحصة الإضافية مع إشعار أولياء الأمور وتسجيل ملاحظات الاسترداد',
-  })
   @ResponseMessage('تم إلغاء الحصة الإضافية بنجاح.')
   async cancel(
     @CurrentCenterId() centerId: string,
@@ -74,7 +62,6 @@ export class ExtraSessionsController {
 
   @Post(':id/students')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'إضافة طلاب جدد للحصة الإضافية (للجمهور SELECTED)' })
   @ResponseMessage('تمت إضافة الطلاب إلى الحصة الإضافية بنجاح.')
   async addStudents(
     @CurrentCenterId() centerId: string,
@@ -86,9 +73,6 @@ export class ExtraSessionsController {
 
   @Post(':id/students/:studentId/pay')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'تسجيل دفع كاش لطالب في الحصة الإضافية وإرسال إيصال واتساب',
-  })
   @ResponseMessage('تم تسجيل سداد رسوم الحصة الإضافية بنجاح.')
   async payStudent(
     @CurrentCenterId() centerId: string,
@@ -101,7 +85,6 @@ export class ExtraSessionsController {
 
   @Patch(':id/students/:studentId/waive')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'إعفاء طالب من رسوم الحصة الإضافية' })
   @ResponseMessage('تم إعفاء الطالب من رسوم الحصة الإضافية بنجاح.')
   async waiveStudent(
     @CurrentCenterId() centerId: string,
@@ -114,9 +97,6 @@ export class ExtraSessionsController {
 
   @Post(':id/session')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({
-    summary: 'بدء وفتح جلسة الحضور للحصة الإضافية (في نفس اليوم أو بعده فقط)',
-  })
   @ResponseMessage('تم بدء جلسة الحضور للحصة الإضافية بنجاح.')
   @Roles(AppRole.OWNER, AppRole.TEACHER)
   async startAttendanceSession(

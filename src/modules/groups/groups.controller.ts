@@ -17,7 +17,6 @@ import {
   ParseBoolPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiConsumes } from '@nestjs/swagger';
 import type { Response } from 'express';
 import {
   BypassInterceptor,
@@ -141,7 +140,6 @@ export class GroupsController {
   @ResponseMessage('تم استيراد بيانات المجموعات بنجاح.')
   @Roles(AppRole.OWNER)
   @UseInterceptors(FileInterceptor('file'))
-  @ApiConsumes('multipart/form-data')
   async importExcel(
     @CurrentCenterId() centerId: string,
     @UploadedFile(new ExcelValidationPipe()) file: Express.Multer.File,
