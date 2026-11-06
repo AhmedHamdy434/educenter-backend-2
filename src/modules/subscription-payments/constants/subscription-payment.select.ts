@@ -18,17 +18,3 @@ export const subscriptionPaymentListSelect = {
     },
   },
 } satisfies Prisma.SubscriptionPaymentSelect;
-
-export type SubscriptionPaymentListItem = Prisma.SubscriptionPaymentGetPayload<{
-  select: typeof subscriptionPaymentListSelect;
-}>;
-
-export interface MonthlyRevenueBreakdown {
-  month: string; // YYYY-MM
-  total: string;
-}
-
-export interface SubscriptionRevenueSummary {
-  totalRevenue: string;
-  breakdown: MonthlyRevenueBreakdown[];
-}

@@ -37,7 +37,7 @@ import {
   StudentByCodeDetails,
   StudentDetails,
   StudentListItem,
-} from './constants/student.select';
+} from './interfaces/student.interface';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { StudentQueryDto } from './dto/get-students.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';

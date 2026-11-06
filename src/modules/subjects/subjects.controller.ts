@@ -34,7 +34,7 @@ import { AppRole } from '../../common/enums/app-role.enum';
 import { CurrentCenterId } from '../../common/decorators/current-center-id.decorator';
 import { ExcelValidationPipe } from '../../shared/excel/pipes/excel-validation.pipe';
 import { ExcelImportSummary } from '../../shared/excel/interfaces/excel.interface';
-import { SubjectListItem } from './constants/subject.select';
+import { SubjectListItem } from './interfaces/subject.interface';
 
 @Controller('subjects')
 @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)

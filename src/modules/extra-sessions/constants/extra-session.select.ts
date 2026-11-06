@@ -1,4 +1,4 @@
-import { AttendanceStatus, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 export const extraSessionStudentSelect = {
   id: true,
@@ -85,20 +85,3 @@ export const extraSessionDetailsSelect = {
     },
   },
 } satisfies Prisma.ExtraSessionSelect;
-
-export type ExtraSessionListItem = Prisma.ExtraSessionGetPayload<{
-  select: typeof extraSessionListSelect;
-}>;
-
-export type ExtraSessionDetails = Prisma.ExtraSessionGetPayload<{
-  select: typeof extraSessionDetailsSelect;
-}>;
-
-export type ExtraSessionStudentItem = Prisma.ExtraSessionStudentGetPayload<{
-  select: typeof extraSessionStudentSelect;
-}>;
-
-export type ExtraSessionStudentWithAttendance = ExtraSessionStudentItem & {
-  attendanceStatus: AttendanceStatus | null;
-  absenceReason: string | null;
-};

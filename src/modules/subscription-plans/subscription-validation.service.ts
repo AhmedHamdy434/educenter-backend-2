@@ -5,16 +5,8 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma/prisma.service';
-import { SubscriptionPlan } from '@prisma/client';
 import { GRACE_PERIOD_DAYS } from '../../common/constants';
-
-export interface SubscriptionValidationResult {
-  subscriptionPlan: SubscriptionPlan;
-  isGracePeriod: boolean;
-  isExpired: boolean;
-  remainingGraceDays?: number;
-  warningHeader?: string;
-}
+import { SubscriptionValidationResult } from './interfaces/subscription-plan.interface';
 
 @Injectable()
 export class SubscriptionValidationService {

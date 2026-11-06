@@ -15,15 +15,15 @@ import {
   groupDetailsSelect,
   groupEnrolledStudentSelect,
   groupListSelect,
-  GroupDetails,
-  GroupEnrolledStudent,
-  GroupListItem,
   groupDetails,
 } from './constants/group.select';
 import {
-  studentListSelect,
-  StudentListItem,
-} from '../students/constants/student.select';
+  GroupDetails,
+  GroupEnrolledStudent,
+  GroupListItem,
+} from './interfaces/group.interface';
+import { studentListSelect } from '../students/constants/student.select';
+import { StudentListItem } from '../students/interfaces/student.interface';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { GroupQueryDto } from './dto/get-groups.dto';

@@ -9,7 +9,8 @@ import {
   comparePassword,
   hashPassword,
 } from '../../common/utils/password.util';
-import { UsersService, UserWithCenter } from '../users/users.service';
+import { UsersService } from '../users/users.service';
+import { UserWithCenter } from '../users/interfaces/user.interface';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';

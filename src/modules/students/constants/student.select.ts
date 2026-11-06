@@ -65,15 +65,3 @@ export const studentByCodeSelect = {
     },
   },
 } satisfies Prisma.StudentSelect;
-
-export type StudentListItem = Prisma.StudentGetPayload<{
-  select: typeof studentListSelect;
-}>;
-
-export type StudentDetails = Prisma.StudentGetPayload<{
-  select: typeof studentDetailsSelect;
-}>;
-
-export type StudentByCodeDetails = Prisma.StudentGetPayload<{
-  select: typeof studentByCodeSelect;
-}>;

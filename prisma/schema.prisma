@@ -6,7 +6,6 @@ datasource db {
   provider = "postgresql"
 }
 
-
 enum SubscriptionType {
   MONTHLY
   YEARLY
@@ -26,7 +25,7 @@ model SubscriptionPlan {
   studentLimit Int
   teacherLimit Int
 
-  canCreateExams   Boolean @default(false)
+  canCreateExams Boolean @default(false)
 
   isPopular Boolean @default(false)
   isActive  Boolean @default(true)
@@ -67,6 +66,14 @@ model Center {
   studentAttendances StudentAttendance[]
   monthlyPayments    MonthlyPayment[]
   extraSessions      ExtraSession[]
+
+  settings              CenterSettings?
+  feeObligations        StudentFeeObligation[]
+  paymentTransactions   PaymentTransaction[]
+  paymentAllocations    PaymentAllocation[]
+  teacherEarningEntries TeacherEarningEntry[]
+  teacherSettlements    TeacherSettlement[]
+  paymentRefunds        PaymentRefund[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -188,6 +195,10 @@ model Teacher {
   subjects TeacherSubject[]
   groups   Group[]
 
+  obligations    StudentFeeObligation[]
+  earningEntries TeacherEarningEntry[]
+  settlements    TeacherSettlement[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -209,10 +220,12 @@ model Student {
 
   notes String?
 
-  enrollments StudentEnrollment[]
-  groups      GroupStudent[]
-  attendance  StudentAttendance[]
-  extraSessions ExtraSessionStudent[]
+  enrollments         StudentEnrollment[]
+  groups              GroupStudent[]
+  attendance          StudentAttendance[]
+  extraSessions       ExtraSessionStudent[]
+  feeObligations      StudentFeeObligation[]
+  paymentTransactions PaymentTransaction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -341,6 +354,7 @@ model Group {
   students           GroupStudent[]
   attendanceSessions AttendanceSession[]
   extraSessions      ExtraSession[]
+  feeObligations     StudentFeeObligation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -364,16 +378,17 @@ model GroupSchedule {
 }
 
 model GroupStudent {
-  id                    String           @id @default(cuid())
+  id                    String                 @id @default(cuid())
   groupId               String
-  group                 Group            @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  group                 Group                  @relation(fields: [groupId], references: [id], onDelete: Cascade)
   studentId             String
-  student               Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student               Student                @relation(fields: [studentId], references: [id], onDelete: Cascade)
   centerId              String
-  center                Center           @relation(fields: [centerId], references: [id], onDelete: Cascade)
-  joinedAt              DateTime         @default(now())
-  subscriptionStartDate DateTime         @default(now())
+  center                Center                 @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  joinedAt              DateTime               @default(now())
+  subscriptionStartDate DateTime               @default(now())
   payments              MonthlyPayment[]
+  feeObligations        StudentFeeObligation[]
 
   @@unique([groupId, studentId])
   @@index([groupId])
@@ -484,32 +499,33 @@ enum ExtraSessionAudience {
 }
 
 model ExtraSession {
-  id              String               @id @default(cuid())
-  centerId        String
-  center          Center               @relation(fields: [centerId], references: [id], onDelete: Cascade)
-  groupId         String
-  group           Group                @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  centerId String
+  center   Center @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  groupId  String
+  group    Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
-  title           String?
-  type            ExtraSessionType     @default(OTHER)
-  audience        ExtraSessionAudience @default(ALL_GROUP)
-  status          ExtraSessionStatus   @default(SCHEDULED)
+  title    String?
+  type     ExtraSessionType     @default(OTHER)
+  audience ExtraSessionAudience @default(ALL_GROUP)
+  status   ExtraSessionStatus   @default(SCHEDULED)
 
-  date            DateTime             @db.Date
-  hour            Int
-  minute          Int
-  location        String?
+  date     DateTime @db.Date
+  hour     Int
+  minute   Int
+  location String?
 
-  fee             Decimal              @default(0.00) @db.Decimal(10, 2)
-  notes           String?
+  fee               Decimal   @default(0.00) @db.Decimal(10, 2)
+  notes             String?
   cancellationNotes String?
-  canceledAt      DateTime?
+  canceledAt        DateTime?
 
   participants      ExtraSessionStudent[]
   attendanceSession AttendanceSession?
+  feeObligations    StudentFeeObligation[]
 
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([centerId, date])
   @@index([groupId])
@@ -523,16 +539,272 @@ model ExtraSessionStudent {
   student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
   centerId       String
 
-  amountDue      Decimal      @db.Decimal(10, 2)
-  isWaived       Boolean      @default(false)
-  paid           Decimal?     @db.Decimal(10, 2)
-  paidAt         DateTime?
-  notes          String?
+  amountDue Decimal   @db.Decimal(10, 2)
+  isWaived  Boolean   @default(false)
+  paid      Decimal?  @db.Decimal(10, 2)
+  paidAt    DateTime?
+  notes     String?
 
   @@unique([extraSessionId, studentId])
   @@index([studentId])
   @@index([centerId])
 }
 
+enum ObligationType {
+  MONTHLY_TUITION
+  EXTRA_SESSION
+}
 
+enum ObligationStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+}
 
+enum PaymentMethod {
+  CASH
+  INSTAPAY
+  VODAFONE_CASH
+  BANK_TRANSFER
+  OTHER
+}
+
+enum TeacherEarningType {
+  EARNING
+  REFUND_ADJUSTMENT
+  SETTLEMENT
+  REVERSAL
+}
+
+enum SettlementStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+model CenterSettings {
+  id       String @id @default(cuid())
+  centerId String @unique
+  center   Center @relation(fields: [centerId], references: [id], onDelete: Cascade)
+
+  centerSharePercentage  Decimal @default(20.00) @db.Decimal(5, 2)
+  teacherSharePercentage Decimal @default(80.00) @db.Decimal(5, 2)
+
+  allowStudentCreditAdvance Boolean @default(true)
+  currency                  String  @default("EGP")
+  receiptNotes              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([centerId])
+}
+
+model StudentFeeObligation {
+  id        String  @id @default(cuid())
+  centerId  String
+  center    Center  @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  groupId        String?
+  group          Group?        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupStudentId String?
+  groupStudent   GroupStudent? @relation(fields: [groupStudentId], references: [id], onDelete: Cascade)
+  extraSessionId String?
+  extraSession   ExtraSession? @relation(fields: [extraSessionId], references: [id], onDelete: Cascade)
+
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  type            ObligationType   @default(MONTHLY_TUITION)
+  periodDate      DateTime         @db.Date
+  amountDue       Decimal          @db.Decimal(10, 2)
+  discountAmount  Decimal          @default(0.00) @db.Decimal(10, 2)
+  finalAmountDue  Decimal          @db.Decimal(10, 2)
+  paidAmount      Decimal          @default(0.00) @db.Decimal(10, 2)
+  remainingAmount Decimal          @db.Decimal(10, 2)
+  status          ObligationStatus @default(UNPAID)
+
+  lockedTeacherShareRate Decimal @db.Decimal(5, 2)
+  lockedCenterShareRate  Decimal @db.Decimal(5, 2)
+
+  isWaived Boolean @default(false)
+  isLegacy Boolean @default(false)
+  notes    String?
+
+  allocations PaymentAllocation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([groupStudentId, periodDate])
+  @@index([centerId, status])
+  @@index([studentId])
+  @@index([teacherId])
+  @@index([periodDate])
+}
+
+model PaymentTransaction {
+  id        String  @id @default(cuid())
+  centerId  String
+  center    Center  @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  receiptNumber     String
+  amount            Decimal @db.Decimal(10, 2)
+  allocatedAmount   Decimal @default(0.00) @db.Decimal(10, 2)
+  unallocatedAmount Decimal @db.Decimal(10, 2)
+  refundedAmount    Decimal @default(0.00) @db.Decimal(10, 2)
+
+  paymentMethod PaymentMethod @default(CASH)
+  paymentDate   DateTime      @default(now())
+  isLegacy      Boolean       @default(false)
+  notes         String?
+  createdById   String?
+
+  allocations PaymentAllocation[]
+  refunds     PaymentRefund[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([centerId, receiptNumber])
+  @@index([centerId])
+  @@index([studentId])
+  @@index([paymentDate])
+}
+
+model PaymentAllocation {
+  id            String               @id @default(cuid())
+  centerId      String
+  center        Center               @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  transactionId String
+  transaction   PaymentTransaction   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  obligationId  String
+  obligation    StudentFeeObligation @relation(fields: [obligationId], references: [id], onDelete: Cascade)
+
+  amount           Decimal @db.Decimal(10, 2)
+  teacherShareRate Decimal @db.Decimal(5, 2)
+  centerShareRate  Decimal @db.Decimal(5, 2)
+  teacherAmount    Decimal @db.Decimal(10, 2)
+  centerAmount     Decimal @db.Decimal(10, 2)
+  refundedAmount   Decimal @default(0.00) @db.Decimal(10, 2)
+  isLegacy         Boolean @default(false)
+
+  earningEntries TeacherEarningEntry[]
+  refunds        PaymentRefund[]
+
+  createdAt DateTime @default(now())
+
+  @@index([transactionId])
+  @@index([obligationId])
+  @@index([centerId])
+}
+
+model TeacherEarningEntry {
+  id        String  @id @default(cuid())
+  centerId  String
+  center    Center  @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  entryNumber String
+  type        TeacherEarningType
+  amount      Decimal            @db.Decimal(10, 2)
+
+  sourceAllocationId String?
+  sourceAllocation   PaymentAllocation? @relation(fields: [sourceAllocationId], references: [id], onDelete: SetNull)
+  sourceRefundId     String?
+  sourceRefund       PaymentRefund?     @relation(fields: [sourceRefundId], references: [id], onDelete: SetNull)
+  sourceSettlementId String?
+  sourceSettlement   TeacherSettlement? @relation(fields: [sourceSettlementId], references: [id], onDelete: SetNull)
+
+  allocatedToSettlementAmount Decimal  @default(0.00) @db.Decimal(10, 2)
+  notes                       String?
+  entryDate                   DateTime @default(now())
+  createdAt                   DateTime @default(now())
+
+  settlementItems SettlementItem[]
+
+  @@unique([centerId, entryNumber])
+  @@index([centerId, teacherId])
+  @@index([type])
+  @@index([entryDate])
+}
+
+model TeacherSettlement {
+  id        String  @id @default(cuid())
+  centerId  String
+  center    Center  @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  settlementNumber String
+  amount           Decimal          @db.Decimal(10, 2)
+  status           SettlementStatus @default(COMPLETED)
+  paymentMethod    PaymentMethod    @default(CASH)
+  referenceNumber  String?
+  notes            String?
+
+  settlementDate     DateTime  @default(now())
+  settledAt          DateTime?
+  cancelledAt        DateTime?
+  cancellationReason String?
+  createdById        String?
+
+  items          SettlementItem[]
+  earningEntries TeacherEarningEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([centerId, settlementNumber])
+  @@index([centerId])
+  @@index([teacherId])
+  @@index([status])
+  @@index([settlementDate])
+}
+
+model SettlementItem {
+  id             String              @id @default(cuid())
+  settlementId   String
+  settlement     TeacherSettlement   @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  earningEntryId String
+  earningEntry   TeacherEarningEntry @relation(fields: [earningEntryId], references: [id], onDelete: Cascade)
+
+  allocatedAmount Decimal  @db.Decimal(10, 2)
+  createdAt       DateTime @default(now())
+
+  @@index([settlementId])
+  @@index([earningEntryId])
+}
+
+model PaymentRefund {
+  id            String             @id @default(cuid())
+  centerId      String
+  center        Center             @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  transactionId String
+  transaction   PaymentTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  allocationId  String?
+  allocation    PaymentAllocation? @relation(fields: [allocationId], references: [id], onDelete: SetNull)
+
+  refundNumber       String
+  amount             Decimal  @db.Decimal(10, 2)
+  teacherRefundShare Decimal  @db.Decimal(10, 2)
+  centerRefundShare  Decimal  @db.Decimal(10, 2)
+  reason             String
+  refundDate         DateTime @default(now())
+  createdById        String?
+
+  earningEntries TeacherEarningEntry[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([centerId, refundNumber])
+  @@index([centerId])
+  @@index([transactionId])
+  @@index([allocationId])
+  @@index([refundDate])
+}

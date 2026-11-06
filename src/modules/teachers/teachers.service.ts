@@ -22,9 +22,11 @@ import { normalizeEgyptianPhone } from '../../shared/excel/utils/arabic-normaliz
 import {
   teacherDetailsSelect,
   teacherListSelect,
+} from './constants/teacher.select';
+import {
   TeacherDetails,
   TeacherListItem,
-} from './constants/teacher.select';
+} from './interfaces/teacher.interface';
 import { CreateTeacherDto } from './dto/create-teacher.dto';
 import { TeacherQueryDto } from './dto/get-teachers.dto';
 import { UpdateTeacherDto } from './dto/update-teacher.dto';

@@ -9,11 +9,11 @@ import { buildMeta, PaginationMeta } from '../../common/utils/buildMeta';
 import { CreateSubscriptionPaymentDto } from './dto/create-subscription-payment.dto';
 import { GetSubscriptionPaymentsDto } from './dto/get-subscription-payments.dto';
 import { SubscriptionPaymentSummaryDto } from './dto/subscription-payment-summary.dto';
+import { subscriptionPaymentListSelect } from './constants/subscription-payment.select';
 import {
-  subscriptionPaymentListSelect,
   SubscriptionPaymentListItem,
   SubscriptionRevenueSummary,
-} from './constants/subscription-payment.select';
+} from './interfaces/subscription-payment.interface';
 
 @Injectable()
 export class SubscriptionPaymentsService {

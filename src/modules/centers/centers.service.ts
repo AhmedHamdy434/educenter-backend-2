@@ -11,9 +11,9 @@ import { hashPassword } from '../../common/utils/password.util';
 import {
   centerDetailsSelect,
   centerListSelect,
-  CenterDetails,
-  CenterListItem,
 } from './constants/center.select';
+import {} from './interfaces/center.interface';
+import { CenterDetails, CenterListItem } from './interfaces/center.interface';
 import { CreateCenterDto } from './dto/create-center.dto';
 import { CenterQueryDto } from './dto/get-centers.dto';
 import { UpdateCenterDto } from './dto/update-center.dto';

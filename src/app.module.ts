@@ -24,6 +24,9 @@ import { SubscriptionPaymentsModule } from './modules/subscription-payments/subs
 import { HomeStatsModule } from './modules/home-stats/home-stats.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
 import { ExtraSessionsModule } from './modules/extra-sessions/extra-sessions.module';
+import { OwnerSettingsModule } from './modules/owner-settings/owner-settings.module';
+import { TeacherSettlementsModule } from './modules/teacher-settlements/teacher-settlements.module';
+import { OwnerDashboardModule } from './modules/owner-dashboard/owner-dashboard.module';
 
 @Module({
   imports: [
@@ -56,6 +59,9 @@ import { ExtraSessionsModule } from './modules/extra-sessions/extra-sessions.mod
     PaymentsModule,
     ScheduleModule,
     ExtraSessionsModule,
+    OwnerSettingsModule,
+    TeacherSettlementsModule,
+    OwnerDashboardModule,
   ],
   controllers: [],
   providers: [

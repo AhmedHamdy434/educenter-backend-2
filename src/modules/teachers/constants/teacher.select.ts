@@ -44,11 +44,3 @@ export const teacherDetailsSelect = {
     },
   },
 } satisfies Prisma.TeacherSelect;
-
-export type TeacherListItem = Prisma.TeacherGetPayload<{
-  select: typeof teacherListSelect;
-}>;
-
-export type TeacherDetails = Prisma.TeacherGetPayload<{
-  select: typeof teacherDetailsSelect;
-}>;

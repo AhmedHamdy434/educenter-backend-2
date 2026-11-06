@@ -30,7 +30,10 @@ import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { ExcelValidationPipe } from '../../shared/excel/pipes/excel-validation.pipe';
 import { ExcelImportSummary } from '../../shared/excel/interfaces/excel.interface';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { TeacherDetails, TeacherListItem } from './constants/teacher.select';
+import {
+  TeacherDetails,
+  TeacherListItem,
+} from './interfaces/teacher.interface';
 import { CreateTeacherDto } from './dto/create-teacher.dto';
 import { TeacherQueryDto } from './dto/get-teachers.dto';
 import { UpdateTeacherDto } from './dto/update-teacher.dto';

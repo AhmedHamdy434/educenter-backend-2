@@ -28,10 +28,6 @@ export const studentPaymentSelect = {
   },
 } satisfies Prisma.MonthlyPaymentSelect;
 
-export type StudentPaymentItem = Prisma.MonthlyPaymentGetPayload<{
-  select: typeof studentPaymentSelect;
-}>;
-
 /**
  * تحديد حقول مدفوعات طلاب المجموعة بالكامل
  */
@@ -74,65 +70,10 @@ export const groupPaymentsSelect = {
   },
 } satisfies Prisma.GroupSelect;
 
-export type GroupPaymentsDetails = Prisma.GroupGetPayload<{
-  select: typeof groupPaymentsSelect;
-}>;
-
-export interface GroupPaymentStats {
-  /** الشهر المستهدف الذي احتُسبت عليه الإحصائيات (YYYY-MM-01) */
-  activeMonth: string;
-  /** إجمالي الطلاب المسجلين في المجموعة (بدون فلترة صفحة) */
-  total: number;
-  /** عدد الطلاب المسددين للشهر المُفلتر (أو كل الأشهر إن لم يُحدَّد شهر) */
-  paid: number;
-  /** عدد الطلاب غير المسددين */
-  unpaid: number;
-  /** الإيراد المتوقع (ج.م) للشهر المستهدف */
-  expected: number;
-  /** الإيراد المحصَّل فعلياً (ج.م) */
-  collected: number;
-  /** شهور المجموعة الكاملة (لعرض فلتر الشهور في الواجهة) */
-  groupMonths: string[];
-}
-
-export interface GroupPaymentCurrentMonth {
-  month: string;
-  isRequired: boolean;
-  isPaid: boolean;
-  payment: {
-    id: string;
-    amount: number;
-    paidAt: Date;
-    notes: string | null;
-  } | null;
-}
-
-export interface GroupPaymentStudentItem {
-  groupStudentId: string;
-  studentId: string;
-  studentInfo: {
-    fullName: string;
-    code?: string;
-    email: string | null;
-    phone: string | null;
-    avatar: string | null;
-  };
-  subscriptionStartDate: string;
-  monthlyFee: number;
-  currentMonth: GroupPaymentCurrentMonth;
-  requiredMonths: string[];
-  paidMonths: {
-    id: string;
-    subscriptionDate: string;
-    amount: number;
-    paidAt: Date;
-    notes: string | null;
-  }[];
-  unpaidMonths: string[];
-}
-
 export const payMonthGroupStudentSelect = {
   id: true,
+  studentId: true,
+  groupId: true,
   subscriptionStartDate: true,
   group: {
     select: {
@@ -141,13 +82,10 @@ export const payMonthGroupStudentSelect = {
       startDate: true,
       monthsCount: true,
       monthlyFee: true,
+      teacherId: true,
     },
   },
 } satisfies Prisma.GroupStudentSelect;
-
-export type PayMonthGroupStudent = Prisma.GroupStudentGetPayload<{
-  select: typeof payMonthGroupStudentSelect;
-}>;
 
 /**
  * تحديد حقول المجموعة الأساسية عند تصدير كشف الحساب
@@ -158,7 +96,3 @@ export const groupPaymentExcelSelect = {
   startDate: true,
   monthsCount: true,
 } satisfies Prisma.GroupSelect;
-
-export type GroupPaymentExcelItem = Prisma.GroupGetPayload<{
-  select: typeof groupPaymentExcelSelect;
-}>;

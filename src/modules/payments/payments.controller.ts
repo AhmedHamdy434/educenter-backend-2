@@ -5,7 +5,6 @@ import {
   Param,
   Post,
   UseGuards,
-  BadRequestException,
   HttpStatus,
   HttpCode,
   Res,
@@ -22,6 +21,7 @@ import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AppRole } from '../../common/enums/app-role.enum';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { CurrentCenterId } from '../../common/decorators/current-center-id.decorator';
 import type { RequestUser } from '../auth/interfaces/authenticated-request.interface';
 import { PaymentsService } from './payments.service';
 import { PayMonthDto } from './dto/pay-month.dto';
@@ -30,22 +30,13 @@ import {
   StudentPaymentItem,
   GroupPaymentStudentItem,
   GroupPaymentStats,
-} from './constants/payment.select';
+} from './interfaces/payment.interface';
 import { PaginationMeta } from '../../common/utils/buildMeta';
 
 @Controller()
 @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
-
-  private validateCenterId(centerId?: string | null): string {
-    if (!centerId) {
-      throw new BadRequestException(
-        'المستخدم الحالي غير مرتبط بأي مركز تعليمي.',
-      );
-    }
-    return centerId;
-  }
 
   /**
    * تصدير كشف مصفوفة مدفوعات المجموعة إلى ملف Excel.
@@ -54,11 +45,10 @@ export class PaymentsController {
   @Roles(AppRole.OWNER, AppRole.TEACHER)
   @BypassInterceptor()
   async exportGroupPayments(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Param('groupId') groupId: string,
     @Res() res: Response,
   ): Promise<void> {
-    const centerId = this.validateCenterId(user.centerId);
     const buffer = await this.paymentsService.exportGroupPaymentsToExcel(
       centerId,
       groupId,
@@ -79,7 +69,7 @@ export class PaymentsController {
   @ResponseMessage('تم جلب مدفوعات المجموعة بنجاح.')
   @Roles(AppRole.OWNER, AppRole.TEACHER)
   async getGroupPayments(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Param('groupId') groupId: string,
     @Query() query: GetGroupPaymentsQueryDto,
   ): Promise<{
@@ -87,7 +77,6 @@ export class PaymentsController {
     meta: PaginationMeta;
     stats: GroupPaymentStats;
   }> {
-    const centerId = this.validateCenterId(user.centerId);
     return this.paymentsService.getGroupPayments(centerId, groupId, query);
   }
 
@@ -96,11 +85,10 @@ export class PaymentsController {
   @ResponseMessage('تم تسجيل دفع الاشتراك بنجاح.')
   @Roles(AppRole.OWNER, AppRole.TEACHER)
   async payMonth(
-    @CurrentUser() user: RequestUser,
+    @CurrentCenterId() centerId: string,
     @Param('groupStudentId') groupStudentId: string,
     @Body() dto: PayMonthDto,
   ) {
-    const centerId = this.validateCenterId(user.centerId);
     const payment = await this.paymentsService.payMonth(
       centerId,
       groupStudentId,
@@ -113,11 +101,11 @@ export class PaymentsController {
   @ResponseMessage('تم جلب سجل مدفوعات الطالب بنجاح.')
   @Roles(AppRole.OWNER, AppRole.TEACHER, AppRole.STUDENT)
   async getStudentPayments(
+    @CurrentCenterId() centerId: string,
     @CurrentUser() user: RequestUser,
     @Param('studentId') studentId: string,
     @Query('groupId') groupId?: string,
   ): Promise<StudentPaymentItem[]> {
-    const centerId = this.validateCenterId(user.centerId);
     const data = await this.paymentsService.getStudentPayments(
       centerId,
       studentId,
@@ -135,11 +123,11 @@ export class PaymentsController {
   @Roles(AppRole.OWNER, AppRole.TEACHER, AppRole.STUDENT)
   @BypassInterceptor()
   async exportStudentPayments(
+    @CurrentCenterId() centerId: string,
     @CurrentUser() user: RequestUser,
     @Param('studentId') studentId: string,
     @Res() res: Response,
   ): Promise<void> {
-    const centerId = this.validateCenterId(user.centerId);
     const buffer = await this.paymentsService.exportStudentPaymentsToExcel(
       centerId,
       studentId,

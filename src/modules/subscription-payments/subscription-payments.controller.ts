@@ -10,7 +10,7 @@ import { SubscriptionPaymentSummaryDto } from './dto/subscription-payment-summar
 import {
   SubscriptionPaymentListItem,
   SubscriptionRevenueSummary,
-} from './constants/subscription-payment.select';
+} from './interfaces/subscription-payment.interface';
 import { PaginationMeta } from '../../common/utils/buildMeta';
 
 @Controller('subscription-payments')

@@ -21,9 +21,11 @@ import { SubscriptionValidationService } from '../subscription-plans/subscriptio
 import {
   subjectDetailsSelect,
   subjectListSelect,
+} from './constants/subject.select';
+import {
   SubjectDetails,
   SubjectListItem,
-} from './constants/subject.select';
+} from './interfaces/subject.interface';
 import { CreateSubjectDto } from './dto/create-subject.dto';
 import { SubjectQueryDto } from './dto/get-subjects.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';

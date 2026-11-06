@@ -17,12 +17,8 @@ import {
   RowValidationError,
 } from '../../shared/excel/interfaces/excel.interface';
 import { normalizeArabicText } from '../../shared/excel/utils/arabic-normalizer.util';
-import {
-  gradeDetailsSelect,
-  gradeListSelect,
-  GradeDetails,
-  GradeListItem,
-} from './constants/grade.select';
+import { gradeDetailsSelect, gradeListSelect } from './constants/grade.select';
+import { GradeDetails, GradeListItem } from './interfaces/grade.interface';
 import { CreateGradeDto } from './dto/create-grade.dto';
 import { GradeQueryDto } from './dto/get-grades.dto';
 import { UpdateGradeDto } from './dto/update-grade.dto';

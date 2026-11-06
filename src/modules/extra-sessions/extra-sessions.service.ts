@@ -27,37 +27,18 @@ import { AddExtraSessionStudentsDto } from './dto/add-extra-session-students.dto
 import { PayExtraSessionStudentDto } from './dto/pay-extra-session-student.dto';
 import { WaiveExtraSessionStudentDto } from './dto/waive-extra-session-student.dto';
 import {
-  ExtraSessionDetails,
   extraSessionDetailsSelect,
-  ExtraSessionListItem,
   extraSessionListSelect,
-  ExtraSessionStudentItem,
   extraSessionStudentSelect,
-  ExtraSessionStudentWithAttendance,
 } from './constants/extra-session.select';
-
-export interface ExtraSessionFinancialSummary {
-  totalDue: number;
-  totalCollected: number;
-  remaining: number;
-  totalWaived: number;
-  studentsCount: number;
-  paidCount: number;
-  waivedCount: number;
-  unpaidCount: number;
-}
-
-export interface ExtraSessionsGroupStats {
-  totalSessions: number;
-  scheduledSessions: number;
-  completedSessions: number;
-  canceledSessions: number;
-  totalCollected: number;
-}
-
-export interface ExtraSessionListItemWithSummary extends ExtraSessionListItem {
-  financialSummary: ExtraSessionFinancialSummary;
-}
+import {
+  ExtraSessionDetails,
+  ExtraSessionFinancialSummary,
+  ExtraSessionListItemWithSummary,
+  ExtraSessionsGroupStats,
+  ExtraSessionStudentItem,
+  ExtraSessionStudentWithAttendance,
+} from './interfaces/extra-session.interface';
 
 @Injectable()
 export class ExtraSessionsService {

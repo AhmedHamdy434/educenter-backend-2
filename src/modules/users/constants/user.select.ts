@@ -33,11 +33,3 @@ export const userListSelect = {
   centerId: true,
   createdAt: true,
 } satisfies Prisma.UserSelect;
-
-export type UserDetails = Prisma.UserGetPayload<{
-  select: typeof userDetailsSelect;
-}>;
-
-export type UserListItem = Prisma.UserGetPayload<{
-  select: typeof userListSelect;
-}>;

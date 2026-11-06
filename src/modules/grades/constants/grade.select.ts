@@ -20,11 +20,3 @@ export const gradeDetailsSelect = {
     },
   },
 } satisfies Prisma.GradeSelect;
-
-export type GradeListItem = Prisma.GradeGetPayload<{
-  select: typeof gradeListSelect;
-}>;
-
-export type GradeDetails = Prisma.GradeGetPayload<{
-  select: typeof gradeDetailsSelect;
-}>;

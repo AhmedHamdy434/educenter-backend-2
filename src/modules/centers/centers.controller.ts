@@ -28,7 +28,7 @@ import type { RequestUser } from '../auth/interfaces/authenticated-request.inter
 
 import { SubscribeCenterDto } from './dto/subscribe-center.dto';
 import { RenewSubscriptionDto } from './dto/renew-subscription.dto';
-import { CenterDetails, CenterListItem } from './constants/center.select';
+import { CenterDetails, CenterListItem } from './interfaces/center.interface';
 import { PaginationMeta } from '../../common/utils/buildMeta';
 
 @Controller('centers')

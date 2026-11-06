@@ -43,8 +43,8 @@ import {
   GroupDetails,
   GroupEnrolledStudent,
   GroupListItem,
-} from './constants/group.select';
-import { StudentListItem } from '../students/constants/student.select';
+} from './interfaces/group.interface';
+import { StudentListItem } from '../students/interfaces/student.interface';
 
 @Controller('groups')
 @UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)

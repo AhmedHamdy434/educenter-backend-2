@@ -19,6 +19,7 @@ import {
 } from '../../common/utils/date.util';
 import { SaveAttendanceDto } from './dto/save-attendance.dto';
 import { StartSessionQueryDto } from './dto/start-session-query.dto';
+import { AttendanceStudentSessionItem } from './interfaces/attendance.interface';
 
 const JS_TO_DAY_OF_WEEK: Record<number, DayOfWeek> = {
   0: DayOfWeek.SUNDAY,
@@ -207,22 +208,7 @@ export class AttendanceService {
 
     const recordsMap = new Map(attendanceRecords.map((r) => [r.studentId, r]));
 
-    let students: Array<{
-      studentId: string;
-      studentCode: string;
-      fullName: string;
-      phone: string | null;
-      avatar: string | null;
-      status: AttendanceStatus | null;
-      absenceReason: string | null;
-      extraSessionInfo?: {
-        amountDue: number;
-        paid: number | null;
-        isWaived: boolean;
-        paidAt: string | null;
-        notes: string | null;
-      };
-    }>;
+    let students: AttendanceStudentSessionItem[];
 
     // إذا كانت الجلسة لحصة إضافية، نجلب الطلاب المسجلين بالحصة الإضافية مع بيانات الدفع
     if (session.extraSessionId) {

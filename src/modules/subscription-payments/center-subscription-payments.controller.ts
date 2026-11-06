@@ -17,7 +17,7 @@ import { AppRole } from '../../common/enums/app-role.enum';
 import { SubscriptionPaymentsService } from './subscription-payments.service';
 import { CreateSubscriptionPaymentDto } from './dto/create-subscription-payment.dto';
 import { GetSubscriptionPaymentsDto } from './dto/get-subscription-payments.dto';
-import { SubscriptionPaymentListItem } from './constants/subscription-payment.select';
+import { SubscriptionPaymentListItem } from './interfaces/subscription-payment.interface';
 import { PaginationMeta } from '../../common/utils/buildMeta';
 
 @Controller('centers/:centerId/subscription-payments')

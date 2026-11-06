@@ -10,45 +10,15 @@ import { buildMeta, PaginationMeta } from '../../common/utils/buildMeta';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UserQueryDto } from './dto/get-users.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { userDetailsSelect, userListSelect } from './constants/user.select';
 import {
-  userDetailsSelect,
-  userListSelect,
+  CreateUserAccountInput,
+  UpdateUserAccountInput,
   UserDetails,
   UserListItem,
-} from './constants/user.select';
+  UserWithCenter,
+} from './interfaces/user.interface';
 import { randomBytes } from 'crypto';
-
-export type UserWithCenter = Prisma.UserGetPayload<{
-  include: {
-    center: {
-      select: {
-        id: true;
-        name: true;
-        slug: true;
-      };
-    };
-  };
-}>;
-
-export interface CreateUserAccountInput {
-  fullName: string;
-  email: string;
-  password?: string;
-  phone?: string;
-  avatar?: string;
-  isActive?: boolean;
-  mustChangePassword?: boolean;
-}
-
-export interface UpdateUserAccountInput {
-  fullName?: string;
-  email?: string;
-  password?: string;
-  phone?: string;
-  avatar?: string;
-  isActive?: boolean;
-  mustChangePassword?: boolean;
-}
 
 @Injectable()
 export class UsersService {

@@ -21,7 +21,7 @@ import type { RequestUser } from '../auth/interfaces/authenticated-request.inter
 import { UsersService } from './users.service';
 import { UserQueryDto } from './dto/get-users.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { UserDetails, UserListItem } from './constants/user.select';
+import { UserDetails, UserListItem } from './interfaces/user.interface';
 import { PaginationMeta } from '../../common/utils/buildMeta';
 
 @Controller('users')

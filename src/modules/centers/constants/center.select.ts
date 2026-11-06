@@ -102,11 +102,3 @@ export const centerDetailsSelect = {
     // take: 1,
   },
 } satisfies Prisma.CenterSelect;
-
-export type CenterDetails = Prisma.CenterGetPayload<{
-  select: typeof centerDetailsSelect;
-}>;
-
-export type CenterListItem = Prisma.CenterGetPayload<{
-  select: typeof centerListSelect;
-}>;

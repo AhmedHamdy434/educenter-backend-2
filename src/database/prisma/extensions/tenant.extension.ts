@@ -29,6 +29,13 @@ const DIRECT_TENANT_MODELS = [
   'GroupStudent',
   'StudentAttendance',
   'MonthlyPayment',
+  'CenterSettings',
+  'StudentFeeObligation',
+  'PaymentTransaction',
+  'PaymentAllocation',
+  'TeacherEarningEntry',
+  'TeacherSettlement',
+  'PaymentRefund',
 ] as const;
 
 export const createTenantExtension = () =>

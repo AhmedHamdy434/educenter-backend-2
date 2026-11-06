@@ -13,10 +13,12 @@ import { ExcelService } from '../../shared/excel/excel.service';
 import {
   groupPaymentExcelSelect,
   payMonthGroupStudentSelect,
+} from './constants/payment.select';
+import {
   StudentPaymentItem,
   GroupPaymentStudentItem,
   GroupPaymentStats,
-} from './constants/payment.select';
+} from './interfaces/payment.interface';
 import { GetGroupPaymentsQueryDto } from './dto/get-group-payments.dto';
 import { buildMeta, PaginationMeta } from '../../common/utils/buildMeta';
 import { Prisma } from '@prisma/client';
@@ -296,6 +298,17 @@ export class PaymentsService {
           },
           orderBy: { subscriptionDate: 'asc' },
         },
+        feeObligations: {
+          select: {
+            id: true,
+            periodDate: true,
+            amountDue: true,
+            finalAmountDue: true,
+            paidAmount: true,
+            remainingAmount: true,
+            status: true,
+          },
+        },
         student: {
           select: {
             id: true,
@@ -340,10 +353,36 @@ export class PaymentsService {
           (p) => this.formatDate(p.subscriptionDate) === targetMonthForStats,
         ) || null;
 
+      const targetObligation = gs.feeObligations.find(
+        (o) => this.formatDate(o.periodDate) === targetMonthForStats,
+      );
+
+      const isFullyPaid = targetObligation
+        ? targetObligation.status === 'PAID'
+        : Boolean(currentMonthPayment);
+
       const currentMonth = {
         month: targetMonthForStats,
         isRequired: isCurrentMonthRequired,
-        isPaid: Boolean(currentMonthPayment),
+        isPaid: isFullyPaid,
+        status: targetObligation
+          ? targetObligation.status
+          : isFullyPaid
+            ? ('PAID' as const)
+            : ('UNPAID' as const),
+        amountDue: targetObligation
+          ? Number(targetObligation.finalAmountDue)
+          : monthlyFee,
+        paidAmount: targetObligation
+          ? Number(targetObligation.paidAmount)
+          : currentMonthPayment
+            ? Number(currentMonthPayment.amount)
+            : 0,
+        remainingAmount: targetObligation
+          ? Number(targetObligation.remainingAmount)
+          : isFullyPaid
+            ? 0
+            : monthlyFee,
         payment: currentMonthPayment
           ? {
               id: currentMonthPayment.id,
@@ -381,7 +420,7 @@ export class PaymentsService {
   }
 
   /**
-   * دفع اشتراك شهر معين لطالب في مجموعة.
+   * دفع اشتراك شهر معين لطالب في مجموعة (يدعم السداد الكلي أو الجزئي مع تسجيل حركات التحصيل ومستحقات المعلم).
    */
   async payMonth(centerId: string, groupStudentId: string, dto: PayMonthDto) {
     const groupStudent = await this.prisma.groupStudent.findUnique({
@@ -431,32 +470,206 @@ export class PaymentsService {
       );
     }
 
-    // التحقق من عدم دفع هذا الشهر مسبقاً
-    const existingPayment = await this.prisma.monthlyPayment.findUnique({
-      where: {
-        groupStudentId_subscriptionDate: {
-          groupStudentId,
-          subscriptionDate: targetMonth,
+    return this.prisma.$transaction(async (tx) => {
+      // 1. جلب إعدادات المركز لنسب التوزيع المالي
+      let settings = await tx.centerSettings.findUnique({
+        where: { centerId },
+      });
+      if (!settings) {
+        settings = await tx.centerSettings.create({
+          data: {
+            centerId,
+            centerSharePercentage: new Prisma.Decimal(20.0),
+            teacherSharePercentage: new Prisma.Decimal(80.0),
+            allowStudentCreditAdvance: true,
+            currency: 'EGP',
+          },
+        });
+      }
+
+      // 2. جلب أو إنشاء الالتزام المالي للشهر المستهدف
+      let obligation = await tx.studentFeeObligation.findUnique({
+        where: {
+          groupStudentId_periodDate: {
+            groupStudentId,
+            periodDate: targetMonth,
+          },
         },
-      },
-    });
+      });
 
-    if (existingPayment) {
-      throw new ConflictException(
-        'تم دفع اشتراك هذا الشهر بالفعل لهذا الطالب.',
+      const monthlyFeeDecimal = new Prisma.Decimal(
+        groupStudent.group.monthlyFee,
       );
-    }
 
-    // حفظ الدفع بنجاح مع تسجيل القيمة الحالية للمجموعة
-    return this.prisma.monthlyPayment.create({
-      data: {
-        groupStudentId,
-        centerId,
-        subscriptionDate: targetMonth,
-        amount: groupStudent.group.monthlyFee,
-        paidAt: new Date(),
-        notes: dto.notes,
-      },
+      if (!obligation) {
+        obligation = await tx.studentFeeObligation.create({
+          data: {
+            centerId,
+            studentId: groupStudent.studentId,
+            groupId: groupStudent.groupId,
+            groupStudentId,
+            teacherId: groupStudent.group.teacherId,
+            type: 'MONTHLY_TUITION',
+            periodDate: targetMonth,
+            amountDue: monthlyFeeDecimal,
+            discountAmount: new Prisma.Decimal(0),
+            finalAmountDue: monthlyFeeDecimal,
+            paidAmount: new Prisma.Decimal(0),
+            remainingAmount: monthlyFeeDecimal,
+            status: 'UNPAID',
+            lockedTeacherShareRate: settings.teacherSharePercentage,
+            lockedCenterShareRate: settings.centerSharePercentage,
+          },
+        });
+      }
+
+      if (obligation.remainingAmount.lte(0) || obligation.status === 'PAID') {
+        throw new ConflictException('تم سداد هذا الاشتراك بالكامل مسبقاً.');
+      }
+
+      // تحديد المبلغ المسدد فعلياً (سداد جزئي أو كامل المتبقي)
+      const payAmount =
+        dto.amount !== undefined
+          ? new Prisma.Decimal(dto.amount)
+          : obligation.remainingAmount;
+
+      if (payAmount.lte(0)) {
+        throw new BadRequestException(
+          'المبلغ المدفوع يجب أن يكون أكبر من الصفر.',
+        );
+      }
+
+      if (payAmount.gt(obligation.remainingAmount)) {
+        throw new BadRequestException(
+          `المبلغ المدفوع (${payAmount} ج.م) أكبر من المبلغ المتبقي المستحق (${obligation.remainingAmount} ج.م).`,
+        );
+      }
+
+      // 3. توليد رقم الإيصال المتسلسل
+      const txCount = await tx.paymentTransaction.count({
+        where: { centerId },
+      });
+      const now = new Date();
+      const receiptNumber = `REC-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}-${String(txCount + 1).padStart(5, '0')}`;
+
+      // 4. إنشاء حركة التحصيل النقدية (PaymentTransaction)
+      const paymentTx = await tx.paymentTransaction.create({
+        data: {
+          centerId,
+          studentId: groupStudent.studentId,
+          receiptNumber,
+          amount: payAmount,
+          allocatedAmount: payAmount,
+          unallocatedAmount: new Prisma.Decimal(0),
+          refundedAmount: new Prisma.Decimal(0),
+          paymentMethod: dto.paymentMethod ?? 'CASH',
+          paymentDate: now,
+          notes: dto.notes,
+        },
+      });
+
+      // 5. حساب حصة المعلم والمركز بالنسبة المثبتة على الالتزام
+      const teacherAmount = payAmount
+        .mul(obligation.lockedTeacherShareRate)
+        .div(100)
+        .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+      const centerAmount = payAmount.sub(teacherAmount);
+
+      // 6. إنشاء تخصيص الدفعة (PaymentAllocation)
+      const allocation = await tx.paymentAllocation.create({
+        data: {
+          centerId,
+          transactionId: paymentTx.id,
+          obligationId: obligation.id,
+          amount: payAmount,
+          teacherShareRate: obligation.lockedTeacherShareRate,
+          centerShareRate: obligation.lockedCenterShareRate,
+          teacherAmount,
+          centerAmount,
+          refundedAmount: new Prisma.Decimal(0),
+        },
+      });
+
+      // 7. تحديث الالتزام المالي
+      const newPaidAmount = obligation.paidAmount.plus(payAmount);
+      const newRemainingAmount = obligation.remainingAmount.sub(payAmount);
+      const newStatus = newRemainingAmount.lte(0) ? 'PAID' : 'PARTIALLY_PAID';
+
+      await tx.studentFeeObligation.update({
+        where: { id: obligation.id },
+        data: {
+          paidAmount: newPaidAmount,
+          remainingAmount: newRemainingAmount,
+          status: newStatus,
+        },
+      });
+
+      // 8. تسجيل قيد مستحقات المعلم في الدفتر المحاسبي (TeacherEarningEntry - EARNING)
+      const earningCount = await tx.teacherEarningEntry.count({
+        where: { centerId },
+      });
+      const entryNumber = `TEE-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}-${String(earningCount + 1).padStart(6, '0')}`;
+
+      await tx.teacherEarningEntry.create({
+        data: {
+          centerId,
+          teacherId: obligation.teacherId,
+          entryNumber,
+          type: 'EARNING',
+          amount: teacherAmount,
+          sourceAllocationId: allocation.id,
+          allocatedToSettlementAmount: new Prisma.Decimal(0),
+          entryDate: now,
+          notes: `دفعة اشتراك الطالب لشهر ${this.formatDate(targetMonth)}`,
+        },
+      });
+
+      // 9. مزامنة MonthlyPayment للتوافق التام مع الاستعلامات الحالية
+      const existingMonthly = await tx.monthlyPayment.findUnique({
+        where: {
+          groupStudentId_subscriptionDate: {
+            groupStudentId,
+            subscriptionDate: targetMonth,
+          },
+        },
+      });
+
+      let monthlyPayment;
+      if (existingMonthly) {
+        monthlyPayment = await tx.monthlyPayment.update({
+          where: { id: existingMonthly.id },
+          data: {
+            amount: existingMonthly.amount.plus(payAmount),
+            paidAt: now,
+            notes: dto.notes ?? existingMonthly.notes,
+          },
+        });
+      } else {
+        monthlyPayment = await tx.monthlyPayment.create({
+          data: {
+            id: paymentTx.id,
+            groupStudentId,
+            centerId,
+            subscriptionDate: targetMonth,
+            amount: payAmount,
+            paidAt: now,
+            notes: dto.notes,
+          },
+        });
+      }
+
+      return {
+        ...monthlyPayment,
+        transaction: paymentTx,
+        allocation,
+        obligation: {
+          id: obligation.id,
+          amountDue: Number(obligation.finalAmountDue),
+          paidAmount: Number(newPaidAmount),
+          remainingAmount: Number(newRemainingAmount),
+          status: newStatus,
+        },
+      };
     });
   }
 

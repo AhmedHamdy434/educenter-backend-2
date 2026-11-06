@@ -26,11 +26,3 @@ export const subjectDetailsSelect = {
   },
   updatedAt: true,
 } satisfies Prisma.SubjectSelect;
-
-export type SubjectDetails = Prisma.SubjectGetPayload<{
-  select: typeof subjectDetailsSelect;
-}>;
-
-export type SubjectListItem = Prisma.SubjectGetPayload<{
-  select: typeof subjectListSelect;
-}>;
