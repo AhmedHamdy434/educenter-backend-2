@@ -8,4 +8,3 @@ export interface HomeStatsData {
   activePlans: number;
   totalPlans: number;
 }
-

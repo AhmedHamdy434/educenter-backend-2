@@ -44,4 +44,3 @@ export interface ExtraSessionsGroupStats {
 export interface ExtraSessionListItemWithSummary extends ExtraSessionListItem {
   financialSummary: ExtraSessionFinancialSummary;
 }
-

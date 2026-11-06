@@ -11,4 +11,3 @@ export type SubjectDetails = Prisma.SubjectGetPayload<{
 export type SubjectListItem = Prisma.SubjectGetPayload<{
   select: typeof subjectListSelect;
 }>;
-

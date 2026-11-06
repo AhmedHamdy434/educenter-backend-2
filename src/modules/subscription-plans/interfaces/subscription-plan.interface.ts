@@ -12,4 +12,3 @@ export interface SubscriptionValidationResult {
   remainingGraceDays?: number;
   warningHeader?: string;
 }
-

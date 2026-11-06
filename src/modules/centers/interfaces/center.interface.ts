@@ -11,4 +11,3 @@ export type CenterDetails = Prisma.CenterGetPayload<{
 export type CenterListItem = Prisma.CenterGetPayload<{
   select: typeof centerListSelect;
 }>;
-

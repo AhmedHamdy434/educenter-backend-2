@@ -81,4 +81,3 @@ export const teacherSettlementDetailsSelect = {
     },
   },
 } satisfies Prisma.TeacherSettlementSelect;
-

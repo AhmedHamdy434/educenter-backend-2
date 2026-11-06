@@ -16,4 +16,3 @@ export type StudentDetails = Prisma.StudentGetPayload<{
 export type StudentByCodeDetails = Prisma.StudentGetPayload<{
   select: typeof studentByCodeSelect;
 }>;
-

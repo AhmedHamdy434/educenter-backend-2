@@ -13,15 +13,21 @@ import { ExcelService } from '../../shared/excel/excel.service';
 import {
   groupPaymentExcelSelect,
   payMonthGroupStudentSelect,
+  studentPaymentSelect,
 } from './constants/payment.select';
 import {
   StudentPaymentItem,
   GroupPaymentStudentItem,
   GroupPaymentStats,
+  StudentPaymentMonthItem,
+  StudentPaymentHistoryItem,
+  StudentPaymentsTotals,
+  StudentPaymentsSummaryData,
+  PayMonthResponse,
 } from './interfaces/payment.interface';
 import { GetGroupPaymentsQueryDto } from './dto/get-group-payments.dto';
 import { buildMeta, PaginationMeta } from '../../common/utils/buildMeta';
-import { Prisma } from '@prisma/client';
+import { MonthlyPayment, Prisma } from '@prisma/client';
 
 @Injectable()
 export class PaymentsService {
@@ -81,6 +87,160 @@ export class PaymentsService {
       months.push(d);
     }
     return months;
+  }
+
+  /**
+   * Helper مركزي للتحقق من وجود الطالب في المركز والتحقق من صلاحيات الوصول حسب الدور (OWNER / TEACHER / STUDENT).
+   */
+  private async resolveStudentWithAccessCheck(
+    centerId: string,
+    studentId: string,
+    userRole: AppRole,
+    userId: string,
+  ): Promise<{
+    resolvedStudentId: string;
+    student: Prisma.StudentGetPayload<{ include: { user: true } }>;
+  }> {
+    let resolvedStudentId = studentId;
+
+    if (studentId === 'me') {
+      const currentStudent = await this.prisma.student.findUnique({
+        where: { userId },
+      });
+      if (!currentStudent) {
+        throw new NotFoundException('حساب الطالب المطلوب غير موجود.');
+      }
+      resolvedStudentId = currentStudent.id;
+    }
+
+    const student = await this.prisma.student.findUnique({
+      where: { id: resolvedStudentId },
+      include: {
+        user: true,
+      },
+    });
+
+    if (!student || student.user.centerId !== centerId) {
+      throw new NotFoundException('الطالب المطلوب غير موجود في هذا المركز.');
+    }
+
+    // التحقق من الصلاحيات الإضافية
+    if (userRole === AppRole.STUDENT) {
+      if (student.userId !== userId) {
+        throw new ForbiddenException('ليس لديك صلاحية لعرض مدفوعات طالب آخر.');
+      }
+    } else if (userRole === AppRole.TEACHER) {
+      const teacher = await this.prisma.teacher.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+      if (!teacher) {
+        throw new NotFoundException('حساب المعلم الحالي غير موجود.');
+      }
+
+      // التحقق من أن الطالب مسجل في إحدى مجموعات هذا المعلم
+      const isTeached = await this.prisma.groupStudent.findFirst({
+        where: {
+          studentId: resolvedStudentId,
+          group: {
+            teacherId: teacher.id,
+            centerId,
+          },
+        },
+      });
+
+      if (!isTeached) {
+        throw new ForbiddenException(
+          'ليس لديك صلاحية لعرض مدفوعات هذا الطالب.',
+        );
+      }
+    }
+
+    return { resolvedStudentId, student };
+  }
+
+  /**
+   * Helper مشترك لحساب حالة الالتزام المالي والمبالغ المستحقة والمدفوعة لشهر معين.
+   */
+  private resolveMonthFeeStatus(
+    monthStr: string,
+    monthlyFeeDecimal: Prisma.Decimal,
+    obligation?: {
+      finalAmountDue: Prisma.Decimal | number;
+      paidAmount: Prisma.Decimal | number;
+      remainingAmount: Prisma.Decimal | number;
+      status: string;
+      isWaived?: boolean;
+    } | null,
+    legacyPayment?: {
+      amount: Prisma.Decimal | number;
+    } | null,
+  ): StudentPaymentMonthItem {
+    if (monthlyFeeDecimal.lte(0)) {
+      return {
+        month: monthStr,
+        amountDue: 0,
+        paidAmount: 0,
+        remainingAmount: 0,
+        status: 'PAID',
+        isWaived: false,
+      };
+    }
+
+    if (obligation) {
+      const amountDue = new Prisma.Decimal(obligation.finalAmountDue)
+        .toDecimalPlaces(2)
+        .toNumber();
+      const paidAmount = new Prisma.Decimal(obligation.paidAmount)
+        .toDecimalPlaces(2)
+        .toNumber();
+      const remainingAmount = new Prisma.Decimal(obligation.remainingAmount)
+        .toDecimalPlaces(2)
+        .toNumber();
+      return {
+        month: monthStr,
+        amountDue,
+        paidAmount,
+        remainingAmount,
+        status: obligation.status as 'UNPAID' | 'PARTIALLY_PAID' | 'PAID',
+        isWaived: Boolean(obligation.isWaived),
+      };
+    }
+
+    if (legacyPayment) {
+      const paidDecimal = new Prisma.Decimal(legacyPayment.amount);
+      const paidAmount = paidDecimal.toDecimalPlaces(2).toNumber();
+      const amountDue = monthlyFeeDecimal.toDecimalPlaces(2).toNumber();
+      const remainingDecimal = Prisma.Decimal.max(
+        0,
+        monthlyFeeDecimal.sub(paidDecimal),
+      );
+      const remainingAmount = remainingDecimal.toDecimalPlaces(2).toNumber();
+      const status: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' =
+        remainingAmount === 0
+          ? 'PAID'
+          : paidAmount > 0
+            ? 'PARTIALLY_PAID'
+            : 'UNPAID';
+      return {
+        month: monthStr,
+        amountDue,
+        paidAmount,
+        remainingAmount,
+        status,
+        isWaived: false,
+      };
+    }
+
+    const amountDue = monthlyFeeDecimal.toDecimalPlaces(2).toNumber();
+    return {
+      month: monthStr,
+      amountDue,
+      paidAmount: 0,
+      remainingAmount: amountDue,
+      status: 'UNPAID',
+      isWaived: false,
+    };
   }
 
   /**
@@ -357,32 +517,21 @@ export class PaymentsService {
         (o) => this.formatDate(o.periodDate) === targetMonthForStats,
       );
 
-      const isFullyPaid = targetObligation
-        ? targetObligation.status === 'PAID'
-        : Boolean(currentMonthPayment);
+      const feeStatus = this.resolveMonthFeeStatus(
+        targetMonthForStats,
+        new Prisma.Decimal(monthlyFee),
+        targetObligation,
+        currentMonthPayment,
+      );
 
       const currentMonth = {
         month: targetMonthForStats,
         isRequired: isCurrentMonthRequired,
-        isPaid: isFullyPaid,
-        status: targetObligation
-          ? targetObligation.status
-          : isFullyPaid
-            ? ('PAID' as const)
-            : ('UNPAID' as const),
-        amountDue: targetObligation
-          ? Number(targetObligation.finalAmountDue)
-          : monthlyFee,
-        paidAmount: targetObligation
-          ? Number(targetObligation.paidAmount)
-          : currentMonthPayment
-            ? Number(currentMonthPayment.amount)
-            : 0,
-        remainingAmount: targetObligation
-          ? Number(targetObligation.remainingAmount)
-          : isFullyPaid
-            ? 0
-            : monthlyFee,
+        isPaid: feeStatus.status === 'PAID',
+        status: feeStatus.status,
+        amountDue: feeStatus.amountDue,
+        paidAmount: feeStatus.paidAmount,
+        remainingAmount: feeStatus.remainingAmount,
         payment: currentMonthPayment
           ? {
               id: currentMonthPayment.id,
@@ -422,7 +571,11 @@ export class PaymentsService {
   /**
    * دفع اشتراك شهر معين لطالب في مجموعة (يدعم السداد الكلي أو الجزئي مع تسجيل حركات التحصيل ومستحقات المعلم).
    */
-  async payMonth(centerId: string, groupStudentId: string, dto: PayMonthDto) {
+  async payMonth(
+    centerId: string,
+    groupStudentId: string,
+    dto: PayMonthDto,
+  ): Promise<PayMonthResponse> {
     const groupStudent = await this.prisma.groupStudent.findUnique({
       where: { id: groupStudentId },
       select: payMonthGroupStudentSelect,
@@ -431,6 +584,14 @@ export class PaymentsService {
     if (!groupStudent || groupStudent.group.centerId !== centerId) {
       throw new NotFoundException(
         'علاقة الطالب بالمجموعة غير موجودة في هذا المركز.',
+      );
+    }
+
+    // التحقق من المجموعات المجانية
+    const monthlyFeeDecimal = new Prisma.Decimal(groupStudent.group.monthlyFee);
+    if (monthlyFeeDecimal.lte(0)) {
+      throw new BadRequestException(
+        'هذه المجموعة مجانية ولا يوجد اشتراك مستحق.',
       );
     }
 
@@ -497,11 +658,29 @@ export class PaymentsService {
         },
       });
 
-      const monthlyFeeDecimal = new Prisma.Decimal(
-        groupStudent.group.monthlyFee,
-      );
-
       if (!obligation) {
+        const existingLegacy = await tx.monthlyPayment.findUnique({
+          where: {
+            groupStudentId_subscriptionDate: {
+              groupStudentId,
+              subscriptionDate: targetMonth,
+            },
+          },
+        });
+
+        const legacyPaid = existingLegacy
+          ? new Prisma.Decimal(existingLegacy.amount)
+          : new Prisma.Decimal(0);
+        const legacyRemaining = Prisma.Decimal.max(
+          0,
+          monthlyFeeDecimal.sub(legacyPaid),
+        );
+        const legacyStatus = legacyRemaining.lte(0)
+          ? 'PAID'
+          : legacyPaid.gt(0)
+            ? 'PARTIALLY_PAID'
+            : 'UNPAID';
+
         obligation = await tx.studentFeeObligation.create({
           data: {
             centerId,
@@ -514,45 +693,97 @@ export class PaymentsService {
             amountDue: monthlyFeeDecimal,
             discountAmount: new Prisma.Decimal(0),
             finalAmountDue: monthlyFeeDecimal,
-            paidAmount: new Prisma.Decimal(0),
-            remainingAmount: monthlyFeeDecimal,
-            status: 'UNPAID',
+            paidAmount: legacyPaid,
+            remainingAmount: legacyRemaining,
+            status: legacyStatus,
             lockedTeacherShareRate: settings.teacherSharePercentage,
             lockedCenterShareRate: settings.centerSharePercentage,
+            isLegacy: Boolean(existingLegacy),
           },
         });
       }
 
-      if (obligation.remainingAmount.lte(0) || obligation.status === 'PAID') {
+      // فحص المجموعة المجانية بعد قراءة الالتزام
+      if (
+        monthlyFeeDecimal.lte(0) ||
+        new Prisma.Decimal(obligation.finalAmountDue).lte(0)
+      ) {
+        throw new BadRequestException(
+          'هذه المجموعة مجانية ولا يوجد اشتراك مستحق.',
+        );
+      }
+
+      const remainingDecimal = new Prisma.Decimal(obligation.remainingAmount);
+      if (remainingDecimal.lte(0) || obligation.status === 'PAID') {
         throw new ConflictException('تم سداد هذا الاشتراك بالكامل مسبقاً.');
       }
 
-      // تحديد المبلغ المسدد فعلياً (سداد جزئي أو كامل المتبقي)
-      const payAmount =
-        dto.amount !== undefined
-          ? new Prisma.Decimal(dto.amount)
-          : obligation.remainingAmount;
-
+      // تحديد والتحقق من صحة المبلغ المدفوع
+      const payAmount = new Prisma.Decimal(dto.amount);
       if (payAmount.lte(0)) {
         throw new BadRequestException(
           'المبلغ المدفوع يجب أن يكون أكبر من الصفر.',
         );
       }
 
-      if (payAmount.gt(obligation.remainingAmount)) {
+      if (payAmount.gt(remainingDecimal)) {
         throw new BadRequestException(
-          `المبلغ المدفوع (${payAmount} ج.م) أكبر من المبلغ المتبقي المستحق (${obligation.remainingAmount} ج.م).`,
+          `المبلغ المدفوع (${payAmount.toDecimalPlaces(2).toNumber()} ج.م) أكبر من المبلغ المتبقي المستحق (${remainingDecimal.toDecimalPlaces(2).toNumber()} ج.م).`,
         );
       }
 
-      // 3. توليد رقم الإيصال المتسلسل
+      // 3. تحديث الالتزام المالي
+      const isFullPayment = Boolean(dto.markAsFullPayment);
+      const newPaidAmount = new Prisma.Decimal(obligation.paidAmount).plus(
+        payAmount,
+      );
+
+      let newRemainingAmount: Prisma.Decimal;
+      let newFinalAmountDue = new Prisma.Decimal(obligation.finalAmountDue);
+      let newDiscountAmount = new Prisma.Decimal(obligation.discountAmount);
+      let newStatus: 'PAID' | 'PARTIALLY_PAID';
+
+      if (isFullPayment) {
+        // عند اختيار اعتبار الشهر مسدداً بالكامل (خصم وإعفاء من المتبقي):
+        // تصفير المبلغ المتبقي، وتعديل المبلغ المطلوب النهائي والخصم ليتطابق مع إجمالي ما تم دفعه
+        newRemainingAmount = new Prisma.Decimal(0);
+        newFinalAmountDue = newPaidAmount;
+        newDiscountAmount = Prisma.Decimal.max(
+          0,
+          new Prisma.Decimal(obligation.amountDue).sub(newPaidAmount),
+        );
+        newStatus = 'PAID';
+      } else {
+        newRemainingAmount = remainingDecimal.sub(payAmount);
+        newStatus = newRemainingAmount.lte(0) ? 'PAID' : 'PARTIALLY_PAID';
+      }
+
+      await tx.studentFeeObligation.update({
+        where: { id: obligation.id },
+        data: {
+          paidAmount: newPaidAmount,
+          remainingAmount: newRemainingAmount,
+          finalAmountDue: newFinalAmountDue,
+          discountAmount: newDiscountAmount,
+          status: newStatus,
+        },
+      });
+
+      // 4. توليد رقم الإيصال ورقم القيد
       const txCount = await tx.paymentTransaction.count({
         where: { centerId },
       });
       const now = new Date();
-      const receiptNumber = `REC-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}-${String(txCount + 1).padStart(5, '0')}`;
+      const yearStr = now.getUTCFullYear();
+      const monthStr = String(now.getUTCMonth() + 1).padStart(2, '0');
+      const receiptNumber = `REC-${yearStr}${monthStr}-${String(txCount + 1).padStart(5, '0')}`;
 
-      // 4. إنشاء حركة التحصيل النقدية (PaymentTransaction)
+      const earningCount = await tx.teacherEarningEntry.count({
+        where: { centerId },
+      });
+      const entryNumber = `TEE-${yearStr}${monthStr}-${String(earningCount + 1).padStart(6, '0')}`;
+
+      // 5. إنشاء حركة التحصيل النقدية (PaymentTransaction)
       const paymentTx = await tx.paymentTransaction.create({
         data: {
           centerId,
@@ -568,14 +799,14 @@ export class PaymentsService {
         },
       });
 
-      // 5. حساب حصة المعلم والمركز بالنسبة المثبتة على الالتزام
+      // 6. حساب حصة المعلم والمركز بالنسبة المثبتة على الالتزام
       const teacherAmount = payAmount
         .mul(obligation.lockedTeacherShareRate)
         .div(100)
         .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
       const centerAmount = payAmount.sub(teacherAmount);
 
-      // 6. إنشاء تخصيص الدفعة (PaymentAllocation)
+      // 7. إنشاء تخصيص الدفعة (PaymentAllocation)
       const allocation = await tx.paymentAllocation.create({
         data: {
           centerId,
@@ -590,26 +821,7 @@ export class PaymentsService {
         },
       });
 
-      // 7. تحديث الالتزام المالي
-      const newPaidAmount = obligation.paidAmount.plus(payAmount);
-      const newRemainingAmount = obligation.remainingAmount.sub(payAmount);
-      const newStatus = newRemainingAmount.lte(0) ? 'PAID' : 'PARTIALLY_PAID';
-
-      await tx.studentFeeObligation.update({
-        where: { id: obligation.id },
-        data: {
-          paidAmount: newPaidAmount,
-          remainingAmount: newRemainingAmount,
-          status: newStatus,
-        },
-      });
-
       // 8. تسجيل قيد مستحقات المعلم في الدفتر المحاسبي (TeacherEarningEntry - EARNING)
-      const earningCount = await tx.teacherEarningEntry.count({
-        where: { centerId },
-      });
-      const entryNumber = `TEE-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}-${String(earningCount + 1).padStart(6, '0')}`;
-
       await tx.teacherEarningEntry.create({
         data: {
           centerId,
@@ -624,7 +836,7 @@ export class PaymentsService {
         },
       });
 
-      // 9. مزامنة MonthlyPayment للتوافق التام مع الاستعلامات الحالية
+      // 9. مزامنة MonthlyPayment للتوافق مع الأنظمة الحالية
       const existingMonthly = await tx.monthlyPayment.findUnique({
         where: {
           groupStudentId_subscriptionDate: {
@@ -634,7 +846,7 @@ export class PaymentsService {
         },
       });
 
-      let monthlyPayment;
+      let monthlyPayment: MonthlyPayment;
       if (existingMonthly) {
         monthlyPayment = await tx.monthlyPayment.update({
           where: { id: existingMonthly.id },
@@ -658,16 +870,26 @@ export class PaymentsService {
         });
       }
 
+      // 10. إرجاع النتيجة مع حقل month وحقل receiptNumber
       return {
         ...monthlyPayment,
+        receiptNumber,
         transaction: paymentTx,
         allocation,
         obligation: {
           id: obligation.id,
-          amountDue: Number(obligation.finalAmountDue),
-          paidAmount: Number(newPaidAmount),
-          remainingAmount: Number(newRemainingAmount),
+          amountDue: newFinalAmountDue.toDecimalPlaces(2).toNumber(),
+          paidAmount: newPaidAmount.toDecimalPlaces(2).toNumber(),
+          remainingAmount: newRemainingAmount.toDecimalPlaces(2).toNumber(),
           status: newStatus,
+        },
+        month: {
+          month: this.formatDate(targetMonth),
+          amountDue: newFinalAmountDue.toDecimalPlaces(2).toNumber(),
+          paidAmount: newPaidAmount.toDecimalPlaces(2).toNumber(),
+          remainingAmount: newRemainingAmount.toDecimalPlaces(2).toNumber(),
+          status: newStatus,
+          isWaived: Boolean(obligation.isWaived),
         },
       };
     });
@@ -683,59 +905,12 @@ export class PaymentsService {
     userId: string,
     groupId?: string,
   ): Promise<StudentPaymentItem[]> {
-    let resolvedStudentId = studentId;
-
-    if (studentId === 'me') {
-      const currentStudent = await this.prisma.student.findUnique({
-        where: { userId },
-      });
-      if (!currentStudent) {
-        throw new NotFoundException('حساب الطالب المطلوب غير موجود.');
-      }
-      resolvedStudentId = currentStudent.id;
-    }
-
-    const student = await this.prisma.student.findUnique({
-      where: { id: resolvedStudentId },
-      include: {
-        user: true,
-      },
-    });
-
-    if (!student || student.user.centerId !== centerId) {
-      throw new NotFoundException('الطالب المطلوب غير موجود في هذا المركز.');
-    }
-
-    // التحقق من الصلاحيات الإضافية
-    if (userRole === AppRole.STUDENT) {
-      if (student.userId !== userId) {
-        throw new ForbiddenException('ليس لديك صلاحية لعرض مدفوعات طالب آخر.');
-      }
-    } else if (userRole === AppRole.TEACHER) {
-      const teacher = await this.prisma.teacher.findUnique({
-        where: { userId },
-      });
-      if (!teacher) {
-        throw new NotFoundException('حساب المعلم الحالي غير موجود.');
-      }
-
-      // التحقق من أن الطالب مسجل في إحدى مجموعات هذا المعلم
-      const isTeached = await this.prisma.groupStudent.findFirst({
-        where: {
-          studentId: resolvedStudentId,
-          group: {
-            teacherId: teacher.id,
-            centerId,
-          },
-        },
-      });
-
-      if (!isTeached) {
-        throw new ForbiddenException(
-          'ليس لديك صلاحية لعرض مدفوعات هذا الطالب.',
-        );
-      }
-    }
+    const { resolvedStudentId } = await this.resolveStudentWithAccessCheck(
+      centerId,
+      studentId,
+      userRole,
+      userId,
+    );
 
     return this.prisma.monthlyPayment.findMany({
       where: {
@@ -745,34 +920,370 @@ export class PaymentsService {
           ...(groupId ? { groupId } : {}),
         },
       },
-      select: {
-        id: true,
-        groupStudentId: true,
-        subscriptionDate: true,
-        amount: true,
-        paidAt: true,
-        notes: true,
-        createdAt: true,
-        groupStudent: {
-          select: {
-            id: true,
-            groupId: true,
-            group: {
-              select: {
-                id: true,
-                name: true,
-                monthlyFee: true,
-                startDate: true,
-                monthsCount: true,
-              },
-            },
-          },
-        },
-      },
+      select: studentPaymentSelect,
       orderBy: {
         subscriptionDate: 'desc',
       },
     });
+  }
+
+  /**
+   * جلب ملخص مدفوعات الطالب الشامل (بيانات المجموعة، الشهور وحالتها، السجل المالي، الإجماليات).
+   */
+  async getStudentPaymentsSummary(
+    centerId: string,
+    studentId: string,
+    userRole: AppRole,
+    userId: string,
+    groupId?: string,
+  ): Promise<StudentPaymentsSummaryData> {
+    const { resolvedStudentId } = await this.resolveStudentWithAccessCheck(
+      centerId,
+      studentId,
+      userRole,
+      userId,
+    );
+
+    let groupRecord: {
+      id: string;
+      name: string;
+      monthlyFee: Prisma.Decimal;
+      startDate: Date;
+      monthsCount: number;
+      teacherId: string;
+    } | null = null;
+
+    if (groupId) {
+      const foundGroup = await this.prisma.group.findFirst({
+        where: { id: groupId, centerId },
+        select: {
+          id: true,
+          name: true,
+          monthlyFee: true,
+          startDate: true,
+          monthsCount: true,
+          teacherId: true,
+        },
+      });
+
+      if (!foundGroup) {
+        throw new NotFoundException(
+          'المجموعة الدراسية المطلوبة غير موجودة في هذا المركز.',
+        );
+      }
+
+      if (userRole === AppRole.TEACHER) {
+        const teacher = await this.prisma.teacher.findUnique({
+          where: { userId },
+          select: { id: true },
+        });
+        if (!teacher || foundGroup.teacherId !== teacher.id) {
+          throw new ForbiddenException(
+            'ليس لديك صلاحية للوصول إلى هذه المجموعة.',
+          );
+        }
+      }
+
+      groupRecord = foundGroup;
+    }
+
+    let groupStudent: {
+      id: string;
+      subscriptionStartDate: Date;
+    } | null = null;
+
+    if (groupRecord) {
+      groupStudent = await this.prisma.groupStudent.findUnique({
+        where: {
+          groupId_studentId: {
+            groupId: groupRecord.id,
+            studentId: resolvedStudentId,
+          },
+        },
+        select: {
+          id: true,
+          subscriptionStartDate: true,
+        },
+      });
+    }
+
+    let months: StudentPaymentMonthItem[] = [];
+    let defaultMonth: string | null = null;
+
+    if (groupRecord && groupStudent) {
+      const groupMonths = this.getGroupMonths(
+        groupRecord.startDate,
+        groupRecord.monthsCount,
+      );
+      const groupStart = this.normalizeToFirstOfMonth(groupRecord.startDate);
+      const studentStart = this.normalizeToFirstOfMonth(
+        groupStudent.subscriptionStartDate,
+      );
+      const activeStart =
+        studentStart.getTime() > groupStart.getTime()
+          ? studentStart
+          : groupStart;
+
+      const requiredMonthDates = groupMonths.filter(
+        (m) => m.getTime() >= activeStart.getTime(),
+      );
+
+      const [obligations, legacyPayments] = await Promise.all([
+        this.prisma.studentFeeObligation.findMany({
+          where: {
+            groupStudentId: groupStudent.id,
+            centerId,
+          },
+          select: {
+            periodDate: true,
+            finalAmountDue: true,
+            paidAmount: true,
+            remainingAmount: true,
+            status: true,
+            isWaived: true,
+          },
+        }),
+        this.prisma.monthlyPayment.findMany({
+          where: {
+            groupStudentId: groupStudent.id,
+            centerId,
+          },
+          select: {
+            subscriptionDate: true,
+            amount: true,
+          },
+        }),
+      ]);
+
+      const obligationsMap = new Map(
+        obligations.map((o) => [this.formatDate(o.periodDate), o]),
+      );
+      const legacyMap = new Map(
+        legacyPayments.map((lp) => [this.formatDate(lp.subscriptionDate), lp]),
+      );
+
+      const monthlyFeeDecimal = new Prisma.Decimal(groupRecord.monthlyFee);
+
+      months = requiredMonthDates.map((mDate) => {
+        const mStr = this.formatDate(mDate);
+        const obligation = obligationsMap.get(mStr);
+        const legacy = legacyMap.get(mStr);
+        return this.resolveMonthFeeStatus(
+          mStr,
+          monthlyFeeDecimal,
+          obligation,
+          legacy,
+        );
+      });
+
+      const firstUnpaid = months.find((m) => m.status !== 'PAID');
+      defaultMonth = firstUnpaid
+        ? firstUnpaid.month
+        : (months[0]?.month ?? null);
+    }
+
+    // جلب سجل المدفوعات من PaymentAllocation و MonthlyPayment القديمة
+    const [allocations, allMonthlyPayments] = await Promise.all([
+      this.prisma.paymentAllocation.findMany({
+        where: {
+          centerId,
+          obligation: {
+            studentId: resolvedStudentId,
+            ...(groupRecord ? { groupId: groupRecord.id } : {}),
+          },
+        },
+        select: {
+          id: true,
+          amount: true,
+          refundedAmount: true,
+          isLegacy: true,
+          obligationId: true,
+          obligation: {
+            select: {
+              id: true,
+              groupId: true,
+              periodDate: true,
+              finalAmountDue: true,
+              group: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+          transaction: {
+            select: {
+              id: true,
+              receiptNumber: true,
+              paymentDate: true,
+              paymentMethod: true,
+              notes: true,
+            },
+          },
+        },
+        orderBy: [{ transaction: { paymentDate: 'asc' } }, { id: 'asc' }],
+      }),
+      this.prisma.monthlyPayment.findMany({
+        where: {
+          centerId,
+          groupStudent: {
+            studentId: resolvedStudentId,
+            ...(groupRecord ? { groupId: groupRecord.id } : {}),
+          },
+        },
+        select: {
+          id: true,
+          subscriptionDate: true,
+          amount: true,
+          paidAt: true,
+          notes: true,
+          groupStudent: {
+            select: {
+              groupId: true,
+              group: {
+                select: {
+                  id: true,
+                  name: true,
+                  monthlyFee: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const obligationPaidRunningMap = new Map<string, Prisma.Decimal>();
+    const paymentItemsMap = new Map<string, StudentPaymentHistoryItem>();
+
+    for (const alloc of allocations) {
+      const oblId = alloc.obligationId;
+      const currentRunning =
+        obligationPaidRunningMap.get(oblId) || new Prisma.Decimal(0);
+      const newRunning = currentRunning.plus(alloc.amount);
+      obligationPaidRunningMap.set(oblId, newRunning);
+
+      const finalDue = new Prisma.Decimal(alloc.obligation.finalAmountDue);
+      const remDecimal = Prisma.Decimal.max(0, finalDue.sub(newRunning));
+      const remainingAfter = remDecimal.toDecimalPlaces(2).toNumber();
+      const status: 'PAID' | 'PARTIALLY_PAID' =
+        remainingAfter === 0 ? 'PAID' : 'PARTIALLY_PAID';
+
+      const item: StudentPaymentHistoryItem = {
+        id: alloc.id,
+        receiptNumber: alloc.transaction.receiptNumber,
+        groupId: alloc.obligation.groupId || alloc.obligation.group?.id || '',
+        groupName: alloc.obligation.group?.name || '',
+        subscriptionDate: this.formatDate(alloc.obligation.periodDate),
+        amount: new Prisma.Decimal(alloc.amount).toDecimalPlaces(2).toNumber(),
+        refundedAmount: new Prisma.Decimal(alloc.refundedAmount)
+          .toDecimalPlaces(2)
+          .toNumber(),
+        amountDue: finalDue.toDecimalPlaces(2).toNumber(),
+        remainingAfter,
+        status,
+        paymentMethod: alloc.transaction.paymentMethod,
+        paidAt: alloc.transaction.paymentDate.toISOString(),
+        notes: alloc.transaction.notes,
+        isLegacy: Boolean(alloc.isLegacy),
+      };
+
+      paymentItemsMap.set(alloc.id, item);
+    }
+
+    const existingAllocatedTxIds = new Set(
+      allocations.map((a) => a.transaction.id),
+    );
+    const legacyPaymentItems: StudentPaymentHistoryItem[] = [];
+
+    for (const mp of allMonthlyPayments) {
+      if (!existingAllocatedTxIds.has(mp.id)) {
+        const mpAmount = new Prisma.Decimal(mp.amount)
+          .toDecimalPlaces(2)
+          .toNumber();
+        const fee = new Prisma.Decimal(mp.groupStudent.group.monthlyFee)
+          .toDecimalPlaces(2)
+          .toNumber();
+        legacyPaymentItems.push({
+          id: mp.id,
+          receiptNumber: '—',
+          groupId: mp.groupStudent.groupId,
+          groupName: mp.groupStudent.group.name,
+          subscriptionDate: this.formatDate(mp.subscriptionDate),
+          amount: mpAmount,
+          refundedAmount: 0,
+          amountDue: fee,
+          remainingAfter: 0,
+          status: 'PAID',
+          paymentMethod: 'CASH',
+          paidAt: mp.paidAt.toISOString(),
+          notes: mp.notes,
+          isLegacy: true,
+        });
+      }
+    }
+
+    const allPayments = [
+      ...Array.from(paymentItemsMap.values()),
+      ...legacyPaymentItems,
+    ];
+    allPayments.sort(
+      (a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime(),
+    );
+
+    let totalPaidDecimal = new Prisma.Decimal(0);
+    let totalRefundedDecimal = new Prisma.Decimal(0);
+    for (const p of allPayments) {
+      totalPaidDecimal = totalPaidDecimal.plus(
+        new Prisma.Decimal(p.amount).sub(new Prisma.Decimal(p.refundedAmount)),
+      );
+      totalRefundedDecimal = totalRefundedDecimal.plus(
+        new Prisma.Decimal(p.refundedAmount),
+      );
+    }
+
+    let totalRemainingDecimal = new Prisma.Decimal(0);
+    for (const m of months) {
+      totalRemainingDecimal = totalRemainingDecimal.plus(
+        new Prisma.Decimal(m.remainingAmount),
+      );
+    }
+
+    const totals: StudentPaymentsTotals = {
+      paymentsCount: allPayments.length,
+      totalPaid: totalPaidDecimal.toDecimalPlaces(2).toNumber(),
+      totalRefunded: totalRefundedDecimal.toDecimalPlaces(2).toNumber(),
+      totalRemaining: totalRemainingDecimal.toDecimalPlaces(2).toNumber(),
+    };
+
+    const canRecordPayment = Boolean(
+      groupStudent && userRole === AppRole.OWNER,
+    );
+
+    return {
+      group:
+        groupRecord && groupStudent
+          ? {
+              id: groupRecord.id,
+              name: groupRecord.name,
+              monthlyFee: new Prisma.Decimal(groupRecord.monthlyFee)
+                .toDecimalPlaces(2)
+                .toNumber(),
+              startDate: this.formatDate(groupRecord.startDate),
+              monthsCount: groupRecord.monthsCount,
+            }
+          : null,
+      groupStudentId: groupStudent ? groupStudent.id : null,
+      subscriptionStartDate: groupStudent
+        ? this.formatDate(groupStudent.subscriptionStartDate)
+        : null,
+      canRecordPayment,
+      months,
+      defaultMonth,
+      payments: allPayments,
+      totals,
+    };
   }
 
   /**
@@ -862,20 +1373,12 @@ export class PaymentsService {
       userId,
     );
 
-    let resolvedStudentId = studentId;
-    if (studentId === 'me') {
-      const currentStudent = await this.prisma.student.findUnique({
-        where: { userId },
-      });
-      if (currentStudent) {
-        resolvedStudentId = currentStudent.id;
-      }
-    }
-
-    const student = await this.prisma.student.findUnique({
-      where: { id: resolvedStudentId },
-      include: { user: { select: { fullName: true } } },
-    });
+    const { student } = await this.resolveStudentWithAccessCheck(
+      centerId,
+      studentId,
+      userRole,
+      userId,
+    );
 
     const studentName = student?.user?.fullName || 'الطالب';
 

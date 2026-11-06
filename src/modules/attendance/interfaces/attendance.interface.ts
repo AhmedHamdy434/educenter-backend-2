@@ -97,4 +97,3 @@ export interface StudentAttendanceReport {
     attendedAnotherGroup: number;
   };
 }
-

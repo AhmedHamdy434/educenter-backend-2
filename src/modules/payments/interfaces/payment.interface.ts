@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { PaymentAllocation, PaymentTransaction, Prisma } from '@prisma/client';
 import {
   groupPaymentExcelSelect,
   groupPaymentsSelect,
@@ -79,3 +79,73 @@ export type GroupPaymentExcelItem = Prisma.GroupGetPayload<{
   select: typeof groupPaymentExcelSelect;
 }>;
 
+export interface StudentPaymentMonthItem {
+  month: string;
+  amountDue: number;
+  paidAmount: number;
+  remainingAmount: number;
+  status: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID';
+  isWaived: boolean;
+}
+
+export interface StudentPaymentHistoryItem {
+  id: string;
+  receiptNumber: string;
+  groupId: string;
+  groupName: string;
+  subscriptionDate: string;
+  amount: number;
+  refundedAmount: number;
+  amountDue: number;
+  remainingAfter: number;
+  status: 'PAID' | 'PARTIALLY_PAID';
+  paymentMethod: string;
+  paidAt: string;
+  notes: string | null;
+  isLegacy: boolean;
+}
+
+export interface StudentPaymentsTotals {
+  paymentsCount: number;
+  totalPaid: number;
+  totalRefunded: number;
+  totalRemaining: number;
+}
+
+export interface StudentPaymentsSummaryData {
+  group: {
+    id: string;
+    name: string;
+    monthlyFee: number;
+    startDate: string;
+    monthsCount: number;
+  } | null;
+  groupStudentId: string | null;
+  subscriptionStartDate: string | null;
+  canRecordPayment: boolean;
+  months: StudentPaymentMonthItem[];
+  defaultMonth: string | null;
+  payments: StudentPaymentHistoryItem[];
+  totals: StudentPaymentsTotals;
+}
+
+export interface PayMonthResponse {
+  id: string;
+  groupStudentId: string;
+  centerId: string;
+  subscriptionDate: Date;
+  amount: Prisma.Decimal;
+  paidAt: Date;
+  notes: string | null;
+  receiptNumber: string;
+  transaction: PaymentTransaction;
+  allocation: PaymentAllocation;
+  obligation: {
+    id: string;
+    amountDue: number;
+    paidAmount: number;
+    remainingAmount: number;
+    status: string;
+  };
+  month: StudentPaymentMonthItem;
+}

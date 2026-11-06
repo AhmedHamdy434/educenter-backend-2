@@ -11,4 +11,3 @@ export type TeacherListItem = Prisma.TeacherGetPayload<{
 export type TeacherDetails = Prisma.TeacherGetPayload<{
   select: typeof teacherDetailsSelect;
 }>;
-

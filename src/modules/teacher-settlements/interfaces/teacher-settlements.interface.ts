@@ -63,4 +63,3 @@ export interface TeacherSettlementListItem {
   itemsCount: number;
   createdAt: Date;
 }
-

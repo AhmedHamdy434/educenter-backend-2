@@ -75,4 +75,3 @@ export const attendanceSessionWithRecordsSelect = {
     },
   },
 } satisfies Prisma.AttendanceSessionSelect;
-

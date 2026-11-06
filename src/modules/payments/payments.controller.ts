@@ -30,6 +30,8 @@ import {
   StudentPaymentItem,
   GroupPaymentStudentItem,
   GroupPaymentStats,
+  StudentPaymentsSummaryData,
+  PayMonthResponse,
 } from './interfaces/payment.interface';
 import { PaginationMeta } from '../../common/utils/buildMeta';
 
@@ -83,18 +85,39 @@ export class PaymentsController {
   @Post('group-students/:groupStudentId/payments')
   @HttpCode(HttpStatus.CREATED)
   @ResponseMessage('تم تسجيل دفع الاشتراك بنجاح.')
-  @Roles(AppRole.OWNER, AppRole.TEACHER)
+  @Roles(AppRole.OWNER)
   async payMonth(
     @CurrentCenterId() centerId: string,
     @Param('groupStudentId') groupStudentId: string,
     @Body() dto: PayMonthDto,
-  ) {
+  ): Promise<PayMonthResponse> {
     const payment = await this.paymentsService.payMonth(
       centerId,
       groupStudentId,
       dto,
     );
     return payment;
+  }
+
+  @Get([
+    'payments/students/:studentId/summary',
+    'students/:studentId/payments/summary',
+  ])
+  @ResponseMessage('تم جلب ملخص مدفوعات الطالب بنجاح.')
+  @Roles(AppRole.OWNER, AppRole.TEACHER, AppRole.STUDENT)
+  async getStudentPaymentsSummary(
+    @CurrentCenterId() centerId: string,
+    @CurrentUser() user: RequestUser,
+    @Param('studentId') studentId: string,
+    @Query('groupId') groupId?: string,
+  ): Promise<StudentPaymentsSummaryData> {
+    return this.paymentsService.getStudentPaymentsSummary(
+      centerId,
+      studentId,
+      user.role,
+      user.id,
+      groupId,
+    );
   }
 
   @Get('students/:studentId/payments')

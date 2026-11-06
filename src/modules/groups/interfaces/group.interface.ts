@@ -21,4 +21,3 @@ export type GroupDetails = Prisma.GroupGetPayload<{
 export type GroupEnrolledStudent = Prisma.GroupStudentGetPayload<{
   select: typeof groupEnrolledStudentSelect;
 }>;
-

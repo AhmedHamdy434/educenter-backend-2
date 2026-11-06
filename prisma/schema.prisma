@@ -594,6 +594,9 @@ model CenterSettings {
   currency                  String  @default("EGP")
   receiptNotes              String?
 
+  receiptCounter      Int @default(0)
+  earningEntryCounter Int @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
